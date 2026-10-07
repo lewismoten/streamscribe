@@ -1,0 +1,7 @@
+# Captured streams, transcripts, and state
+/data/
+# Local settings and transcript corrections (copy config.example.js to config.local.js)
+/config.local.js
+/transcription-corrections.local.json
+node_modules/
+.DS_Store

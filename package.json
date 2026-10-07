@@ -1,0 +1,27 @@
+{
+  "name": "streamscribe",
+  "version": "1.0.0",
+  "description": "Capture public meeting livestreams, fill gaps from the official archive, transcribe locally with Whisper, and review them with speakers, chapters, votes, and clips.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "capture": "node scripts/capture.js",
+    "report-stream-identifiers": "node scripts/report-stream-identifiers.js",
+    "transcribe": "node scripts/transcribe.js",
+    "transcribe-media": "node scripts/transcribe-media.js",
+    "transcript-corrections": "node scripts/transcript-corrections.js",
+    "split-session": "node scripts/split-session.js",
+    "extract-slides": "node scripts/extract-slides.js",
+    "extract-thumbnails": "node scripts/extract-thumbnails.js",
+    "extract-clip": "node scripts/extract-clip.js",
+    "render-mp4": "node scripts/render-mp4.js",
+    "backfill-from-archive": "node scripts/backfill-from-archive.js",
+    "build-meeting": "node scripts/build-meeting.js",
+    "retranscribe-range": "node scripts/retranscribe-range.js",
+    "serve": "node scripts/serve.js",
+    "classify-swagit-standby": "node scripts/providers/swagit/classify-standby-slides.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
