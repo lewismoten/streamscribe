@@ -36,7 +36,9 @@ export default function PersonService({ person, civic }: { person: MeetingPerson
         )}
       </div>
       {message && <p className="note">{message}</p>}
-      {editing && <TermForm id={editing.id} value={editing.value} civic={civic} onDone={done} />}
+      {editing && (
+        <TermForm key={editing.id || 'new'} id={editing.id} value={editing.value} civic={civic} onDone={done} />
+      )}
       {!terms.length && (
         <p className="muted small">
           None yet: add the bodies they serve on (elected, appointed, Chair, staff) or a seat they ran for.

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { can } from '../data/account.ts';
 import { putRecord, removeRecord } from '../data/useRecords.ts';
 import { listedPerson, savePublic } from '../people/directory.ts';
@@ -10,6 +10,9 @@ import {
   electionLabel,
   END_REASONS,
   RESULTS,
+  activeOn,
+  MEMBER_KINDS,
+  officesOf,
   TERM_HELP,
   TERM_KINDS,
   TITLE_SUGGESTIONS,
@@ -50,6 +53,12 @@ export default function TermForm({
     ...value
   });
   const [message, setMessage] = useState('');
+  // Opened from further down the page (such as the Officers panel): brought into view, ready to fill in.
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    formRef.current?.querySelector('select')?.focus({ preventScroll: true });
+  }, []);
   const [newElection, setNewElection] = useState({ date: '', kind: 'general' as ElectionKind });
   const change = (patch: Partial<Term>) => setForm({ ...form, ...patch });
   const bodies = civic.bodies || [];
@@ -66,7 +75,18 @@ export default function TermForm({
   const people = [...civic.people.values()].sort(
     (a, b) => a.sourceName.localeCompare(b.sourceName) || shownName(a).localeCompare(shownName(b))
   );
-  const sourceNames = [...new Set(people.map((person) => person.sourceName))];
+  // Members of the body on the term's first day come first (officers are chosen from them).
+  const membersNow = new Set(
+    (civic.terms || [])
+      .filter(
+        (term) =>
+          term.data.bodyId === form.bodyId && MEMBER_KINDS.includes(term.data.kind) && activeOn(term.data, form.start)
+      )
+      .map((term) => `${term.data.sourceKey}/${term.data.personId}`)
+  );
+  const others = people.filter((person) => !membersNow.has(person.key));
+  const sourceNames = [...new Set(others.map((person) => person.sourceName))];
+  const titles = form.kind === 'officer' && body ? officesOf(body.data) : TITLE_SUGGESTIONS[form.kind];
   const personKey = form.sourceKey && form.personId ? `${form.sourceKey}/${form.personId}` : '';
 
   const save = async (event: FormEvent) => {
@@ -118,8 +138,8 @@ export default function TermForm({
   };
 
   return (
-    <form className="panel schedule-form" onSubmit={save}>
-      <h2>{id ? 'Change a term' : 'Add a term'}</h2>
+    <form className="panel schedule-form" onSubmit={save} ref={formRef}>
+      <h2>{id ? 'Change a term' : value.kind === 'officer' && value.title ? `${value.title}` : 'Add a term'}</h2>
       <div className="form-grid">
         <label>
           Person
@@ -132,9 +152,20 @@ export default function TermForm({
             required
           >
             <option value="">Choose…</option>
+            {membersNow.size > 0 && (
+              <optgroup label={`On ${body?.data.name || 'this body'}`}>
+                {people
+                  .filter((person) => membersNow.has(person.key))
+                  .map((person) => (
+                    <option key={person.key} value={person.key}>
+                      {shownName(person)}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
             {sourceNames.map((sourceName) => (
               <optgroup key={sourceName} label={sourceName}>
-                {people
+                {others
                   .filter((person) => person.sourceName === sourceName)
                   .map((person) => (
                     <option key={person.key} value={person.key}>
@@ -185,10 +216,10 @@ export default function TermForm({
             value={form.title}
             onChange={(event) => change({ title: event.target.value })}
             list="term-titles"
-            placeholder={TITLE_SUGGESTIONS[form.kind][0]}
+            placeholder={titles[0]}
           />
           <datalist id="term-titles">
-            {TITLE_SUGGESTIONS[form.kind].map((title) => (
+            {titles.map((title) => (
               <option key={title} value={title}>
                 {title}
               </option>

@@ -202,7 +202,7 @@ The Bodies page lists public bodies by the organization they belong to: a county
 - **Bodies** belong to an organization, or sit under another body (a committee). Each says how its members are chosen (elected, appointed, chosen by the body itself, mixed, or hired staff) and which recordings are its meetings: a source's meetings, or those whose title contains some words, when one source streams several bodies.
 - **Terms** say who served on a body, as what, and from when to when (blank until it ends), with a district and how it ended (term ended, resigned, replaced…). A person has as many as they need:
   - **Elected** or **Appointed** to a seat (appointed before an election, or after someone resigns), a **Citizen appointee**, or **Ex officio**.
-  - An **Officer** of the body, such as Chair or Vice Chair, for a year at a time.
+  - An **Officer** of the body, such as Chair or Vice Chair, usually a year at a time. Each body lists its offices (Chair and Vice Chair unless you change them), and its page has an **Officers** panel: every holder of each office, newest first (a whole calendar year shows as the year), with a button to add the next year's holder. Someone can hold an office as many times as they're chosen.
   - **Staff** or **Interim** staff, such as the County Administrator or County Attorney; someone moving between Interim County Administrator and Assistant to the County Administrator has one term for each stretch.
   - A **Candidate** running for a seat, with the election they ran in and its result (won, lost, withdrew), whether or not they're elected.
 

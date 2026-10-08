@@ -6,6 +6,7 @@ import type { RecordingData } from '../pages/MeetingsPage.tsx';
 import type { Publication } from '../published/types.ts';
 import { BodyForm } from './OrgBodyForms.tsx';
 import { districtName, kindTag, MemberCard, PersonLink } from './parts.tsx';
+import OfficersPanel from './OfficersPanel.tsx';
 import TermForm from './TermForm.tsx';
 import {
   bodiesOfRecording,
@@ -125,7 +126,15 @@ export default function BodyPage() {
         )}
       </p>
       {message && <p className="note">{message}</p>}
-      {editing?.type === 'term' && <TermForm id={editing.id} value={editing.value} civic={civic} onDone={done} />}
+      {editing?.type === 'term' && (
+        <TermForm
+          key={editing.id || JSON.stringify(editing.value)}
+          id={editing.id}
+          value={editing.value}
+          civic={civic}
+          onDone={done}
+        />
+      )}
       {editing?.type === 'body' && (
         <BodyForm
           id={body.id}
@@ -161,6 +170,11 @@ export default function BodyPage() {
           </ul>
         </section>
       )}
+      <OfficersPanel
+        body={body}
+        civic={civic}
+        onEdit={(termId, value) => setEditing({ type: 'term', id: termId, value })}
+      />
       {staff.length > 0 && (
         <section className="panel">
           <h2>Staff</h2>

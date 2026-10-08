@@ -35,6 +35,8 @@ export interface Body {
   parentId?: string;
   selection: Selection;
   meetings: MeetingMatch[];
+  // The body's offices, such as Chair and Vice Chair; officer terms hold them, usually a year at a time.
+  offices?: string[];
   website?: string;
   note?: string;
 }
@@ -174,6 +176,17 @@ export const activeOn = (term: Term, day: string) => term.start <= day && (!term
 // A candidate is current until the election has a result (or has passed, with an end date).
 export const isCurrent = (term: Term, day = today()) =>
   term.kind === 'candidate' ? !term.result && activeOn(term, day) : activeOn(term, day);
+
+export const DEFAULT_OFFICES = ['Chair', 'Vice Chair'];
+export const officesOf = (body: Body | undefined) => body?.offices || DEFAULT_OFFICES;
+// A whole calendar year (Jan 1 to Dec 31) shows as the year alone.
+export const yearOrSpan = (term: Term) =>
+  term.end &&
+  term.start.slice(5) === '01-01' &&
+  term.end.slice(5) === '12-31' &&
+  term.start.slice(0, 4) === term.end.slice(0, 4)
+    ? term.start.slice(0, 4)
+    : span(term);
 
 export const personKeyOf = (term: Term) => `${term.sourceKey}/${term.personId}`;
 

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { putRecord, removeRecord, useRecords } from '../data/useRecords.ts';
 import {
   BODY_KINDS,
+  DEFAULT_OFFICES,
   ORGANIZATION_KINDS,
   SELECTIONS,
   slug,
@@ -122,6 +123,7 @@ export function BodyForm({
     meetings: [],
     ...value
   });
+  const [offices, setOffices] = useState((value.offices || DEFAULT_OFFICES).join('\n'));
   const { records: sources } = useRecords<{ name?: string }>('sources');
   const { records: recordings } = useRecords<{ sourceKey: string }>('recordings');
   const sourceKeys = [
@@ -139,7 +141,15 @@ export function BodyForm({
     await putRecord('bodies', id || `${form.organizationId}-${slug(form.name)}`, {
       ...form,
       name: form.name.trim(),
-      meetings
+      meetings,
+      offices: [
+        ...new Set(
+          offices
+            .split('\n')
+            .map((office) => office.trim())
+            .filter(Boolean)
+        )
+      ]
     });
     onDone(`Saved ${form.name.trim()}`);
   };
@@ -214,6 +224,15 @@ export function BodyForm({
           />
         </label>
       </div>
+      <label className="block">
+        Its offices, one per line (held by members, usually a year at a time)
+        <textarea
+          rows={3}
+          value={offices}
+          onChange={(event) => setOffices(event.target.value)}
+          placeholder={'Chair\nVice Chair'}
+        />
+      </label>
       <fieldset>
         <legend>Its meetings</legend>
         <p className="muted small">
