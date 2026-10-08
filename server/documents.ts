@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Source } from './scan.ts';
 
 // Documents the review page saves for a recording, each kept in {recording}/{kind}.json as well.
-export const RECORDING_DOCUMENTS = ['speakers', 'agenda', 'votes', 'views', 'audio-boosts', 'meeting-info', 'word-edits'] as const;
+export const RECORDING_DOCUMENTS = ['speakers', 'agenda', 'votes', 'views', 'audio-boosts', 'meeting-info', 'word-edits', 'playlist'] as const;
 
 interface DocumentRow {
   body: string;

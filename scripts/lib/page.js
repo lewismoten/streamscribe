@@ -242,6 +242,7 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
     padding: 8px 10px; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
   .download-menu[hidden] { display: none; }
   .download-menu button { text-align: left; }
+  #playlist-list li.current { background: color-mix(in srgb, var(--start) 14%, transparent); }
   .picker-edit input { flex: 1; min-width: 0; }
   .w { border-radius: 3px; }
   .w:hover { background: color-mix(in srgb, var(--fg) 12%, transparent); }
@@ -590,6 +591,7 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
     <button type="button" id="clip-open" title="Refine the clip and download it" aria-label="Download clip">🎬</button>
     <button id="set-end" type="button" title="Clip ends here" aria-label="Clip end">⟧✂</button>
   </span>
+  <button type="button" id="playlist-add" title="Add the clip (between ✂⟦ and ⟧✂) to the playlist" aria-label="Add clip to playlist">➕</button>
   <button type="button" id="boost-open" title="Boost the volume of the clip (or the next 30 seconds) and transcribe it again" aria-label="Boost and re-transcribe">🔊</button>
   <span class="sep"></span>
   <button type="button" id="snapshot" title="Save this frame as an image" aria-label="Save this frame as an image">📷</button>
@@ -610,6 +612,7 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
     <button type="button" id="votes-toggle" title="Show or hide the votes" aria-label="Votes">🗳</button>
     <button type="button" id="vote-next" title="Next vote" aria-label="Next vote">▶</button>
   </span>
+  <button type="button" id="playlist-toggle" title="Show or hide the playlist of clips" aria-label="Playlist">📼</button>
   <button type="button" id="zoom-toggle" title="Magnify: drag a square on the video to show it larger in place (press again to remove it)" aria-label="Magnify">🔍</button>
   <button type="button" id="display-open" title="What to show on the video, and playback settings" aria-label="Display settings">🎛</button>
   <span class="label boost-active" id="boost-active"></span>
@@ -658,6 +661,18 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
     <button type="button" id="agenda-cancel" hidden>Cancel</button>
     <span class="label" id="agenda-status" role="status"></span>
   </form>
+</section>
+<section class="agenda-panel" id="playlist-panel" aria-labelledby="playlist-title" hidden>
+  <h2 id="playlist-title">Playlist <small class="label" id="playlist-total"></small></h2>
+  <ol class="agenda-list" id="playlist-list"></ol>
+  <p class="hint" id="playlist-empty">No clips yet. Mark a clip with ✂⟦ and ⟧✂, then press ➕ to add it here; mark the next one, and so on.</p>
+  <div class="row">
+    <button type="button" id="playlist-play" title="Play the clips one after another">▶ Play all</button>
+    <button type="button" class="start" id="playlist-video" title="Join the clips into one video and download it">⬇ Video</button>
+    <button type="button" id="playlist-text" title="Download what is said in the clips, as text">⬇ Transcript</button>
+    <button type="button" id="playlist-captions" title="Download closed captions timed to the playlist video (.srt, for YouTube)">⬇ Captions (.srt)</button>
+    <span class="label" id="playlist-status" role="status"></span>
+  </div>
 </section>
 <section class="agenda-panel" id="votes-panel" aria-labelledby="votes-title">
   <h2 id="votes-title">Votes</h2>
@@ -2349,16 +2364,18 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   const stampAt = (seconds) => '[' + (clockMs(seconds) === null ? fmt(seconds) : stampFormat.format(new Date(clockMs(seconds)))) + ']';
   const speakerLabel = (ids) => (ids.length ? ids.map((id) => nameAndRole(peopleMap.get(id) || { id, name: id })).join(' & ') : 'Unknown speaker');
   function transcriptText(chapter) {
+    const header = [meetingName || document.title || 'Meeting', ...(chapter ? ['Chapter: ' + chapter.title] : []), ''];
+    return [...header, ...transcriptLines(chapter, !chapter)].join(String.fromCharCode(10)) + String.fromCharCode(10);
+  }
+  // The text lines for a stretch (null for everything); withChapters puts each chapter's heading where it starts.
+  function transcriptLines(chapter, withChapters) {
     const out = [];
     // One blank line at most between parts.
     const add = (text) => { if (text || out[out.length - 1]) out.push(text); };
-    add(meetingName || document.title || 'Meeting');
-    if (chapter) add('Chapter: ' + chapter.title);
-    add('');
     const inRange = (seconds) => !chapter || (seconds >= chapter.from - 0.01 && seconds < chapter.to);
     const personName = (id) => shownName(peopleMap.get(id) || { id, name: id });
     const events = [];
-    if (!chapter) agendaItems.forEach((item) => events.push({ at: item.at, chapter: item.title }));
+    if (withChapters) agendaItems.forEach((item) => events.push({ at: item.at, chapter: item.title }));
     voteData.votes.forEach((vote) => {
       if (vote.movedBy?.id && vote.movedBy.at !== null && vote.movedBy.at !== undefined) {
         events.push({ at: vote.movedBy.at, text: '✋ Motion by ' + personName(vote.movedBy.id) + (vote.motion ? ': ' + vote.motion : '') });
@@ -2398,7 +2415,8 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
         eventsUntil(word.at);
         const shown = word.edited ? word.display : word.text;
         if (!shown) return;
-        const minute = Math.floor(word.at / 60);
+        // Each minute of the time of day (the stamps show it), or of the video when that isn't known.
+        const minute = clockMs(word.at) === null ? Math.floor(word.at / 60) : Math.floor(clockMs(word.at) / 60000);
         if (minute !== lastMinute) {
           closeLine();
           add('');
@@ -2416,22 +2434,86 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     });
     eventsUntil(chapter ? chapter.to : Infinity);
     closeLine();
-    return out.join(String.fromCharCode(10)) + String.fromCharCode(10);
+    return out;
+  }
+  // Every word said in a stretch, in order, as { at, end, text, ids } with corrections applied (deleted words left out).
+  function wordsIn(range) {
+    const list = [];
+    transcript.forEach(([startSeconds, endSeconds, text, , timedWords]) => {
+      if (range && (endSeconds < range.from || startSeconds >= range.to)) return;
+      lineWordList(startSeconds, endSeconds, text, timedWords).forEach((word) => {
+        const shown = word.edited ? word.display : word.text;
+        if (!shown || (range && (word.at < range.from - 0.01 || word.at >= range.to))) return;
+        list.push({ at: word.at, end: range ? Math.min(word.end, range.to) : word.end, text: shown, ids: speakersAt(word.at + 0.01) });
+      });
+    });
+    return list;
+  }
+  // Closed captions (SubRip .srt, which YouTube takes) for stretches of the video played one after another: each
+  // stretch's times start where the one before ended. A caption holds at most two lines of about 42 characters and
+  // 6 seconds, and a new one starts at each speaker change (named, as captions do) and pause.
+  function captionsFor(ranges) {
+    const cues = [];
+    let offset = 0;
+    ranges.forEach((range) => {
+      let cue = null;
+      let lastIds = null;
+      const close = () => { if (cue) cues.push(cue); cue = null; };
+      wordsIn(range).forEach((word) => {
+        const key = word.ids.join(',');
+        const changed = key !== lastIds;
+        // Pauses and lengths are measured in the meeting's own time; captions are timed to the playlist video.
+        if (!cue || changed || word.at - cue.lastEnd >= 1 || (cue.text + ' ' + word.text).length > 84 || word.end - cue.firstAt > 6) {
+          close();
+          const label = changed && word.ids.length ? word.ids.map((id) => shownName(peopleMap.get(id) || { id, name: id })).join(' & ') + ': ' : '';
+          cue = { from: word.at - range.from + offset, end: word.end - range.from + offset, text: label + word.text, firstAt: word.at, lastEnd: word.end };
+        } else {
+          cue.text += ' ' + word.text;
+          cue.end = word.end - range.from + offset;
+          cue.lastEnd = word.end;
+        }
+        lastIds = key;
+      });
+      close();
+      offset += range.to - range.from;
+    });
+    const stamp = (seconds) => {
+      const ms = Math.max(0, Math.round(seconds * 1000));
+      const pad = (value, size) => String(value).padStart(size, '0');
+      return pad(Math.floor(ms / 3600000), 2) + ':' + pad(Math.floor(ms / 60000) % 60, 2) + ':' + pad(Math.floor(ms / 1000) % 60, 2) + ',' + pad(ms % 1000, 3);
+    };
+    // Two lines, split near the middle at a space.
+    const wrap = (text) => {
+      if (text.length <= 42) return text;
+      const middle = Math.floor(text.length / 2);
+      const before = text.lastIndexOf(' ', middle);
+      const after = text.indexOf(' ', middle);
+      const at = before < 0 ? after : (after < 0 || middle - before <= after - middle ? before : after);
+      return at < 0 ? text : text.slice(0, at) + String.fromCharCode(10) + text.slice(at + 1);
+    };
+    const NL = String.fromCharCode(10);
+    return cues.map((cue, index) => {
+      const next = cues[index + 1];
+      const end = Math.max(cue.from + 0.8, Math.min(cue.end + 0.3, next ? next.from : cue.end + 0.3));
+      return (index + 1) + NL + stamp(cue.from) + ' --> ' + stamp(next ? Math.min(end, next.from) : end) + NL + wrap(cue.text) + NL;
+    }).join(NL);
+  }
+  function downloadFile(name, text, type) {
+    const blob = new Blob([text], { type });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = name.replace(/[^a-zA-Z0-9 ,.()-]+/g, '').trim().replace(/ +/g, ' ');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
   }
   function chapterRange(item) {
     const next = agendaItems[agendaItems.indexOf(item) + 1];
     return { title: item.title, from: item.at, to: next ? next.at : endSeconds };
   }
   function downloadTranscript(chapter) {
-    const blob = new Blob([transcriptText(chapter)], { type: 'text/plain;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    const name = (meetingName || 'transcript') + (chapter ? ' - ' + chapter.title : '');
-    link.download = name.replace(/[^a-zA-Z0-9 ,.()-]+/g, '').trim().replace(/ +/g, ' ') + '.txt';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    downloadFile((meetingName || 'transcript') + (chapter ? ' - ' + chapter.title : '') + '.txt', transcriptText(chapter), 'text/plain;charset=utf-8');
   }
   // ⬇ beside the find box: the whole meeting, or the chapter being played.
   const downloadMenu = document.createElement('div');
@@ -2454,6 +2536,11 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
       downloadMenu.appendChild(button);
     };
     option('⬇ Whole meeting', null);
+    const captions = document.createElement('button');
+    captions.type = 'button';
+    captions.textContent = '⬇ Captions for the whole meeting (.srt)';
+    captions.addEventListener('click', () => { downloadMenu.hidden = true; downloadFile((meetingName || 'transcript') + '.srt', captionsFor([{ from: 0, to: endSeconds }]), 'application/x-subrip;charset=utf-8'); });
+    downloadMenu.appendChild(captions);
     const current = agendaIndexAt(position);
     if (current >= 0) option('⬇ This chapter: ' + agendaItems[current].title, chapterRange(agendaItems[current]));
     downloadMenu.hidden = false;
@@ -2462,6 +2549,166 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     downloadMenu.style.top = (rect.bottom + 6) + 'px';
   });
   document.addEventListener('mousedown', (event) => { if (!downloadMenu.hidden && !downloadMenu.contains(event.target) && event.target !== $('transcript-download')) downloadMenu.hidden = true; });
+
+  // Playlist: clips (from the ✂⟦ ⟧✂ marks) collected one after another, saved in {session}/playlist.json. They can be
+  // played in a row, joined into one video by the server (render-playlist), or downloaded as text or captions timed
+  // to that video.
+  let playlist = [];
+  let playlistPlaying = -1;
+  const playlistRanges = () => playlist.map((clip) => ({ title: clip.title, from: clip.from, to: clip.to }));
+  async function savePlaylist(done) {
+    renderPlaylist();
+    try {
+      await putFile('../playlist.json', JSON.stringify({ updatedAt: new Date().toISOString(), clips: playlist }, null, 2), 'application/json');
+      $('playlist-status').textContent = done;
+    } catch (error) {
+      $('playlist-status').textContent = 'Not saved: ' + error.message;
+    }
+  }
+  function renderPlaylist() {
+    const list = $('playlist-list');
+    list.textContent = '';
+    playlist.forEach((clip, index) => {
+      const row = document.createElement('li');
+      if (index === playlistPlaying) row.classList.add('current');
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'go';
+      go.title = 'Go to this clip (and mark it with the cut marks)';
+      const when = document.createElement('time');
+      when.textContent = fmt(clip.from) + '–' + fmt(clip.to);
+      const title = document.createElement('span');
+      title.className = 'chapter-title';
+      title.textContent = (index + 1) + '. ' + clip.title;
+      const length = document.createElement('span');
+      length.className = 'chapter-length';
+      length.textContent = fmt(clip.to - clip.from);
+      go.append(when, title, length);
+      go.addEventListener('click', () => { start = clip.from; end = clip.to; update(); renderCutMarks(); showPosition(clip.from); });
+      const button = (text, label, action, disabled = false) => {
+        const element = document.createElement('button');
+        element.type = 'button';
+        element.className = 'small';
+        element.textContent = text;
+        element.title = label;
+        element.disabled = disabled;
+        element.addEventListener('click', action);
+        return element;
+      };
+      const move = (step) => {
+        const moved = [...playlist];
+        const [item] = moved.splice(index, 1);
+        moved.splice(index + step, 0, item);
+        playlist = moved;
+        savePlaylist('Moved');
+      };
+      row.append(go,
+        button('↑', 'Move up', () => move(-1), index === 0),
+        button('↓', 'Move down', () => move(1), index === playlist.length - 1),
+        button('✎', 'Rename', () => {
+          const name = (prompt('Clip name:', clip.title) || '').trim();
+          if (name) { clip.title = name; savePlaylist('Renamed'); }
+        }),
+        button('✕', 'Remove from the playlist', () => { playlist = playlist.filter((other) => other !== clip); savePlaylist('Removed'); }));
+      list.appendChild(row);
+    });
+    const total = playlist.reduce((sum, clip) => sum + (clip.to - clip.from), 0);
+    $('playlist-total').textContent = playlist.length ? playlist.length + ' clip' + (playlist.length === 1 ? '' : 's') + ', ' + fmt(total) : '';
+    $('playlist-empty').hidden = playlist.length > 0;
+    ['playlist-play', 'playlist-video', 'playlist-text', 'playlist-captions'].forEach((id) => { $(id).disabled = playlist.length === 0; });
+  }
+  function setPlaylistShown(shown) {
+    $('playlist-panel').hidden = !shown;
+    $('playlist-toggle').setAttribute('aria-pressed', shown ? 'true' : 'false');
+    try { localStorage.setItem('thumbnails.playlistShown', shown ? '1' : '0'); } catch {}
+  }
+  $('playlist-toggle').addEventListener('click', () => setPlaylistShown($('playlist-panel').hidden));
+  try { setPlaylistShown(localStorage.getItem('thumbnails.playlistShown') === '1'); } catch {}
+  $('playlist-add').addEventListener('click', () => {
+    if (start === null || end === null || !(end > start)) {
+      $('snapshot-status').textContent = 'Mark the clip first: ✂⟦ where it starts and ⟧✂ where it ends';
+      return;
+    }
+    // Named after its chapter, or else the first words said in it.
+    const chapter = agendaIndexAt(start + 0.01);
+    const firstWords = wordsIn({ from: start, to: end }).slice(0, 8).map((word) => word.text).join(' ');
+    const title = chapter >= 0 ? agendaItems[chapter].title : (firstWords || 'Clip at ' + fmt(start));
+    playlist = [...playlist, { id: Date.now().toString(36), from: Number(start.toFixed(3)), to: Number(end.toFixed(3)), title }];
+    setPlaylistShown(true);
+    savePlaylist('Added ' + fmt(start) + '–' + fmt(end) + ' as clip ' + playlist.length);
+    $('snapshot-status').textContent = 'Added to the playlist as clip ' + playlist.length + '; mark the next one';
+  });
+  // Play all: each clip in turn, moving on when one ends.
+  $('playlist-play').addEventListener('click', async () => {
+    if (!playlist.length) return;
+    playlistPlaying = 0;
+    renderPlaylist();
+    showPosition(playlist[0].from);
+    if (video.paused) await togglePlay();
+  });
+  video.addEventListener('timeupdate', () => {
+    if (playlistPlaying < 0) return;
+    const clip = playlist[playlistPlaying];
+    const now = toPosition(video.currentTime);
+    if (!clip) { playlistPlaying = -1; return; }
+    if (now < clip.from - 1 || now > clip.to + 2) { playlistPlaying = -1; renderPlaylist(); return; } // moved elsewhere
+    if (now >= clip.to) {
+      playlistPlaying += 1;
+      if (playlistPlaying >= playlist.length) { playlistPlaying = -1; video.pause(); } else showPosition(playlist[playlistPlaying].from);
+      renderPlaylist();
+    }
+  });
+  $('playlist-text').addEventListener('click', () => {
+    const NL = String.fromCharCode(10);
+    const lines = [meetingName || document.title || 'Meeting', 'Playlist: ' + playlist.length + ' clips, ' + fmt(playlist.reduce((sum, clip) => sum + (clip.to - clip.from), 0)), ''];
+    playlistRanges().forEach((range, index) => {
+      lines.push('== Clip ' + (index + 1) + ': ' + range.title + ' (' + fmt(range.from) + '–' + fmt(range.to) + ') ==', '');
+      lines.push(...transcriptLines(range, false), '');
+    });
+    downloadFile((meetingName || 'transcript') + ' - playlist.txt', lines.join(NL) + NL, 'text/plain;charset=utf-8');
+  });
+  $('playlist-captions').addEventListener('click', () => {
+    downloadFile((meetingName || 'transcript') + ' - playlist.srt', captionsFor(playlistRanges()), 'application/x-subrip;charset=utf-8');
+  });
+  $('playlist-video').addEventListener('click', async () => {
+    const button = $('playlist-video');
+    button.disabled = true;
+    try {
+      if (location.protocol === 'file:') throw new Error('this needs the local server (npm start)');
+      $('playlist-status').textContent = 'Asking the server to join the clips…';
+      const response = await fetch('../render-playlist', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clips: playlist.map(({ from, to }) => ({ from, to })) }) });
+      if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
+      const started = await response.json();
+      const startedAt = Date.now();
+      const job = await new Promise((resolve, reject) => {
+        const check = async () => {
+          const state = await fetch('../' + started.statusUrl, { cache: 'no-store' }).then((reply) => (reply.ok ? reply.json() : null)).catch(() => null);
+          if (state?.status === 'done') { resolve(state); return; }
+          if (state?.status === 'failed') { reject(new Error(state.message || 'the job failed')); return; }
+          if (state?.message) $('playlist-status').textContent = state.message + ' (' + Math.round((Date.now() - startedAt) / 1000) + 's)';
+          setTimeout(check, 1500);
+        };
+        setTimeout(check, 700);
+      });
+      const link = document.createElement('a');
+      link.href = '../' + job.file.split('/').map(encodeURIComponent).join('/');
+      link.download = ((meetingName || 'meeting') + ' - playlist.mp4').replace(/[^a-zA-Z0-9 ,.()-]+/g, '').trim();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      $('playlist-status').textContent = job.message + ' — downloading (also saved in the session folder as ' + job.file + ')';
+    } catch (error) {
+      $('playlist-status').textContent = 'Could not make the video: ' + error.message;
+    } finally {
+      button.disabled = playlist.length === 0;
+    }
+  });
+  if (location.protocol !== 'file:') {
+    fetch('../playlist.json', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).then((data) => {
+      if (Array.isArray(data?.clips)) { playlist = data.clips; renderPlaylist(); }
+    }).catch(() => {});
+  }
+  renderPlaylist();
 
   // Who starts speaking at a word: clicking a word opens this. Picking a face makes that person the speaker from the
   // word on (Cmd/Ctrl-click to pick several people speaking together); Nobody marks silence or no one in particular.

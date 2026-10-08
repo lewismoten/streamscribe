@@ -20,6 +20,7 @@
     "extract-slides": "node scripts/extract-slides.js",
     "extract-thumbnails": "node scripts/extract-thumbnails.js",
     "extract-clip": "node scripts/extract-clip.js",
+    "render-playlist": "node scripts/render-playlist.js",
     "render-mp4": "node scripts/render-mp4.js",
     "backfill-from-archive": "node scripts/backfill-from-archive.js",
     "build-meeting": "node scripts/build-meeting.js",

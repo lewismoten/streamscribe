@@ -56,6 +56,7 @@ To work on the web app, run `npm run dev` and open http://localhost:5173/: Vite 
 | [`extract-thumbnails`](scripts/extract-thumbnails.md) | Builds a session's thumbnails, camera changes, and review page |
 | [`extract-slides`](scripts/extract-slides.md) | Saves each presentation slide shown during a session |
 | [`extract-clip`](scripts/extract-clip.md) | Cuts an MP4 clip of a session |
+| `render-playlist` | Joins a playlist of clips into one video (used by the review page) |
 | [`render-mp4`](scripts/render-mp4.md) | Stitches a session's segments into one MP4, optionally with a clock |
 | [`retranscribe-range`](scripts/retranscribe-range.md) | Boosts the audio of part of a session and transcribes it again (used by the review page) |
 | [`split-session`](scripts/split-session.md) | Splits a session in two |

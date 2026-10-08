@@ -219,6 +219,9 @@ async function handleFiles(request: http.IncomingMessage, response: http.ServerR
   if (method === 'POST' && path.basename(relative) === 'retranscribe') {
     return handleRetranscribe(request, response, path.dirname(resolved));
   }
+  if (method === 'POST' && path.basename(relative) === 'render-playlist') {
+    return handleRenderPlaylist(request, response, path.dirname(resolved));
+  }
   if (!['GET', 'HEAD'].includes(method)) return sendText(response, 405, 'Not allowed');
 
   // Saved marks come from the database (the files are copies).
@@ -293,6 +296,34 @@ async function handleRetranscribe(request: http.IncomingMessage, response: http.
   child.on('exit', () => { scan(); });
   console.log(`Started ${input.action} job ${job}`);
   return sendJson(response, 202, { job, status: 'queued', statusUrl: `retranscribe/jobs/${job}.json` });
+}
+
+// POST {recording}/render-playlist with JSON { clips: [{ from, to }, ...] } (video positions) joins the clips into one
+// MP4 with render-playlist, in the background; the page follows {recording}/clips/jobs/{job}.json, then downloads the
+// file it names.
+async function handleRenderPlaylist(request: http.IncomingMessage, response: http.ServerResponse, sessionDir: string) {
+  if (!String(request.headers['content-type'] || '').startsWith('application/json')) return sendText(response, 415, 'Expected application/json');
+  if (!fs.existsSync(path.join(sessionDir, 'segments.jsonl'))) return sendText(response, 404, 'Not a captured session or meeting folder');
+  const body = await readBody(request, 100000);
+  if (!body) return sendText(response, 413, 'Too large');
+  let clips: { from: number; to: number }[];
+  try {
+    clips = (JSON.parse(body.toString('utf8')).clips || []).map((clip: { from: unknown; to: unknown }) => ({ from: Number(clip.from), to: Number(clip.to) }));
+  } catch {
+    return sendText(response, 400, 'Not valid JSON');
+  }
+  if (clips.length === 0 || clips.length > 200 || clips.some((clip) => !(clip.from >= 0) || !(clip.to > clip.from) || clip.to > 86400)) {
+    return sendText(response, 400, 'Expected 1 to 200 clips, each with from < to (seconds)');
+  }
+  const job = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const jobsDir = path.join(sessionDir, 'clips', 'jobs');
+  await fs.promises.mkdir(jobsDir, { recursive: true });
+  await fs.promises.writeFile(path.join(jobsDir, `${job}.json`), `${JSON.stringify({ id: job, status: 'queued', updatedAt: new Date().toISOString() }, null, 2)}\n`);
+  const child = spawn(process.execPath, [path.join(repoRoot, 'scripts', 'render-playlist.js'), '--session', sessionDir,
+    '--clips', clips.map((clip) => `${clip.from.toFixed(3)}-${clip.to.toFixed(3)}`).join(','), '--job', job], { stdio: ['ignore', 'inherit', 'inherit'] });
+  child.on('error', (error) => console.error(`playlist job ${job}: ${error.message}`));
+  console.log(`Started playlist job ${job} (${clips.length} clips)`);
+  return sendJson(response, 202, { job, status: 'queued', statusUrl: `clips/jobs/${job}.json` });
 }
 
 // ---- Web app ----

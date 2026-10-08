@@ -38,6 +38,14 @@ Output goes to `{session}/thumbnails/`:
   - With **🔍 Magnify whoever is speaking** checked in 🎛 (saving zoom areas turns it on), whenever that person speaks while the camera is on that view, their larger copy grows out of where they sit just before they start (about 0.8 seconds, fading in), so it's in place when they begin. It stays about 3 seconds after they stop, then shrinks back into their seat as it fades out (timed by the video, so scrubbing and pausing agree). All of this stays within the camera shot it belongs to, worked out for the exact frame. A copy never grows in before a cut to the shot where the person speaks, and it never lingers past a cut away. If someone is already talking when the camera cuts to their view, their copy grows in at the start of the new shot. Copies have a black border and a drop shadow.
   - **🔍** in the toolbar magnifies a square chosen by hand (drag on the video); 🔍 again removes it.
   - Saved 📷 frames include whatever is magnified, at full resolution. Views and areas are saved in `{session}/views.json`.
+- Playlist (on the served page): collect clips and make one video of them.
+  - **Adding clips:** mark a clip with ✂⟦ and ⟧✂, press **➕** to add it, then mark the next one, and so on. **📼** shows or hides the playlist, which lists each clip with its times and length, and the total. A clip is named after its chapter, or else its first words.
+  - **Arranging:** click a clip to go there (with the cut marks set to it), ↑ ↓ to reorder, ✎ to rename, and ✕ to remove.
+  - **▶ Play all** plays the clips one after another.
+  - **⬇ Video:** the server cuts each clip frame-exact and joins them in order into one MP4 (`npm run render-playlist`), saved in `{session}/clips/` and downloaded.
+  - **⬇ Transcript:** what is said in each clip, as text, under a heading for each clip.
+  - **⬇ Captions (.srt):** closed captions timed to the playlist video, for YouTube. Each caption has at most two lines of about 42 characters and lasts up to 6 seconds. A new caption starts at each speaker change, named, and at each pause. The ⬇ menu beside the find box has the same captions for the whole meeting.
+  - The playlist is saved in `{session}/playlist.json` (and the library database).
 - Meeting name (on the served page): check **Show meeting name** and click the name on the top left of the video to edit it (it shows "Meeting name" until one is set). The name becomes the browser tab's title and is saved in `{session}/meeting-info.json`. It's drawn into 📷 frames too. A full meeting from `build-meeting` starts with the first named session's name.
 - `../playback.m3u8`: an HLS playlist of the session's captured segments, used by the page's player
 
