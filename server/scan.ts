@@ -190,8 +190,28 @@ async function describe(item: Found): Promise<Description> {
   };
 }
 
+// Word corrections made on the review page (word-edits.json) for the usual transcript: by line start, word number,
+// and the word as transcribed (as the page matches them). '' deletes a word; several words replace it.
+function applyWordEdits<T extends { startSeconds: number; text: string }>(db: DatabaseSync, recordingId: number, lines: T[]): T[] {
+  const row = db.prepare("SELECT body FROM documents WHERE recording_id = ? AND kind = 'word-edits'").get(recordingId) as { body: string } | undefined;
+  const edits = ((row ? JSON.parse(row.body)?.edits : null) || []) as { transcript: string; line: number; index: number; original: string; text: string }[];
+  const mine = edits.filter((edit) => edit.transcript === 'latest');
+  if (mine.length === 0) return lines;
+  return lines.map((line) => {
+    const key = Math.round(Number(line.startSeconds) * 100) / 100;
+    const forLine = mine.filter((edit) => edit.line === key);
+    if (forLine.length === 0) return line;
+    const words = String(line.text || '').split(' ').filter(Boolean);
+    const fixed = words.map((word, index) => {
+      const edit = forLine.find((item) => item.index === index && item.original === word);
+      return edit ? edit.text : word;
+    });
+    return { ...line, text: fixed.filter(Boolean).join(' ') };
+  });
+}
+
 function importTranscript(db: DatabaseSync, recordingId: number, filePath: string, mtime: number) {
-  const lines = (readJson(filePath)?.lines || []) as { startSeconds: number; endSeconds: number; text: string; retranscribed?: boolean }[];
+  const lines = applyWordEdits(db, recordingId, (readJson(filePath)?.lines || []) as { startSeconds: number; endSeconds: number; text: string; retranscribed?: boolean }[]);
   db.exec('BEGIN');
   try {
     db.prepare('DELETE FROM transcript_lines WHERE recording_id = ?').run(recordingId);

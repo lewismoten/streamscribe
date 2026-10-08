@@ -222,16 +222,29 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
   .turn.left .bubble { border-top-left-radius: 4px; }
   .turn.right .bubble { border-top-right-radius: 4px; background: color-mix(in srgb, var(--start) 10%, var(--card)); }
   .turn:not(.first) .bubble { border-top-left-radius: 12px; border-top-right-radius: 12px; }
-  .bubble time { display: block; font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .turn.right .bubble time { text-align: right; }
-  .turn.active .bubble { border-color: var(--start); box-shadow: 0 0 0 1px var(--start); }
-  .turn.match .bubble { box-shadow: 0 0 0 2px var(--end); }
-  .turn.retranscribed time::after { content: '  🔊 re-transcribed'; }
+  .para { position: relative; margin: 0; padding: 2px 4px; border-radius: 6px; cursor: pointer; }
+  .para + .para { margin-top: 6px; }
+  .para.active { background: color-mix(in srgb, var(--start) 12%, transparent); }
+  .para .line-boost { position: absolute; top: -10px; right: -6px; }
+  .para:hover .line-boost { display: inline-block; }
+  .w.match { box-shadow: 0 2px 0 var(--end); }
+  .w.retranscribed { color: color-mix(in srgb, var(--fg) 75%, var(--start)); }
+  .minute-row { margin: 8px auto 2px; width: fit-content; padding: 1px 10px; border-radius: 10px; font-size: 0.7rem; color: var(--muted);
+    background: color-mix(in srgb, var(--fg) 7%, transparent); font-variant-numeric: tabular-nums; cursor: pointer; }
+  .minute-row:hover { color: var(--fg); }
+  .silence-row { margin: 4px 8px; padding: 2px 8px; text-align: center; font-size: 0.75rem; color: var(--muted); border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); cursor: pointer; }
+  .silence-row:hover { color: var(--fg); }
+  .silence-row button { margin-left: 8px; padding: 0 6px; font-size: 0.72rem; line-height: 1.5; }
+  .w.edited { text-decoration: underline dotted color-mix(in srgb, var(--start) 80%, transparent); text-underline-offset: 3px; text-decoration-thickness: 2px; }
+  .w.deleted { text-decoration: line-through; opacity: 0.45; }
+  .picker-edit { display: flex; gap: 4px; margin: 0 0 6px; }
+  .download-menu { width: auto; max-width: min(420px, calc(100vw - 16px)); display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+  .download-menu button { text-align: left; }
+  .picker-edit input { flex: 1; min-width: 0; }
   .w { border-radius: 3px; }
   .w:hover { background: color-mix(in srgb, var(--fg) 12%, transparent); }
   .w.now { background: color-mix(in srgb, var(--start) 40%, transparent); }
   .w.change { box-shadow: inset 2px 0 0 var(--end); padding-left: 2px; }
-  .turn:hover .line-boost { display: inline-block; }
   .who-person, .figure-speakers .avatar { cursor: pointer; }
   .who-person:hover .avatar, .figure-speakers .avatar:hover { outline: 2px solid var(--end); outline-offset: 1px; }
   .word-picker { position: fixed; z-index: 50; width: min(420px, calc(100vw - 16px)); max-height: 70vh; overflow: auto; padding: 8px 10px;
@@ -684,6 +697,11 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
       <button type="button" id="find-next" title="Next result (Enter)" aria-label="Next result">▶</button>
     </span>
     <span class="label" id="find-status"></span>
+    <button type="button" id="transcript-download" title="Download the transcript as text (whole meeting or this chapter)" aria-label="Download transcript">⬇</button>
+    <select id="transcript-choice" hidden title="Which transcript to show" aria-label="Transcript">
+      <option value="latest">Transcript</option>
+      <option value="best">Best (word times)</option>
+    </select>
   </div>
   <div class="transcript-list" id="transcript-list"></div>
   </div>
@@ -2002,8 +2020,43 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   // span]] }); lineElements holds each line's first piece (for find).
   let lineElements = [];
   let pieceList = [];
+  const silenceMinimumSeconds = 8;
+  const paragraphPauseSeconds = 2;
+  // Word corrections ({ transcript, line, index, original, text }; text '' deletes the word, and several words replace
+  // it), saved in {session}/word-edits.json. Each applies only while the word there is still the one corrected.
+  let wordEdits = [];
+  const wordEditFor = (line, index, original) => wordEdits.find((edit) => edit.transcript === transcriptName && edit.line === line && edit.index === index && edit.original === original);
+  async function saveWordEdit(word, text) {
+    const original = word.edited ? word.original : word.text;
+    wordEdits = wordEdits.filter((edit) => !(edit.transcript === transcriptName && edit.line === word.line && edit.index === word.index));
+    if (text !== original) wordEdits.push({ transcript: transcriptName, line: word.line, index: word.index, at: word.at, original, text, updatedAt: new Date().toISOString() });
+    renderTranscript();
+    try {
+      await putFile('../word-edits.json', JSON.stringify({ updatedAt: new Date().toISOString(), note: 'Word corrections from the thumbnails page: line is the line start (seconds), index the word number in it.', edits: wordEdits }, null, 2), 'application/json');
+      $('snapshot-status').textContent = text === original ? 'Restored “' + original + '”' : (text ? 'Corrected “' + original + '” to “' + text + '”' : 'Deleted “' + original + '”');
+    } catch (error) {
+      $('snapshot-status').textContent = 'Correction not saved: ' + error.message;
+    }
+  }
   let activePiece = -1;
   let nowWord = null;
+  // A transcript line's words, each { text, at, end, line, index } with any correction (edited, display, original):
+  // times from the transcript where it has them (transcribe --best), or else estimated.
+  function lineWordList(startSeconds, endSeconds, text, timedWords) {
+    const words = timedWords && timedWords.length
+      ? timedWords.map(([at, end, said]) => ({ text: said, at: Math.round(at * 100) / 100, end: Number(end) }))
+      : lineWords(startSeconds, endSeconds, text);
+    // Corrections made on this page (word-edits.json), matched by line, word number, and the word as transcribed.
+    const lineKey = Math.round(startSeconds * 100) / 100;
+    words.forEach((word, wordIndex) => {
+      word.line = lineKey;
+      word.index = wordIndex;
+      if (!(word.end > word.at)) word.end = wordIndex + 1 < words.length ? words[wordIndex + 1].at : endSeconds;
+      const edit = wordEditFor(lineKey, wordIndex, word.text);
+      if (edit) { word.original = word.text; word.edited = true; word.display = edit.text; }
+    });
+    return words;
+  }
   // A line's words with estimated times (whisper times whole lines): the line's time shared out by word length.
   function lineWords(startSeconds, endSeconds, text) {
     const parts = String(text).split(' ').filter(Boolean);
@@ -2082,8 +2135,102 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
       section.appendChild(figure);
       transcriptList.appendChild(section);
     };
-    transcript.forEach(([startSeconds, endSeconds, text, retranscribed], index) => {
+    // Stretches with no words transcribed, as rows between the lines: silence, or speech too quiet or unclear to
+    // make out, which can be boosted and transcribed again.
+    let lastEnd = null;
+    const silenceRow = (from, to) => {
+      const row = document.createElement('div');
+      row.className = 'silence-row';
+      const length = to - from;
+      const label = document.createElement('span');
+      label.textContent = '⏸ No words for ' + (length >= 60 ? Math.floor(length / 60) + ' min ' + Math.round(length % 60) + ' s' : Math.round(length) + ' s');
+      row.title = 'Nothing was transcribed from ' + fmt(from) + ' to ' + fmt(to) + ' (silence, or speech too quiet to make out) — click to go there';
+      const boostGap = document.createElement('button');
+      boostGap.type = 'button';
+      boostGap.textContent = '🔊 Boost & re-transcribe';
+      boostGap.title = 'Raise the volume of this stretch, listen, and transcribe it again';
+      boostGap.addEventListener('click', (event) => { event.stopPropagation(); openBoostDialog(Math.max(0, from - 0.5), to + 0.5); });
+      row.append(label, boostGap);
+      row.addEventListener('click', () => showPosition(from));
+      section.appendChild(row);
+    };
+    // Words flow together while the same people are speaking; a new speaker starts a new bubble at the word where they
+    // begin, a pause of paragraphPauseSeconds starts a new paragraph, and the time is shown on its own, centered, as
+    // each minute begins. Headings, votes, camera changes, and gaps also end a bubble.
+    let bubble = null;
+    let paragraph = null;
+    let lastMinute = null;
+    let lastWordEnd = null;
+    const turnTimes = turns.map((turn) => turn.at);
+    const speakersFor = (seconds) => {
+      let low = 0, high = turnTimes.length - 1, found = -1;
+      while (low <= high) {
+        const middle = (low + high) >> 1;
+        if (turnTimes[middle] <= seconds + 0.15) { found = middle; low = middle + 1; } else high = middle - 1;
+      }
+      return found < 0 ? [] : turns[found].speakers;
+    };
+    const minuteRow = (minute) => {
+      const row = document.createElement('div');
+      row.className = 'minute-row';
+      const at = minute * 60;
+      row.textContent = fmt(at) + (clockMs(at) === null ? '' : ' · ' + clockFormat.format(new Date(clockMs(at))).replace(':00 ', ' '));
+      row.addEventListener('click', () => showPosition(at));
+      section.appendChild(row);
+    };
+    const openBubble = (ids) => {
+      const row = document.createElement('div');
+      row.className = 'turn ' + (ids.length && ids.every((id) => votingIds.has(id)) ? 'right' : 'left');
+      const face = document.createElement('div');
+      face.className = 'face';
+      // Faces at the start of each speaker change (and again after a heading, camera change, or gap).
+      const key = ids.join(',');
+      if (ids.length && key !== previousSpeakers) {
+        ids.forEach((id) => {
+          const person = peopleMap.get(id) || { id, name: id };
+          const item = document.createElement('span');
+          item.className = 'who-person';
+          item.title = nameAndRole(person) + ' — click to clip everything they say here';
+          const at = lastWordEnd ?? 0;
+          item.addEventListener('click', (event) => { event.stopPropagation(); clipSpeaker(id, Number(row.dataset.start || at) + 0.01); });
+          const label = document.createElement('small');
+          label.textContent = lastName(person);
+          item.append(avatar(person), label);
+          face.appendChild(item);
+        });
+        row.classList.add('first');
+      }
+      previousSpeakers = key;
+      const body = document.createElement('div');
+      body.className = 'bubble';
+      row.append(face, body);
+      section.appendChild(row);
+      bubble = { key, row, body };
+      paragraph = null;
+    };
+    const openParagraph = (startAt) => {
+      const element = document.createElement('p');
+      element.className = 'para';
+      // On hover: boost this paragraph (and a moment either side).
+      const boostButton = document.createElement('button');
+      boostButton.type = 'button';
+      boostButton.className = 'line-boost';
+      boostButton.textContent = '🔊';
+      boostButton.title = 'Boost this and transcribe it again';
+      element.appendChild(boostButton);
+      element.addEventListener('click', () => showPosition(Number(element.dataset.start)));
+      element.dataset.start = startAt;
+      bubble.body.appendChild(element);
+      const own = { el: element, element, start: startAt, end: startAt, words: [] };
+      boostButton.addEventListener('click', (event) => { event.stopPropagation(); openBoostDialog(Math.max(0, own.start - 0.5), own.end + 0.5); });
+      if (!bubble.row.dataset.start) bubble.row.dataset.start = startAt;
+      pieceList.push(own);
+      paragraph = own;
+    };
+    transcript.forEach(([startSeconds, endSeconds, text, retranscribed, timedWords], index) => {
       if (!inRange(startSeconds)) return;
+      if (lastEnd !== null && startSeconds - lastEnd >= silenceMinimumSeconds) silenceRow(lastEnd, startSeconds);
+      lastEnd = Math.max(lastEnd ?? 0, endSeconds);
       // Open a section for every scene change up to this line (the last one before the line gets its own).
       while (sceneIndex + 1 < scenes.length && scenes[sceneIndex + 1][0] <= startSeconds + 0.5) {
         sceneIndex += 1;
@@ -2100,81 +2247,37 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
         const event = sortedVotes[voteIndex++];
         if (!range || event.at >= range.min - 0.01) voteRow(event);
       }
-      // Split the line at every speaker change inside it, at the first word said after the change.
-      const words = lineWords(startSeconds, endSeconds, text);
-      const breaks = turns.map((turn) => turn.at).filter((at) => at > startSeconds + 0.15 && at < endSeconds - 0.05);
-      const groups = [[]];
-      let nextBreak = 0;
-      words.forEach((word) => {
-        while (nextBreak < breaks.length && word.at >= breaks[nextBreak] - 0.05) {
-          if (groups[groups.length - 1].length) groups.push([]);
-          nextBreak += 1;
+      const words = lineWordList(startSeconds, endSeconds, text, timedWords);
+      words.forEach((word, wordIndex) => {
+        const minute = Math.floor(word.at / 60);
+        if (minute !== lastMinute) { minuteRow(minute); lastMinute = minute; }
+        const ids = speakersFor(word.at + 0.01);
+        // Anything added to the section since (a heading, a vote, an image, a gap, a minute) ends the bubble.
+        if (!bubble || bubble.key !== ids.join(',') || section.lastElementChild !== bubble.row) openBubble(ids);
+        if (!paragraph || (lastWordEnd !== null && word.at - lastWordEnd >= paragraphPauseSeconds)) openParagraph(word.at);
+        const span = document.createElement('span');
+        span.className = 'w';
+        span.dataset.line = index;
+        span.textContent = word.edited ? (word.display || word.original) : word.text;
+        if (word.edited) {
+          span.classList.add(word.display ? 'edited' : 'deleted');
+          span.title = word.display ? 'Corrected from “' + word.original + '”' : 'Deleted: “' + word.original + '”';
+        } else if (retranscribed) {
+          span.classList.add('retranscribed');
+          span.title = 'Re-transcribed after a volume boost';
         }
-        groups[groups.length - 1].push(word);
-      });
-      groups.forEach((group, groupIndex) => {
-        if (!group.length) return;
-        const pieceStart = groupIndex === 0 ? startSeconds : group[0].at;
-        const pieceEnd = groupIndex + 1 < groups.length && groups[groupIndex + 1].length ? groups[groupIndex + 1][0].at : endSeconds;
-        const ids = speakersAt(pieceStart + 0.01);
-        const row = document.createElement('div');
-        row.className = 'turn ' + (ids.length && ids.every((id) => votingIds.has(id)) ? 'right' : 'left');
-        row.dataset.index = index;
-        if (retranscribed) row.classList.add('retranscribed');
-        // Faces beside the first piece of each speaker change (and again under each new image or heading).
-        const face = document.createElement('div');
-        face.className = 'face';
-        if (ids.length && ids.join(',') !== previousSpeakers) {
-          ids.forEach((id) => {
-            const person = peopleMap.get(id) || { id, name: id };
-            const item = document.createElement('span');
-            item.className = 'who-person';
-            item.title = nameAndRole(person) + ' — click to clip everything they say here';
-            item.addEventListener('click', (event) => { event.stopPropagation(); clipSpeaker(id, pieceStart + 0.01); });
-            const label = document.createElement('small');
-            label.textContent = lastName(person);
-            item.append(avatar(person), label);
-            face.appendChild(item);
-          });
-          row.classList.add('first');
-        }
-        previousSpeakers = ids.join(',');
-        const bubble = document.createElement('div');
-        bubble.className = 'bubble';
-        const stamp = document.createElement('time');
-        stamp.textContent = fmt(pieceStart) + (clockMs(pieceStart) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(pieceStart))));
-        // On hover: boost just this piece (and a moment either side).
-        const lineBoost = document.createElement('button');
-        lineBoost.type = 'button';
-        lineBoost.className = 'line-boost';
-        lineBoost.textContent = '🔊';
-        lineBoost.title = 'Boost this and transcribe it again';
-        lineBoost.addEventListener('click', (event) => { event.stopPropagation(); openBoostDialog(Math.max(0, pieceStart - 0.5), pieceEnd + 0.5); });
-        stamp.appendChild(lineBoost);
-        stamp.addEventListener('click', (event) => { event.stopPropagation(); showPosition(pieceStart); });
-        const said = document.createElement('span');
-        said.className = 'words';
-        const wordRefs = [];
-        group.forEach((word) => {
-          const span = document.createElement('span');
-          span.className = 'w';
-          span.textContent = word.text;
-          if (turns.some((turn) => Math.abs(turn.at - word.at) < 0.06)) span.classList.add('change');
-          span.addEventListener('click', (event) => {
-            event.stopPropagation();
-            showPosition(word.at);
-            openWordPicker(word, span);
-          });
-          said.append(span, ' ');
-          wordRefs.push([word.at, span]);
+        if (turns.some((turn) => Math.abs(turn.at - word.at) < 0.06)) span.classList.add('change');
+        if (index === findIndex) span.classList.add('match');
+        span.addEventListener('click', (event) => {
+          event.stopPropagation();
+          showPosition(word.at);
+          openWordPicker(word, span);
         });
-        bubble.append(stamp, said);
-        row.append(face, bubble);
-        row.addEventListener('click', () => showPosition(pieceStart));
-        if (index === findIndex) row.classList.add('match');
-        section.appendChild(row);
-        pieceList.push({ start: pieceStart, end: pieceEnd, el: row, words: wordRefs });
-        if (!lineElements[index]) lineElements[index] = row;
+        paragraph.element.append(span, ' ');
+        paragraph.words.push([word.at, span]);
+        paragraph.end = Math.max(paragraph.end, word.end);
+        lastWordEnd = word.end;
+        if (wordIndex === 0 && !lineElements[index]) lineElements[index] = span;
       });
       shownLines += 1;
     });
@@ -2237,6 +2340,127 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   }
   video.addEventListener('play', () => requestAnimationFrame(followWords));
 
+  // The transcript as text, for the whole meeting or one chapter: the meeting name, chapter headings, who said what
+  // ("Name, role: words"; a new line for each speaker change, pause, and minute), the time of day as each minute
+  // begins ("[02:19:46 PM]"), and motions, seconds, and votes with how each member voted. Corrections are applied.
+  const stampFormat = new Intl.DateTimeFormat('en-US', { timeZone: page.timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const stampAt = (seconds) => '[' + (clockMs(seconds) === null ? fmt(seconds) : stampFormat.format(new Date(clockMs(seconds)))) + ']';
+  const speakerLabel = (ids) => (ids.length ? ids.map((id) => nameAndRole(peopleMap.get(id) || { id, name: id })).join(' & ') : 'Unknown speaker');
+  function transcriptText(chapter) {
+    const out = [];
+    // One blank line at most between parts.
+    const add = (text) => { if (text || out[out.length - 1]) out.push(text); };
+    add(meetingName || document.title || 'Meeting');
+    if (chapter) add('Chapter: ' + chapter.title);
+    add('');
+    const inRange = (seconds) => !chapter || (seconds >= chapter.from - 0.01 && seconds < chapter.to);
+    const personName = (id) => shownName(peopleMap.get(id) || { id, name: id });
+    const events = [];
+    if (!chapter) agendaItems.forEach((item) => events.push({ at: item.at, chapter: item.title }));
+    voteData.votes.forEach((vote) => {
+      if (vote.movedBy?.id && vote.movedBy.at !== null && vote.movedBy.at !== undefined) {
+        events.push({ at: vote.movedBy.at, text: '✋ Motion by ' + personName(vote.movedBy.id) + (vote.motion ? ': ' + vote.motion : '') });
+      }
+      if (vote.secondedBy?.id && vote.secondedBy.at !== null && vote.secondedBy.at !== undefined) {
+        events.push({ at: vote.secondedBy.at, text: '✋ Seconded by ' + personName(vote.secondedBy.id) });
+      }
+      const statuses = voteState(vote).statuses;
+      const roll = ['for', 'against', 'abstain', 'absent', 'pending'].map((choice) => {
+        const names = Object.keys(statuses).filter((id) => statuses[id] === choice).map(personName);
+        return names.length ? choiceNames[choice] + ': ' + names.join(', ') : '';
+      }).filter(Boolean).join('; ');
+      // The result goes where the roll call settled it (or where the vote opened, if it never was).
+      events.push({ at: decidedAt(vote) ?? vote.at, text: '🗳 Vote: ' + (vote.motion || 'Motion') + ' — ' + describeTally(vote) + (roll ? ' (' + roll + ')' : '') });
+    });
+    events.sort((left, right) => left.at - right.at);
+    let eventIndex = 0;
+    let line = null;
+    let lastMinute = null;
+    let lastEnd = null;
+    const closeLine = () => {
+      if (line && line.words.length) out.push(line.label + ': ' + line.words.join(' '));
+      line = null;
+    };
+    const eventsUntil = (seconds) => {
+      while (eventIndex < events.length && events[eventIndex].at <= seconds) {
+        const event = events[eventIndex++];
+        if (!inRange(event.at)) continue;
+        closeLine();
+        if (event.chapter) { add(''); add('== ' + event.chapter + ' =='); add(''); lastMinute = null; } else out.push(event.text);
+      }
+    };
+    transcript.forEach(([startSeconds, endSeconds, text, , timedWords]) => {
+      if (chapter && (endSeconds < chapter.from || startSeconds >= chapter.to)) return;
+      lineWordList(startSeconds, endSeconds, text, timedWords).forEach((word) => {
+        if (!inRange(word.at)) return;
+        eventsUntil(word.at);
+        const shown = word.edited ? word.display : word.text;
+        if (!shown) return;
+        const minute = Math.floor(word.at / 60);
+        if (minute !== lastMinute) {
+          closeLine();
+          add('');
+          out.push(stampAt(word.at));
+          lastMinute = minute;
+        }
+        const label = speakerLabel(speakersAt(word.at + 0.01));
+        if (!line || line.label !== label || (lastEnd !== null && word.at - lastEnd >= paragraphPauseSeconds)) {
+          closeLine();
+          line = { label, words: [] };
+        }
+        line.words.push(shown);
+        lastEnd = word.end;
+      });
+    });
+    eventsUntil(chapter ? chapter.to : Infinity);
+    closeLine();
+    return out.join(String.fromCharCode(10)) + String.fromCharCode(10);
+  }
+  function chapterRange(item) {
+    const next = agendaItems[agendaItems.indexOf(item) + 1];
+    return { title: item.title, from: item.at, to: next ? next.at : endSeconds };
+  }
+  function downloadTranscript(chapter) {
+    const blob = new Blob([transcriptText(chapter)], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const name = (meetingName || 'transcript') + (chapter ? ' - ' + chapter.title : '');
+    link.download = name.replace(/[^a-zA-Z0-9 ,.()-]+/g, '').trim().replace(/ +/g, ' ') + '.txt';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+  }
+  // ⬇ beside the find box: the whole meeting, or the chapter being played.
+  const downloadMenu = document.createElement('div');
+  downloadMenu.className = 'word-picker download-menu';
+  downloadMenu.hidden = true;
+  document.body.appendChild(downloadMenu);
+  $('transcript-download').addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (!downloadMenu.hidden) { downloadMenu.hidden = true; return; }
+    downloadMenu.textContent = '';
+    const head = document.createElement('div');
+    head.className = 'picker-head';
+    head.textContent = 'Download the transcript as text';
+    downloadMenu.appendChild(head);
+    const option = (label, chapter) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.addEventListener('click', () => { downloadMenu.hidden = true; downloadTranscript(chapter); });
+      downloadMenu.appendChild(button);
+    };
+    option('⬇ Whole meeting', null);
+    const current = agendaIndexAt(position);
+    if (current >= 0) option('⬇ This chapter: ' + agendaItems[current].title, chapterRange(agendaItems[current]));
+    downloadMenu.hidden = false;
+    const rect = $('transcript-download').getBoundingClientRect();
+    downloadMenu.style.left = Math.max(8, Math.min(window.innerWidth - downloadMenu.offsetWidth - 8, rect.right - downloadMenu.offsetWidth)) + 'px';
+    downloadMenu.style.top = (rect.bottom + 6) + 'px';
+  });
+  document.addEventListener('mousedown', (event) => { if (!downloadMenu.hidden && !downloadMenu.contains(event.target) && event.target !== $('transcript-download')) downloadMenu.hidden = true; });
+
   // Who starts speaking at a word: clicking a word opens this. Picking a face makes that person the speaker from the
   // word on (Cmd/Ctrl-click to pick several people speaking together); Nobody marks silence or no one in particular.
   const wordPicker = document.createElement('div');
@@ -2251,7 +2475,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     wordPicker.textContent = '';
     const head = document.createElement('div');
     head.className = 'picker-head';
-    head.textContent = 'Who starts speaking at “' + word.text + '” (' + fmt(word.at) + ')?';
+    head.textContent = '“' + (word.edited ? (word.display || word.original) : word.text) + '” at ' + fmt(word.at) + ' — who starts speaking here?';
     const close = document.createElement('button');
     close.type = 'button';
     close.textContent = '✕';
@@ -2259,6 +2483,37 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     close.addEventListener('click', closeWordPicker);
     head.appendChild(close);
     wordPicker.appendChild(head);
+    // Correct the word: change it, type more words to add after it, delete it, or restore what was transcribed.
+    const editRow = document.createElement('form');
+    editRow.className = 'picker-edit';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = word.edited ? word.display : word.text;
+    input.setAttribute('aria-label', 'Correct this word');
+    input.title = 'Correct the word (type more words to add them after it), then Enter';
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.textContent = '✎ Correct';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '🗑';
+    remove.title = 'Delete this word';
+    remove.addEventListener('click', () => { saveWordEdit(word, ''); closeWordPicker(); });
+    editRow.append(input, save, remove);
+    if (word.edited) {
+      const restore = document.createElement('button');
+      restore.type = 'button';
+      restore.textContent = '↺';
+      restore.title = 'Restore “' + word.original + '” as transcribed';
+      restore.addEventListener('click', () => { saveWordEdit(word, word.original); closeWordPicker(); });
+      editRow.appendChild(restore);
+    }
+    editRow.addEventListener('submit', (event) => {
+      event.preventDefault();
+      saveWordEdit(word, input.value.split(' ').filter(Boolean).join(' '));
+      closeWordPicker();
+    });
+    wordPicker.appendChild(editRow);
     const choose = (id, event) => {
       if (event.metaKey || event.ctrlKey) {
         pickerSelection = pickerSelection.includes(id) ? pickerSelection.filter((item) => item !== id) : [...pickerSelection, id];
@@ -2393,7 +2648,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     if (!lineElements[findIndex]) showPosition(transcript[findIndex][0]);
     const line = lineElements[findIndex];
     if (line) {
-      line.classList.add('match');
+      transcriptList.querySelectorAll('.w[data-line="' + findIndex + '"]').forEach((span) => span.classList.add('match'));
       userScrolledAt = Date.now();
       scrollToLine(line);
     }
@@ -2408,22 +2663,41 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   $('find-next').addEventListener('click', () => stepFind(1));
   $('find-prev').addEventListener('click', () => stepFind(-1));
   let transcriptKey = '';
+  // Which transcript is shown: the usual one (transcripts/latest.json), or best.json from transcribe --best, which
+  // times every word. The choice is remembered.
+  let transcriptName = 'latest';
+  try { transcriptName = localStorage.getItem('thumbnails.transcript') === 'best' ? 'best' : 'latest'; } catch {}
   function loadLatestTranscript() {
-    return fetch('../transcripts/latest.json', { cache: 'no-store' })
+    return fetch('../transcripts/' + transcriptName + '.json', { cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
-        if (data?.lines?.length) {
-          // Only redraw when it changed (a live session checks again every few seconds).
-          const key = data.lines.length + ':' + (data.updatedAt || '') + ':' + data.lines[data.lines.length - 1].text;
-          if (key === transcriptKey) return;
-          transcriptKey = key;
-          transcript = data.lines.map((line) => [Number(line.startSeconds), Number(line.endSeconds), line.text, line.retranscribed ? 1 : 0]);
-          renderTranscript();
+        if (!data?.lines?.length) {
+          if (transcriptName !== 'latest') { transcriptName = 'latest'; return loadLatestTranscript(); }
+          return;
         }
+        // Only redraw when it changed (a live session checks again every few seconds).
+        const key = transcriptName + ':' + data.lines.length + ':' + (data.createdAt || data.updatedAt || '') + ':' + data.lines[data.lines.length - 1].text;
+        if (key === transcriptKey) return;
+        transcriptKey = key;
+        transcript = data.lines.map((line) => [Number(line.startSeconds), Number(line.endSeconds), line.text, line.retranscribed ? 1 : 0, Array.isArray(line.words) ? line.words : null]);
+        $('transcript-choice').value = transcriptName;
+        renderTranscript();
       })
       .catch(() => {});
   }
+  // The choice only shows when a best transcript exists.
   if (location.protocol !== 'file:') {
+    fetch('../transcripts/best.json', { method: 'HEAD', cache: 'no-store' }).then((response) => { $('transcript-choice').hidden = !response.ok; }).catch(() => {});
+  }
+  $('transcript-choice').addEventListener('change', () => {
+    transcriptName = $('transcript-choice').value;
+    try { localStorage.setItem('thumbnails.transcript', transcriptName); } catch {}
+    loadLatestTranscript();
+  });
+  if (location.protocol !== 'file:') {
+    fetch('../word-edits.json', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).then((data) => {
+      if (Array.isArray(data?.edits)) { wordEdits = data.edits; renderTranscript(); }
+    }).catch(() => {});
     loadLatestTranscript();
     fetch('../views.json', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).then((data) => {
       if (data) { viewData = { views: data.views || [], sceneViews: data.sceneViews || {} }; sceneViewCache.clear(); refreshCurrentView(); }
@@ -2924,6 +3198,12 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
       length.title = 'Length of this chapter';
       go.append(when, title, length);
       go.addEventListener('click', () => showPosition(item.at));
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'small';
+      save.title = 'Download this chapter’s transcript as text';
+      save.textContent = '⬇';
+      save.addEventListener('click', () => downloadTranscript(chapterRange(item)));
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'small';
@@ -2939,7 +3219,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
         if (!confirm('Remove the chapter "' + item.title + '"?')) return;
         await changeAgenda(agendaItems.filter((other) => other.id !== item.id), 'Removed');
       });
-      row.append(go, edit, remove);
+      row.append(go, save, edit, remove);
       list.appendChild(row);
     });
     $('agenda-empty').hidden = agendaItems.length > 0;

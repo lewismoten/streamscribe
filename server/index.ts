@@ -208,6 +208,11 @@ async function handleFiles(request: http.IncomingMessage, response: http.ServerR
     await fs.promises.mkdir(path.dirname(resolved), { recursive: true });
     await saveDocument(db, source.key, target!.recordingId, target!.kind, value, resolved);
     if (target!.kind === 'meeting-info') db.prepare('UPDATE recordings SET title = ? WHERE id = ?').run(String((value as { name?: string }).name || ''), target!.recordingId);
+    // Corrected words go into the searchable transcript on the next scan.
+    if (target!.kind === 'word-edits') {
+      db.prepare('UPDATE recordings SET transcript_mtime = 0 WHERE id = ?').run(target!.recordingId);
+      scan();
+    }
     console.log(`Saved ${target!.kind} for ${path.dirname(relative) || source.key}`);
     return sendText(response, 200, 'Saved');
   }
