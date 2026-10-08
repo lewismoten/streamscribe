@@ -2,9 +2,9 @@
 // Brings the database up to date and checks the setup; run after each deploy (bin/deploy-hub.sh does):
 //   php tools/migrate.php [path/to/config.php]
 require __DIR__ . '/../lib/db.php';
-$configFile = $argv[1] ?? __DIR__ . '/../config.php';
+$configFile = $argv[1] ?? dirname(__DIR__) . '/config.php';
 if (!is_file($configFile)) {
-  fwrite(STDERR, "No $configFile yet: copy config.example.php to config.php and edit it (see docs/hub/hub.md)\n");
+  fwrite(STDERR, "No $configFile yet: copy config.example.php to config.php there and edit it (docs/hub/deploy.md, \"Once, on the server\")\n");
   exit(1);
 }
 $config = require $configFile;
