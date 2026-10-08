@@ -26,7 +26,10 @@
     "build-meeting": "node bin/build-meeting.js",
     "retranscribe-range": "node bin/retranscribe-range.js",
     "classify-swagit-standby": "node bin/classify-swagit-standby.js",
-    "test": "node --test test/"
+    "test": "node --test test/*.test.js",
+    "simulate-hls": "node bin/simulate-hls.js",
+    "recorder": "node bin/recorder.js",
+    "test:recorder": "node --test test/recorder.e2e.js"
   },
   "engines": {
     "node": ">=24"

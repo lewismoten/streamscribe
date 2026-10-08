@@ -138,7 +138,8 @@ export async function detectScenes(sessionDir, session, outputDir, options, verb
 export function scanPart(listPath) {
   return new Promise((resolve, reject) => {
     const child = spawn(TOOLS.ffmpeg, [
-      '-hide_banner', '-nostats', '-skip_frame', 'nokey', '-f', 'concat', '-safe', '0', '-i', listPath,
+      // (A segment that won't decode leaves a gap rather than failing the whole scan.)
+      '-hide_banner', '-nostats', '-max_error_rate', '1', '-skip_frame', 'nokey', '-f', 'concat', '-safe', '0', '-i', listPath,
       '-filter_complex', `[0:v]scale=160:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score[v];[0:a]silencedetect=noise=${stillSilenceDb}dB:d=${stillMinimumSeconds}[a]`,
       '-map', '[v]', '-map', '[a]', '-f', 'null', '-'
     ], { stdio: ['ignore', 'ignore', 'pipe'] });

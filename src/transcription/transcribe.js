@@ -114,7 +114,7 @@ async function writeNamedTranscript(sessionDir, lines, options, session, boosts)
 }
 
 // Transcribes one chunk; when the output loops, retries once at a higher temperature.
-async function transcribeChunk(chunk, sessionDir, session, options, chunkBoosts = []) {
+export async function transcribeChunk(chunk, sessionDir, session, options, chunkBoosts = []) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'streamscribe-transcribe-'));
   try {
     const offset = chunk[0].audioStart;

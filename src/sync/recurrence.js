@@ -63,7 +63,17 @@ export function zonedTime(dateMs, hour, minute, timeZone) {
 
 // ---- Rules ----
 
+/**
+ * @typedef {{ freq: string, interval: number, byDay: { position: number, weekday: number }[], byMonthDay: number[],
+ *   until: { date: number, minutes: number } | null, count: number | null }} Rule
+ * @typedef {{ key: string, scheduleId: string, localStart: string, start: number, end: number, title: string,
+ *   sourceKey: string, leadMinutes: number, overrun: Record<string, number>, moved: boolean, cancelled: boolean,
+ *   schedule: Record<string, any> }} Occurrence
+ */
+
+/** @param {string} text @returns {Rule} */
 export function parseRule(text) {
+  /** @type {Rule} */
   const rule = { freq: '', interval: 1, byDay: [], byMonthDay: [], until: null, count: null };
   for (const part of String(text || '').split(';').map((item) => item.trim()).filter(Boolean)) {
     const [name, value = ''] = part.split('=');
@@ -137,6 +147,10 @@ function* ruleDates(rule, startDate) {
 // The occurrences of a schedule that overlap [fromMs, toMs): { key, scheduleId, localStart, start, end (ms), title,
 // sourceKey, leadMinutes, overrun, moved, schedule }. Cancelled ones (exdates, or overrides with cancelled) are left
 // out unless includeCancelled, when they come with cancelled: true.
+/**
+ * @param {Record<string, any>} schedule @param {number} fromMs @param {number} toMs
+ * @param {{ includeCancelled?: boolean }} [options] @returns {Occurrence[]}
+ */
 export function occurrences(schedule, fromMs, toMs, { includeCancelled = false } = {}) {
   const first = parseLocal(schedule.start);
   const timeZone = schedule.timeZone || 'UTC';
@@ -144,7 +158,9 @@ export function occurrences(schedule, fromMs, toMs, { includeCancelled = false }
   const rule = schedule.rrule ? parseRule(schedule.rrule) : null;
   const exdates = new Set(schedule.exdates || []);
   const overrides = schedule.overrides || {};
+  /** @type {Occurrence[]} */
   const found = [];
+  /** @param {number} dateMs @returns {Occurrence} */
   const make = (dateMs) => {
     const key = localKey(dateMs, first.hour, first.minute);
     const override = overrides[key] || {};
@@ -189,6 +205,10 @@ export function occurrences(schedule, fromMs, toMs, { includeCancelled = false }
 }
 
 // Every schedule's occurrences in a window, soonest first.
+/**
+ * @param {Record<string, any>[]} schedules @param {number} fromMs @param {number} toMs
+ * @param {{ includeCancelled?: boolean }} [options] @returns {Occurrence[]}
+ */
 export function upcoming(schedules, fromMs, toMs, options) {
   return schedules.flatMap((schedule) => occurrences(schedule, fromMs, toMs, options)).sort((a, b) => a.start - b.start);
 }

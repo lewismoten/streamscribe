@@ -57,6 +57,18 @@ test('reading needs no key; writing does, and keys are scoped', async () => {
   assert.equal(reply.results[0].status, 'error');
 });
 
+test('a change the hub refuses is dropped and reported, and the rest still go', async () => {
+  const editor = client(editorKey);
+  await editor.put('stills', 'refused-still', { path: 'x.jpg' });
+  await editor.put('schedules', 'sent-schedule', { title: 'Sent anyway' });
+  const result = await editor.sync();
+  assert.deepEqual(result.refused.map((item) => item.id), ['refused-still']);
+  assert.equal((await editor.store.listPending()).length, 0);
+  const reader = client();
+  await reader.pull();
+  assert.equal((await reader.list('schedules')).find((record) => record.id === 'sent-schedule')?.data.title, 'Sent anyway');
+});
+
 test('two editors converge, and concurrent chapter edits are merged', async () => {
   const one = client(editorKey);
   const two = client('ss_test_editor2');

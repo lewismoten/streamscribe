@@ -29,6 +29,11 @@ Edit `config.local.js` first: add a `sources` entry for each stream (its live `.
 - **Search:** finds words in every transcript at once, matching word forms ("budget" also finds "budgets" and "budgeted"); use quotes for an exact phrase. Results are grouped by recording, and each line opens the review page at that moment.
 - **Capture:** starts and stops the live capture of each source. Each capture runs as its own process, so restarting the server doesn't interrupt it. A thumbnail watcher keeps the review page current while it records, so you can watch and scrub it live. The page shows the capture's log and its newest recording, and won't start a second capture beside one already running, including one started from a terminal.
 - **Review page:** the existing per-recording page, with the player, transcript, speakers, chapters, votes, boosts, clips, and the magnifier. 🏠 returns to the library.
+- **Meetings, Live, Schedules, Settings:** the hub's side, once a hub is set under Settings. Meetings lists what recorders recorded, each with its stills and transcript. Live shows each recorder's latest picture and quick transcript while a meeting runs. Schedules sets when meetings happen, one-off or repeating (every Tuesday 6–10 pm, the first Tuesday of each month), with a preview of the coming dates. These pages also work as a static site such as GitHub Pages (docs/hub/hub.md).
+
+### Recorders and the hub
+
+To record meetings on a schedule, run a recorder on a machine with disk (`npm run recorder`, docs/recorder/recorder.md). It reads schedules from a hub (a small PHP API with SQLite, `hub-php/`, docs/hub/hub.md), and starts capturing a few minutes before each meeting. If the meeting runs long, it keeps going until the stream shows the standby slide or stops sending video. While recording it reports live pictures and quick transcripts; afterwards it sends the final transcript and stills. The video stays on the recorder. Several recorders can follow the same schedules as backups for each other: only one records each meeting.
 
 The library is kept in a SQLite database, `data/streamscribe.db`. It holds the recordings and their transcripts (indexed for search), plus everything saved on the review page: speaker marks, chapters, votes, camera views, boosts, meeting names, and each source's people. The server finds new recordings, transcripts, and files changed by the scripts every half minute (**↻ Rescan** does it at once). Each save is also written to its JSON file beside the video, so the command-line scripts keep working with it.
 
@@ -81,6 +86,8 @@ src/
   media/             thumbnails/ (frames, camera changes, title cards), clips/ (clips, playlists),
                      render-mp4/, slides, audio, text recognition
   archive/           official recordings: download and alignment (backfill-from-archive), full meetings (build-meeting)
+  recorder/          the recorder service: records scheduled meetings and reports them to the hub (docs/recorder/recorder.md)
+  dev/               the simulated live stream used for testing (npm run simulate-hls)
   sync/              records shared with a hub: collections, schedules and recurrence, merging, the sync client
   review-page/       the review page: page.js puts markup.js, styles.css, and client/ (its script, by feature)
                      into each session's thumbnails/index.html

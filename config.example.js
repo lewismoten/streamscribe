@@ -66,5 +66,28 @@ export default {
     //   discoveryUrls: ['https://va-warrencounty.civicplus.com/259/Board-of-Supervisors-Meetings---Videos'],
     //   liveUrls: ['https://edge-f.swagit.com/live/frontroyalva/live-1-a-1/playlist.m3u8']
     // }
-  ]
+  ],
+
+  // The recorder service (npm run recorder; see docs/recorder/recorder.md): records the meetings on the hub's schedule.
+  recorder: {
+    // The hub (docs/hub/hub.md) and this recorder's key (made with php tools/new-key.php recorder "Name").
+    // hubUrl: 'https://example.com/streamscribe/api.php',
+    // key: 'ss_…',
+    // id: 'office-mac',            // default: this computer's name
+    // name: 'Office Mac',
+    // sources: ['springfield-council'],   // default: every source above
+    // How often to sync with the hub, report, send a live picture, and transcribe quickly (seconds).
+    pollSeconds: 30,
+    heartbeatSeconds: 20,
+    thumbnailSeconds: 30,
+    quickTranscribe: true,
+    quickTranscribeSeconds: 60,
+    // quickModel: '~/.cache/whisper-cpp/ggml-small.en.bin',   // faster quick transcripts (default: the main model)
+    finalTranscribe: true,
+    maxStills: 300,
+    // After a meeting's scheduled end, stop when the standby slide has shown this long, or no new video has come
+    // this long, and at the latest this long past the end (minutes). Each schedule can override these.
+    overrun: { standbyMinutes: 10, idleMinutes: 15, capMinutes: 240 },
+    minFreeGb: 2
+  }
 };

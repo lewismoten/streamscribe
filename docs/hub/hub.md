@@ -54,7 +54,8 @@ A schedule says when a meeting happens, in its own time zone, so a 6 pm meeting 
 { "title": "Board of Supervisors", "sourceKey": "warren-county-va", "timeZone": "America/New_York",
   "start": "2026-01-06T13:00", "durationMinutes": 300, "rrule": "FREQ=MONTHLY;BYDAY=1TU",
   "exdates": ["2026-07-07T13:00"], "overrides": { "2026-12-01T13:00": { "start": "2026-12-02T14:00" } },
-  "leadMinutes": 10 }
+  "leadMinutes": 10, "overrun": { "standbyMinutes": 10, "idleMinutes": 15, "capMinutes": 240 },
+  "preferredRecorder": "office-mac" }
 ```
 
 - **`rrule`:** a subset of the iCalendar repeat rule. Leave it empty for a single meeting.
@@ -63,8 +64,31 @@ A schedule says when a meeting happens, in its own time zone, so a 6 pm meeting 
   - `FREQ=MONTHLY;BYDAY=-1TH`: the last Thursday of each month.
   - Also supported: `INTERVAL=2` (every other), `COUNT=10`, and `UNTIL=20271231` (inclusive).
 - **Cancellations and moves:** `exdates` cancels single meetings and `overrides` moves or shortens one. Both name the meeting by its original start.
+- **`overrun`** (optional): when the recorder stops after the scheduled end, in place of its own `recorder.overrun` settings (docs/recorder/recorder.md).
+- **`preferredRecorder`** (optional): a recorder id. That recorder starts at the lead time; others wait until the scheduled start and take the meeting only if it hasn't.
 
 Recorders and the web app work out the dates (`src/sync/recurrence.js`); the hub only stores schedules.
+
+## The web app as a static site
+
+The web app also runs without a recorder behind it, from any static host. It shows the hub's meetings (stills and transcripts), the live page and schedules, and has a Settings page. Each browser keeps its own copy in IndexedDB and syncs with the hub every 30 seconds (every 10 on the live page).
+
+- **GitHub Pages:** `.github/workflows/pages.yml` builds and publishes it. In the repository's settings, under Pages, choose "GitHub Actions" as the source, then run the workflow from the Actions tab. To publish on every push to main, add `push: { branches: [main] }` under `on:`.
+- **Elsewhere:** build with `VITE_BASE=/folder/ VITE_ROUTER=hash npm run build` and copy `web/dist` there.
+- **Connecting:** add the site's address to `allowed_origins` in the hub's `config.php`. Then, under Settings in the site, enter the hub address (ending in `api.php`). Reading needs nothing more. To change schedules, also enter an editor key. It stays in that browser only.
+- **Offline:** changes made while the hub can't be reached wait in the browser and go on the next sync. If someone else changed the same schedule meanwhile, the two are merged; where both changed the same field, the browser's change wins.
+- **Marks:** speakers, chapters, votes and the rest are edited on a recorder's review page, next to the video. The static site shows them but doesn't edit them.
+- **Refused changes:** a change the hub won't take (a key that can't write it, a record over 256 KB) is dropped and listed under Settings, so it doesn't hold up the rest.
+
+## Moving to a new hub
+
+Settings → Export saves everything the browser holds as JSON. To fill a new hub with it:
+
+```bash
+php tools/import.php streamscribe-2026-10-08.json config.php
+```
+
+Then copy the old hub's `media/` folder across; pictures are named by their hash, so the records find them. Importing from Settings instead only brings what an editor key may write (schedules, sources, marks and settings), not what recorders made. When a browser switches to a different hub address, it drops its copy of the old hub and syncs the new one from the start.
 
 ## Upkeep
 

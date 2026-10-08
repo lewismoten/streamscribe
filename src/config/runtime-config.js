@@ -19,8 +19,9 @@ export const TOOLS = normalizeTools(config.tools);
 export const TRANSCRIPTION = normalizeTranscriptionConfig(config.transcription);
 export const HTTP = normalizeHttpConfig(config.http);
 export const LOCALE = normalizeLocaleConfig(config.locale);
+export const RECORDER = normalizeRecorderConfig(config.recorder);
 
-export default { DATA_ROOT, STATE_ROOT, SOURCES, TOOLS, TRANSCRIPTION, HTTP, LOCALE };
+export default { DATA_ROOT, STATE_ROOT, SOURCES, TOOLS, TRANSCRIPTION, HTTP, LOCALE, RECORDER };
 
 async function loadLocalConfig() {
   // STREAMSCRIBE_CONFIG points to another settings file (for tests, or several setups side by side).
@@ -141,6 +142,38 @@ function normalizeHttpConfig(value) {
   };
 }
 
+// The recorder service (npm run recorder): which hub it reports to and how. Times are in seconds unless named minutes.
+//   overrun: when to stop after a meeting's scheduled end (each schedule can override): after standbyMinutes of the
+//   standby slide, or idleMinutes without new video, and never later than capMinutes past the end.
+function normalizeRecorderConfig(value) {
+  const recorder = value && typeof value === 'object' ? value : {};
+  const number = (item, fallback) => (Number.isFinite(Number(item)) && Number(item) >= 0 ? Number(item) : fallback);
+  const host = os.hostname().toLowerCase().replace(/\.local$/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'recorder';
+  return {
+    hubUrl: String(recorder.hubUrl || '').trim().replace(/\/+$/, ''),
+    key: String(recorder.key || ''),
+    id: String(recorder.id || host),
+    name: String(recorder.name || os.hostname()),
+    // Source keys this recorder records (default: every configured source).
+    sources: Array.isArray(recorder.sources) ? recorder.sources.map(String) : null,
+    pollSeconds: number(recorder.pollSeconds, 30),
+    heartbeatSeconds: number(recorder.heartbeatSeconds, 20),
+    thumbnailSeconds: number(recorder.thumbnailSeconds, 30),
+    quickTranscribe: recorder.quickTranscribe !== false,
+    quickTranscribeSeconds: number(recorder.quickTranscribeSeconds, 60),
+    quickModel: recorder.quickModel ? expandHome(String(recorder.quickModel)) : '',
+    finalTranscribe: recorder.finalTranscribe !== false,
+    maxStills: number(recorder.maxStills, 300),
+    leaseSeconds: number(recorder.leaseSeconds, 300),
+    minFreeGb: number(recorder.minFreeGb, 2),
+    overrun: {
+      standbyMinutes: number(recorder.overrun?.standbyMinutes, 10),
+      idleMinutes: number(recorder.overrun?.idleMinutes, 15),
+      capMinutes: number(recorder.overrun?.capMinutes, 240)
+    }
+  };
+}
+
 function normalizeLocaleConfig(value) {
   const locale = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   // Times of day on pages and transcripts are shown in this time zone.
@@ -168,4 +201,8 @@ function normalizeNonNegativeNumber(value, fallback) {
 function normalizePositiveInteger(value, fallback) {
   const number = Number.parseInt(String(value ?? ''), 10);
   return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function expandHome(value) {
+  return value.startsWith('~/') ? path.join(os.homedir(), value.slice(2)) : value;
 }

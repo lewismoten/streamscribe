@@ -15,12 +15,17 @@ import { merge } from './merge.js';
 //   getPending(collection, id), putPending(change), deletePending(collection, id), listPending()
 //
 // Hub API (see hub-php/api.php): GET {hub}/changes?since=rev&limit=n, POST {hub}/records with an X-Streamscribe-Key.
+/** @typedef {{ collection: string, id: string }} Change */
 export class SyncClient {
-  constructor({ store, hubUrl = '', key = '', fetchImpl = globalThis.fetch, onChange = () => {} }) {
+  /**
+   * @param {{ store: any, hubUrl?: string, key?: string, fetchImpl?: typeof fetch,
+   *   onChange?: (changes: Change[]) => void }} options
+   */
+  constructor({ store, hubUrl = '', key = '', fetchImpl = (...args) => globalThis.fetch(...args), onChange = () => {} }) {
     this.store = store;
     this.hubUrl = hubUrl.replace(/\/+$/, '');
     this.key = key;
-    this.fetch = fetchImpl;
+    this.fetch = fetchImpl; // (called as a method, so browsers need the wrapper above rather than fetch itself)
     this.onChange = onChange;
   }
 
@@ -107,10 +112,12 @@ export class SyncClient {
     }
   }
 
-  // Sends local changes; merges and resends any that conflict (a few rounds at most).
+  // Sends local changes; merges and resends any that conflict (a few rounds at most). A change the hub refuses (a key
+  // that can't write that collection, a record too large) is dropped and reported, so it can't hold up the rest.
   async push() {
-    if (!this.hubUrl) return { sent: 0, conflicts: [] };
+    if (!this.hubUrl) return { sent: 0, conflicts: [], refused: [] };
     const conflicts = [];
+    const refused = [];
     let sent = 0;
     for (let round = 0; round < 4; round += 1) {
       const pending = await this.store.listPending();
@@ -139,13 +146,15 @@ export class SyncClient {
           await this.store.putPending({ ...change, data: merged.data, base_rev: current.rev, base_data: current.deleted ? null : current.data });
           retry = true;
         } else {
-          throw new Error(`The hub refused ${change.collection}/${change.id}: ${result.error || result.status}`);
+          refused.push({ collection: change.collection, id: change.id, error: result.error || result.status });
+          await this.store.deletePending(change.collection, change.id);
+          retry = true;
         }
       }
       if (!retry && batch.length === pending.length) break;
     }
-    if (conflicts.length) this.onChange(conflicts.map(({ collection, id }) => ({ collection, id })));
-    return { sent, conflicts };
+    if (conflicts.length || refused.length) this.onChange([...conflicts, ...refused].map(({ collection, id }) => ({ collection, id })));
+    return { sent, conflicts, refused };
   }
 
   // Pull first (fewer conflicts), then push, then pull what the push produced.
