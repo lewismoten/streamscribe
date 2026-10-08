@@ -6,3 +6,4 @@ Options -Indexes
 RedirectMatch 403 ^.*/(lib|tools|data)/
 # Some hosts drop the custom key header unless it is passed through explicitly.
 SetEnvIf X-Streamscribe-Key "(.*)" HTTP_X_STREAMSCRIBE_KEY=$1
+SetEnvIf X-Streamscribe-Token "(.*)" HTTP_X_STREAMSCRIBE_TOKEN=$1

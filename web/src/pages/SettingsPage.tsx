@@ -2,9 +2,10 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { hubSettings, saveHubSettings } from '../data/hub.ts';
 import { idbStore } from '../data/idb-store.ts';
 import { onSyncState, syncClient, syncNow, type SyncState } from '../data/sync.ts';
+import { refreshAccount } from '../data/account.ts';
 import { canWrite } from '../../../src/sync/collections.js';
 
-// Where the hub is and this browser's editor key (kept only in this browser), syncing, and moving data in and out as
+// Where the hub is (and, for scripts, a key; people sign in under Account instead), syncing, and moving data in and out as
 // JSON (the same records the hub keeps; an export can also start a new hub).
 export default function SettingsPage() {
   const [settings, setSettings] = useState(hubSettings());
@@ -25,8 +26,10 @@ export default function SettingsPage() {
     } else if (!previous && next) {
       await idbStore.clearHubCopy();
     }
-    saveHubSettings(settings);
+    // A session belongs to the hub it was made on.
+    saveHubSettings({ ...settings, token: next !== previous ? '' : hubSettings().token });
     setSettings(hubSettings());
+    refreshAccount();
     if (!settings.url) { setMessage('Saved: no hub, so this browser keeps its own copy only.'); return; }
     try {
       const info = await fetch(`${hubSettings().url}/info`).then((response) => response.json());
@@ -71,7 +74,10 @@ export default function SettingsPage() {
         <p className="muted">The hub (docs/hub/hub.md) is where recorders report and schedules live. Without one, this browser keeps its own copy only.</p>
         <div className="form-grid">
           <label>Hub address <input value={settings.url} onChange={(event) => setSettings({ ...settings, url: event.target.value })} placeholder="https://example.com/streamscribe/api.php" /></label>
-          <label>Editor key <input type="password" value={settings.key} onChange={(event) => setSettings({ ...settings, key: event.target.value })} placeholder="needed to make changes" autoComplete="off" /></label>
+          <details>
+            <summary>Key (for scripts; people sign in under Account)</summary>
+            <label>Editor key <input type="password" value={settings.key} onChange={(event) => setSettings({ ...settings, key: event.target.value })} placeholder="from the hub's config.php" autoComplete="off" /></label>
+          </details>
         </div>
         <div className="card-actions">
           <button type="submit" className="button primary">Save and connect</button>
@@ -81,7 +87,7 @@ export default function SettingsPage() {
         {state && (
           <p className="muted">
             {state.syncing ? 'Syncing…' : state.lastSyncAt ? `Last synced ${new Date(state.lastSyncAt).toLocaleTimeString()}` : 'Not synced yet'}
-            {state.pending ? ` · ${state.pending} change${state.pending === 1 ? '' : 's'} waiting to be sent${settings.key ? '' : ' (needs an editor key)'}` : ''}
+            {state.pending ? ` · ${state.pending} change${state.pending === 1 ? '' : 's'} waiting to be sent${settings.key || settings.token ? '' : ' (sign in to send them)'}` : ''}
             {state.conflicts ? ` · ${state.conflicts} merged with someone else's changes` : ''}
             {state.refused.length ? ` · the hub refused ${state.refused.length} (dropped): ${state.refused.join('; ')}` : ''}
             {state.error && <span className="error"> · {state.error}</span>}

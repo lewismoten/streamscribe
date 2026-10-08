@@ -1,6 +1,7 @@
 import { SyncClient } from '../../../src/sync/client.js';
 import { idbStore } from './idb-store.ts';
 import { hubSettings } from './hub.ts';
+import { sessionEnded } from './account.ts';
 
 // One sync client for the page, over IndexedDB. Only one tab syncs at a time (Web Locks); every tab hears about
 // changes (BroadcastChannel) so it can show them.
@@ -27,13 +28,15 @@ channel?.addEventListener('message', (event) => announce(event.data.changes || [
 
 let client: SyncClient | null = null;
 export function syncClient(): SyncClient {
-  const { url, key } = hubSettings();
+  const { url, key, token } = hubSettings();
   client ??= new SyncClient({ store: idbStore, hubUrl: url, key, onChange: (changes: { collection: string; id: string }[]) => {
     announce(changes);
     idbStore.listPending().then((pending) => setState({ pending: pending.length }));
   } });
   client.hubUrl = url;
-  client.key = key;
+  // Signed in, the browser speaks as that person; otherwise with a key if one is set (for scripts), or only reads.
+  client.token = token;
+  client.key = token ? '' : key;
   return client;
 }
 
@@ -51,12 +54,16 @@ export async function syncNow() {
   const work = async () => {
     setState({ syncing: true });
     try {
-      // Without an editor key the browser only reads: local changes wait until a key is set.
-      const result = sync.key ? await sync.sync() : { sent: 0, conflicts: [], refused: [] };
-      if (!sync.key) await sync.pull();
+      // Signed out (and without a key) the browser only reads: local changes wait.
+      const writer = Boolean(sync.token || sync.key);
+      const result = writer ? await sync.sync() : { sent: 0, conflicts: [], refused: [] };
+      if (!writer) await sync.pull();
       setState({ lastSyncAt: new Date().toISOString(), error: '', conflicts: result.conflicts.length,
         refused: result.refused.map((item: { collection: string; id: string; error: string }) => `${item.collection}/${item.id}: ${item.error}`) });
     } catch (error) {
+      if ((error as { status?: number }).status === 401 && sync.token) {
+        sessionEnded();
+      }
       setState({ error: (error as Error).message });
     } finally {
       setState({ syncing: false, pending: (await idbStore.listPending()).length });

@@ -1,30 +1,33 @@
 # The hub
 
-The hub is a small PHP API with a SQLite database (`hub-php/`). Recorders report to it: what they're recording, live thumbnails and quick transcripts, then the final transcript and stills. The web app syncs with it, whether it's served by a recorder or hosted as a static site such as GitHub Pages. Video stays on the recorders.
+The hub is a small PHP API with a SQLite database (`hub-php/`). Recorders report to it: what they're recording, live thumbnails and quick transcripts, then the final transcript and stills. The web app syncs with it, whether it's served by a recorder, by the hub's own server, or by a static host such as GitHub Pages. Video stays on the recorders.
+
+Anyone can read the hub. People sign in to change things, and what their changes may do depends on their group (see People, groups, and layers below). Recorders and scripts use keys.
 
 ## Install on shared hosting
 
-You need PHP 8 with `pdo_sqlite`, which most hosts have, and HTTPS.
+You need PHP 8 with `pdo_sqlite`, which most hosts have, and HTTPS. The easiest way is the deploy script, which puts the hub and the web app on your server together and keeps them up to date from GitHub Actions: see [deploy.md](deploy.md). To install by hand instead:
 
 1. Upload the `hub-php/` folder, for example as `https://example.com/streamscribe/`.
 2. Copy `config.example.php` to `config.php` and edit it:
    - `allowed_origins`: the web addresses allowed to call the hub from a browser, such as `https://your-name.github.io`.
    - `database` and `media_dir`: where the SQLite file and uploaded pictures go. Keep the database outside the web root if your host allows it. Otherwise the included `.htaccess` blocks `data/` from the web.
-   - `keys`: one line per editor and per recorder. Make each one with:
+   - `keys`: one line per recorder (and per script that edits schedules). Make each one with:
 
      ```bash
-     php tools/new-key.php editor "Your name"
      php tools/new-key.php recorder "Office Mac"
+     php tools/new-key.php editor "Import script"
      ```
 
-     Each run prints the key once, to give to that person or recorder, and the line to paste into `config.php`. The hub stores only the key's hash.
-3. Open `https://example.com/streamscribe/api.php/info`. It should answer with the hub's name and `"rev": 0`.
+     Each run prints the key once, to give to that recorder or script, and the line to paste into `config.php`. The hub stores only the key's hash. People don't need keys: they sign in.
+3. Make your own account, as the admin: `php tools/new-user.php YOUR-NAME --admin` (it asks for a password).
+4. Open `https://example.com/streamscribe/api.php/info`. It should answer with the hub's name.
 
 Your recorders and the web app use `https://example.com/streamscribe/api.php` as the hub address. It works without URL rewriting: routes are `api.php/changes`, `api.php/records`, and so on, or `api.php?r=changes` where a host doesn't pass the path through.
 
 ## What's stored
 
-Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted }`, the same in the hub's SQLite and in the web app's IndexedDB. `rev` is one counter for every change. Clients fetch everything changed after the last `rev` they saw.
+Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, owner, layer }`, the same in the hub's SQLite and in the web app's IndexedDB. `rev` is one counter for every change. Clients fetch everything changed after the last `rev` they saw.
 
 | Collection | What it holds | Who writes it |
 | --- | --- | --- |
@@ -37,7 +40,44 @@ Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted }`
 | `marks` | review marks: speakers, chapters, votes, views, boosts, meeting name, word edits, playlist, people | editors, recorders |
 | `settings` | public settings (never secrets) | editors |
 
-Anyone can read. Writing needs a key, sent as the `X-Streamscribe-Key` header.
+Anyone can read. Writing needs a key (the `X-Streamscribe-Key` header) or a signed-in person (the `X-Streamscribe-Token` header, which the web app sends) whose group allows it.
+
+## People, groups, and layers
+
+**Accounts.** Anyone can make an account in the web app (Account, at the top right), unless an admin closes sign-ups. Passwords are stored as PHP password hashes; after 10 wrong passwords in 15 minutes from one address or for one username, sign-ins wait. A sign-in lasts 30 days from the last visit.
+
+**Groups.** Every person is in one group, and the group's permissions say what their changes may do. Admins change them on the People page (only admins and reviewers see it).
+
+| Permission | Admin | Editor | Reporter | Member | Limited |
+| --- | --- | --- | --- | --- | --- |
+| Correct transcript words | ✓ | ✓ | ✓ | ✓ | |
+| Choose who is speaking, and add people | ✓ | ✓ | ✓ | ✓ | |
+| Chapters and the meeting name | ✓ | ✓ | ✓ | | |
+| Votes | ✓ | ✓ | ✓ | | |
+| Camera views, audio boosts, and clips | ✓ | ✓ | | | |
+| Edit schedules | ✓ | ✓ | | | |
+| Edit sources and site settings | ✓ | ✓ | | | |
+| Review people (see untrusted changes, mark people trusted or not) | ✓ | ✓ | | | |
+| Manage people and groups | ✓ | | | | |
+
+Admin always has every permission and can't be removed, and the last admin can't be demoted or turned off. Other groups can be renamed, removed (their people move to a group you choose), or added. New accounts join Member and are trusted; both are settings on the People page.
+
+**Layers.** A signed-in person's changes to a meeting don't overwrite anything. Each person's changes to a mark (the word corrections of one recording, its speakers, a source's people) are a record of their own, `<mark id>~<user id>`, holding what they saw without their changes and with them. What each person sees is built in the browser (`src/sync/layers.js`):
+
+1. The shared mark from the recorder.
+2. Everyone else's public layers, oldest change first.
+3. Admins' layers, so an admin's changes win over everyone else's.
+4. Your own layer, so you always see your own changes.
+
+Each layer carries only what that person changed, so removing it removes only their changes.
+
+**Who sees a layer:**
+- **Public layers.** If the person's group has the permission for that kind of change (correcting words, say), their layer is public: everyone sees it, while the person is trusted.
+- **Private layers.** If not, the same change is kept for them alone, and the page says so ("only you see this").
+- **Untrusted people.** Unticking Trusted on the People page hides all of someone's layers from everyone else straight away. On their next sync, other browsers drop them. Reviewers still see them, marked untrusted.
+- **Removed accounts.** Removing someone removes their layers.
+
+The recorder's own review page still edits the shared marks directly; people's layers show in the web app, on top of them.
 
 **When two writers change the same record:** each change says which `rev` it was based on. If the record has changed since, the hub answers with a conflict and the current version. The client merges the two (`src/sync/merge.js`), keeping both sides' changes item by item, and sends the result again. For example, two people adding chapters at the same time both keep theirs.
 
@@ -71,14 +111,16 @@ Recorders and the web app work out the dates (`src/sync/recurrence.js`); the hub
 
 ## The web app as a static site
 
-The web app also runs without a recorder behind it, from any static host. It shows the hub's meetings (stills and transcripts), the live page and schedules, and has a Settings page. Each browser keeps its own copy in IndexedDB and syncs with the hub every 30 seconds (every 10 on the live page).
+The web app also runs without a recorder behind it, from any static host. It shows the hub's meetings (stills and transcripts), the live page and schedules, and has Account, People and Settings pages. Each browser keeps its own copy in IndexedDB and syncs with the hub every 30 seconds (every 10 on the live page).
 
-- **GitHub Pages:** `.github/workflows/pages.yml` builds and publishes it. In the repository's settings, under Pages, choose "GitHub Actions" as the source, then run the workflow from the Actions tab. To publish on every push to main, add `push: { branches: [main] }` under `on:`.
-- **Elsewhere:** build with `VITE_BASE=/folder/ VITE_ROUTER=hash npm run build` and copy `web/dist` there.
-- **Connecting:** add the site's address to `allowed_origins` in the hub's `config.php`. Then, under Settings in the site, enter the hub address (ending in `api.php`). Reading needs nothing more. To change schedules, also enter an editor key. It stays in that browser only.
+- **On the hub's server:** `bin/deploy-hub.sh` puts the site beside the hub, already pointed at it ([deploy.md](deploy.md)).
+- **GitHub Pages:** `.github/workflows/pages.yml` builds and publishes it ([deploy.md](deploy.md)).
+- **Elsewhere:** build with `VITE_BASE=/folder/ VITE_ROUTER=hash VITE_HUB_URL=https://example.com/streamscribe/api.php npm run build` and copy `web/dist` there.
+- **Connecting:** add the site's address to `allowed_origins` in the hub's `config.php`. Build it with the hub's address (the `PAGES_HUB_URL` variable, see deploy.md), or enter the address under Settings (ending in `api.php`). Reading needs nothing more. To change things, sign in (Account). The session stays in that browser only.
 - **Offline:** changes made while the hub can't be reached wait in the browser and go on the next sync. If someone else changed the same schedule meanwhile, the two are merged; where both changed the same field, the browser's change wins.
-- **Marks:** speakers, chapters, votes and the rest are edited on a recorder's review page, next to the video. The static site shows them but doesn't edit them.
-- **Refused changes:** a change the hub won't take (a key that can't write it, a record over 256 KB) is dropped and listed under Settings, so it doesn't hold up the rest.
+- **Marks:** signed in, click a word of the final transcript to correct it or to say who is speaking from there (adding someone new if needed). Chapters, votes and the rest are edited on a recorder's review page, next to the video; the site shows them.
+- **Refused changes:** a change the hub won't take (a group or key that can't write it, a record over 256 KB) is dropped and listed under Settings, so it doesn't hold up the rest.
+- **Signing in or out** fetches the browser's copy again from the start, since what the hub shows depends on who's asking.
 
 ## Moving to a new hub
 
@@ -88,7 +130,7 @@ Settings → Export saves everything the browser holds as JSON. To fill a new hu
 php tools/import.php streamscribe-2026-10-08.json config.php
 ```
 
-Then copy the old hub's `media/` folder across; pictures are named by their hash, so the records find them. Importing from Settings instead only brings what an editor key may write (schedules, sources, marks and settings), not what recorders made. When a browser switches to a different hub address, it drops its copy of the old hub and syncs the new one from the start.
+Then copy the old hub's `media/` folder across; pictures are named by their hash, so the records find them. Accounts and groups aren't in the export: copy the old hub's database file instead to keep them. Importing from Settings instead only brings what that browser may write (with an editor key: schedules, sources and settings), not what recorders made. When a browser switches to a different hub address, it drops its copy of the old hub and syncs the new one from the start.
 
 ## Upkeep
 

@@ -1,20 +1,29 @@
 <?php
-// The streamscribe hub: one file of PHP with SQLite, for ordinary shared hosting. Recorders report here, and the web
-// app (on GitHub Pages or anywhere) syncs with it. Routes, as api.php/<route> (or api.php?r=<route>):
+// The streamscribe hub: PHP with SQLite, for ordinary shared hosting. Recorders report here, and the web app (on
+// GitHub Pages, on this server, or anywhere) syncs with it. Routes, as api.php/<route> (or api.php?r=<route>):
 //   GET  info                         name, current rev, server time (a health check)
-//   GET  changes?since=REV&limit=N    records changed after REV, in rev order: { records, next, more }
-//   POST records   (key)              { op_id, records: [{ collection, id, data, deleted, base_rev }] } → { results }
+//   GET  changes?since=REV&limit=N    records changed after REV, in rev order, as this viewer may see them:
+//                                     { records, next, more }
+//   POST records   (key or sign-in)   { op_id, records: [{ collection, id, data, deleted, base_rev }] } → { results }
 //   POST claim     (recorder key)     { occurrenceKey, recorderId, ttlSeconds } → { granted, holder, leaseUntil }
 //   POST live      (recorder key)     { recorderId, status } — the recorder's current state (heartbeat)
 //   GET  live                         every recorder's latest state
 //   POST live-thumbnail?recorder=ID   (recorder key) a JPEG, replacing that recorder's live picture
 //   POST media?sha256=HEX&type=image/jpeg   (key) a file stored by its hash; already there → { exists: true }
-// Reading needs no key; writing needs an editor or recorder key (see lib/auth.php and config.example.php).
+// People (lib/users.php):
+//   POST register {username, password, displayName}, POST login {username, password} → { token, ...me }
+//   POST logout, GET me, POST password {current, password}
+//   GET  users (review or manage.users), POST users/update {id, groupId, trusted, disabled, displayName, password},
+//   POST users/delete {id}, GET groups, POST groups/save {id?, name, permissions}, POST groups/delete {id, moveTo},
+//   POST hub-settings {registration, defaultGroupId, newUsersTrusted}   (manage.users)
+// Reading needs nothing; writing needs a key (lib/auth.php) or a signed-in person whose group allows it.
 declare(strict_types=1);
 require __DIR__ . '/lib/collections.php';
 require __DIR__ . '/lib/db.php';
 require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/lib/cors.php';
+require __DIR__ . '/lib/permissions.php';
+require __DIR__ . '/lib/users.php';
 
 function hub_send(int $status, $value): void {
   http_response_code($status);
@@ -36,6 +45,33 @@ function hub_json_body(int $limit = 8388608, bool $objects = false) {
   return $value;
 }
 
+// Who may write what, and as which layer: ['owner' => user id or 0, 'layer' => shared | contribution | private], or
+// ['error' => why not].
+//   - keys write shared records of the collections their scope may write (collections.php)
+//   - a signed-in person writes their own layer of a mark (id <mark id>~<their id>): a contribution if their group may
+//     make that kind of change public, else private (also when they ask for private); and shared schedules, sources,
+//     and settings if their group may edit them
+function hub_write_rule(array $viewer, string $collection, string $id, $record, array $rules): array {
+  $layered = strpos($id, '~') !== false;
+  if ($viewer['kind'] === 'key') {
+    if ($layered) return ['error' => 'Keys write shared records only'];
+    if (!in_array($viewer['scope'], $rules['writers'], true)) return ['error' => 'This key can\'t write ' . $collection];
+    return ['owner' => 0, 'layer' => 'shared'];
+  }
+  $userId = $viewer['user']['id'];
+  if ($layered) {
+    [$markId, $owner] = explode('~', $id, 2);
+    if ($collection !== 'marks' || $markId === '' || $owner !== (string)$userId) return ['error' => 'You can only write your own layer of a mark (id ending in ~' . $userId . ')'];
+    $permission = MARK_PERMISSIONS[hub_mark_kind($markId)] ?? null;
+    if (!$permission) return ['error' => 'Unknown kind of mark'];
+    $public = hub_can($viewer, $permission) && ($record->layer ?? '') !== 'private';
+    return ['owner' => $userId, 'layer' => $public ? 'contribution' : 'private'];
+  }
+  $permission = EDIT_PERMISSIONS[$collection] ?? null;
+  if (!$permission || !hub_can($viewer, $permission)) return ['error' => 'Your group can\'t change ' . $collection];
+  return ['owner' => 0, 'layer' => 'shared'];
+}
+
 $configFile = __DIR__ . '/config.php';
 if (!is_file($configFile)) hub_fail(500, 'The hub is not set up: copy config.example.php to config.php');
 $config = require $configFile;
@@ -45,6 +81,11 @@ set_exception_handler(function (Throwable $error) { hub_fail(500, 'Server error:
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $route = trim((string)($_SERVER['PATH_INFO'] ?? ($_GET['r'] ?? '')), '/');
 $db = hub_db($config);
+$viewer = hub_viewer($config, $db);
+// A browser whose session ended hears so (instead of quietly getting what anyone gets), except where that's moot.
+if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'logout', 'me', 'live', 'groups'], true)) {
+  hub_fail(401, 'Signed out (the session ended); sign in again');
+}
 
 if ($method === 'GET' && ($route === 'info' || $route === '')) {
   hub_send(200, ['name' => $config['name'] ?? 'streamscribe hub', 'rev' => (int)hub_meta($db, 'rev'), 'time' => hub_now()]);
@@ -65,19 +106,21 @@ if ($method === 'GET' && $route === 'changes') {
   $current = (int)hub_meta($db, 'rev');
   $db->exec('COMMIT');
   $more = count($rows) > $limit;
-  $records = array_map('hub_record_out', array_slice($rows, 0, $limit));
+  $people = hub_people($db);
+  $records = array_map(fn ($row) => hub_record_for($row, $viewer, $people), array_slice($rows, 0, $limit));
   // Caught up: continue from the current rev (past any cleared deletions), not just the last record shown.
   $next = $more ? end($records)['rev'] : max($since, $current);
   hub_send(200, ['records' => $records, 'next' => $next, 'more' => $more]);
 }
 
 if ($method === 'POST' && $route === 'records') {
-  $caller = hub_require($config, ['editor', 'recorder']);
+  if ($viewer['kind'] === 'anonymous') hub_fail(401, 'A valid key (X-Streamscribe-Key) or signing in is needed');
   $input = hub_json_body(8388608, true);
   $opId = substr((string)($input->op_id ?? ''), 0, 100);
   $records = $input->records ?? null;
   if (!is_array($records) || count($records) > 500) hub_fail(400, 'Expected records: [ … ] (at most 500)');
-  $response = hub_write($db, function (PDO $db) use ($caller, $opId, $records) {
+  $response = hub_write($db, function (PDO $db) use ($viewer, $opId, $records) {
+    $people = hub_people($db);
     // A batch already applied (the client retried after a lost answer) gets the same answer again.
     if ($opId !== '') {
       $statement = $db->prepare('SELECT response FROM ops WHERE op_id = ?');
@@ -87,8 +130,9 @@ if ($method === 'POST' && $route === 'records') {
     }
     $results = [];
     $find = $db->prepare('SELECT * FROM records WHERE collection = ? AND id = ?');
-    $save = $db->prepare('INSERT INTO records (collection, id, data, rev, updated_at, updated_by, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(collection, id) DO UPDATE SET data = excluded.data, rev = excluded.rev, updated_at = excluded.updated_at, updated_by = excluded.updated_by, deleted = excluded.deleted');
+    $save = $db->prepare('INSERT INTO records (collection, id, data, rev, updated_at, updated_by, deleted, owner, layer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(collection, id) DO UPDATE SET data = excluded.data, rev = excluded.rev, updated_at = excluded.updated_at, updated_by = excluded.updated_by,
+        deleted = excluded.deleted, owner = excluded.owner, layer = excluded.layer');
     foreach ($records as $record) {
       $collection = (string)($record->collection ?? '');
       $id = (string)($record->id ?? '');
@@ -96,7 +140,8 @@ if ($method === 'POST' && $route === 'records') {
       $rules = COLLECTIONS[$collection] ?? null;
       if (!$rules) { $results[] = $result + ['status' => 'error', 'error' => 'Unknown collection']; continue; }
       if ($id === '' || strlen($id) > 200) { $results[] = $result + ['status' => 'error', 'error' => 'Expected an id (up to 200 characters)']; continue; }
-      if (!in_array($caller['scope'], $rules['writers'], true)) { $results[] = $result + ['status' => 'error', 'error' => 'This key can\'t write ' . $collection]; continue; }
+      $rule = hub_write_rule($viewer, $collection, $id, $record, $rules);
+      if (isset($rule['error'])) { $results[] = $result + ['status' => 'error', 'error' => $rule['error']]; continue; }
       $deleted = !empty($record->deleted);
       $data = $deleted ? null : json_encode($record->data ?? null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
       if ($data !== null && strlen($data) > MAX_RECORD_BYTES) { $results[] = $result + ['status' => 'error', 'error' => 'Record too large (256 KB at most)']; continue; }
@@ -104,18 +149,19 @@ if ($method === 'POST' && $route === 'records') {
       $current = $find->fetch() ?: null;
       if ($current && $rules['mode'] === 'immutable' && !$current['deleted']) {
         // Written once: a repeat (a retry) is accepted as it is.
-        $results[] = $result + ['status' => 'ok', 'record' => hub_record_out($current)];
+        $results[] = $result + ['status' => 'ok', 'record' => hub_record_out($current, $people)];
         continue;
       }
       if ($current && $rules['mode'] === 'mutable' && (int)($record->base_rev ?? 0) !== (int)$current['rev']) {
         // Changed by someone else since this change was made: the client merges and sends again.
-        $results[] = $result + ['status' => 'conflict', 'record' => hub_record_out($current)];
+        $results[] = $result + ['status' => 'conflict', 'record' => hub_record_for($current, $viewer, $people)];
         continue;
       }
       $rev = hub_next_rev($db);
       $now = hub_now();
-      $save->execute([$collection, $id, $data, $rev, $now, $caller['name'], $deleted ? 1 : 0]);
-      $results[] = $result + ['status' => 'ok', 'record' => ['collection' => $collection, 'id' => $id, 'data' => $deleted ? null : ($record->data ?? null), 'rev' => $rev, 'updated_at' => $now, 'updated_by' => $caller['name'], 'deleted' => $deleted]];
+      $save->execute([$collection, $id, $data, $rev, $now, $viewer['name'], $deleted ? 1 : 0, $rule['owner'], $rule['layer']]);
+      $results[] = $result + ['status' => 'ok', 'record' => ['data' => $deleted ? null : ($record->data ?? null)]
+        + hub_record_out(['collection' => $collection, 'id' => $id, 'data' => null, 'rev' => $rev, 'updated_at' => $now, 'updated_by' => $viewer['name'], 'deleted' => $deleted ? 1 : 0, 'owner' => $rule['owner'], 'layer' => $rule['layer']], $people)];
     }
     $response = ['results' => $results];
     if ($opId !== '') {
@@ -128,7 +174,7 @@ if ($method === 'POST' && $route === 'records') {
 }
 
 if ($method === 'POST' && $route === 'claim') {
-  $caller = hub_require($config, ['recorder']);
+  hub_require($config, ['recorder']);
   $input = hub_json_body(10000);
   $key = substr((string)($input['occurrenceKey'] ?? ''), 0, 300);
   $recorder = substr((string)($input['recorderId'] ?? ''), 0, 200);
@@ -191,5 +237,7 @@ if ($method === 'POST' && ($route === 'media' || $route === 'live-thumbnail')) {
   rename($temporary, $target);
   hub_send(200, ['path' => 'media/' . $relative, 'exists' => false]);
 }
+
+require __DIR__ . '/lib/account-routes.php';
 
 hub_fail(404, 'No such route: ' . $method . ' ' . $route);

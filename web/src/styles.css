@@ -135,3 +135,28 @@ details summary { cursor: pointer; margin: 8px 0; color: var(--muted); }
 .live-recorder .state.on { color: var(--live); font-weight: 600; }
 .live-recorder .lines { max-height: 320px; overflow: auto; }
 @media (max-width: 760px) { .live-body { grid-template-columns: 1fr; } .upcoming li { grid-template-columns: 1fr; } }
+
+/* Accounts and people */
+.topbar nav { flex-wrap: wrap; }
+.topbar nav a.account-link { margin-left: 8px; }
+.narrow { max-width: 560px; }
+label.inline { display: inline-flex; align-items: center; gap: 6px; }
+.table-scroll { overflow-x: auto; }
+table.people, table.permissions { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+table.people th, table.people td, table.permissions th, table.permissions td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+table.permissions td.center { text-align: center; }
+table.permissions th { white-space: nowrap; }
+.group-name { width: 8em; font: inherit; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; color: var(--fg); }
+.group-name:hover, .group-name:focus { border-color: var(--line); background: var(--card); }
+
+/* Correcting the transcript on a meeting page */
+.lines .words { line-height: 1.7; }
+.word { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; border-radius: 3px; }
+.word:disabled { cursor: text; }
+.word:not(:disabled):hover { background: var(--mark); }
+.word.edited { text-decoration: underline dotted var(--accent); text-underline-offset: 3px; }
+.word.deleted { color: var(--muted); }
+.speaker-label { color: var(--accent); }
+.word-editor { display: grid; gap: 8px; margin: 6px 0; padding: 10px; max-width: 520px; box-shadow: 0 4px 16px rgb(0 0 0 / 0.15); }
+.word-editor form { display: grid; gap: 6px; }
+.word-editor .toolbar { display: flex; flex-wrap: wrap; gap: 6px; }

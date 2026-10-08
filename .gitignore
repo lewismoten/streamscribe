@@ -6,7 +6,9 @@
 node_modules/
 .DS_Store
 /web/dist/
+/web/dist-deploy/
 /hub-php/config.php
 /hub-php/data/
 /hub-php/media/
 notes/
+/deploy.local.env

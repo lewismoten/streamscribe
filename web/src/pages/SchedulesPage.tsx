@@ -1,6 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { describeRule, occurrences, parseRule, upcoming } from '../../../src/sync/recurrence.js';
 import { putRecord, removeRecord, useRecords } from '../data/useRecords.ts';
+import { can, useAccount } from '../data/account.ts';
+import { hubSettings } from '../data/hub.ts';
 
 // Meeting schedules: when each source's meetings happen, one-off or recurring, which recorders follow. Upcoming
 // meetings can be cancelled one at a time (and restored).
@@ -98,6 +100,9 @@ const when = (ms: number, timeZone: string) => new Intl.DateTimeFormat('en-US', 
 const clockTime = (ms: number, timeZone: string) => new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
 
 export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) {
+  // Changing schedules takes a group that may (or a key); everyone else sees them read-only.
+  const account = useAccount();
+  const editor = can('edit.schedules', account) || (!account.user && Boolean(hubSettings().key)) || !hubSettings().url;
   const { records } = useRecords<Schedule>('schedules');
   const { records: sources } = useRecords<{ name?: string }>('sources');
   const recorders = useRecords<{ name?: string }>('recorders').records || [];
@@ -140,7 +145,7 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
     <section>
       <div className="toolbar">
         <h1 className="grow">Schedules</h1>
-        <button type="button" className="button primary" onClick={() => setForm(blankForm())}>＋ New schedule</button>
+        {editor && <button type="button" className="button primary" onClick={() => setForm(blankForm())}>＋ New schedule</button>}
       </div>
       {message && <p className="note">{message}</p>}
       {form && (
@@ -231,7 +236,7 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
                 <li key={item.key}>
                   <span className="time">{when(item.start, item.schedule.timeZone || localZone)}</span>
                   <span>{item.title} <span className="muted">· {item.sourceKey} · until {clockTime(item.end, item.schedule.timeZone || localZone)}</span>
-                    {record && <button type="button" className="link-button" onClick={() => toggleCancelled(record.id, record.data, item.key)}>Cancel this one</button>}</span>
+                    {record && editor && <button type="button" className="link-button" onClick={() => toggleCancelled(record.id, record.data, item.key)}>Cancel this one</button>}</span>
                 </li>
               );
             })}
@@ -252,13 +257,13 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
                   <strong>{schedule.title}</strong>{record.pending && <span className="muted"> · not synced yet</span>}
                   <div className="muted">{schedule.rrule ? describeRule(schedule.rrule) : 'Once'}, {schedule.start.slice(11, 16)} for {schedule.durationMinutes} min ({schedule.timeZone}) · {schedule.sourceKey}</div>
                   {cancelled.length > 0 && <div className="muted">Cancelled: {cancelled.map((local) => (
-                    <button key={local} type="button" className="link-button" title="Restore" onClick={() => toggleCancelled(record.id, schedule, `${record.id}@${local}`)}>{local.replace('T', ' ')} ↺</button>
+                    <button key={local} type="button" className="link-button" title="Restore" disabled={!editor} onClick={() => toggleCancelled(record.id, schedule, `${record.id}@${local}`)}>{local.replace('T', ' ')} ↺</button>
                   ))}</div>}
                 </div>
-                <span className="card-actions">
+                {editor && <span className="card-actions">
                   <button type="button" className="button" onClick={() => setForm(formOf(record.id, schedule))}>✎ Edit</button>
                   <button type="button" className="button" onClick={async () => { if (confirm(`Delete the schedule “${schedule.title}”?`)) { await removeRecord('schedules', record.id); setMessage('Deleted'); } }}>Delete</button>
-                </span>
+                </span>}
               </li>
             );
           })}

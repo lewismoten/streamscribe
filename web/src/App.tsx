@@ -12,14 +12,20 @@ import MeetingPage from './pages/MeetingPage.tsx';
 import SchedulesPage from './pages/SchedulesPage.tsx';
 import LivePage from './pages/LivePage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
+import AccountPage from './pages/AccountPage.tsx';
+import PeoplePage from './pages/PeoplePage.tsx';
+import { can, refreshAccount, useAccount } from './data/account.ts';
 
 // Two ways to run: served by a recorder's streamscribe server (its library of local recordings, search, and capture,
-// plus the hub pages), or as a static site such as GitHub Pages (the hub pages only: meetings, live, schedules, and
-// settings, kept in this browser and synced with the hub).
+// plus the hub pages), or as a static site such as GitHub Pages or the hub's own server (the hub pages only: meetings,
+// live, schedules, people, and settings, kept in this browser and synced with the hub). Signed out, the hub pages are
+// read-only; signing in (Account) allows what the person's group may do.
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
   const [mode, setMode] = useState<'checking' | 'local' | 'static'>('checking');
+  const account = useAccount();
   useEffect(() => {
+    refreshAccount();
     api.config()
       .then((value) => { setTimeZone(value.timeZone); setConfig(value); setMode('local'); })
       .catch(() => setMode('static'));
@@ -38,7 +44,9 @@ export default function App() {
           <NavLink to={local ? '/meetings' : '/'} end={!local}>Meetings</NavLink>
           <NavLink to="/live">Live</NavLink>
           <NavLink to="/schedules">Schedules</NavLink>
+          {(can('manage.users', account) || can('review', account)) && <NavLink to="/people">People</NavLink>}
           <NavLink to="/settings">Settings</NavLink>
+          <NavLink to="/account" className="account-link">{account.user ? `👤 ${account.user.displayName || account.user.username}` : 'Sign in'}</NavLink>
         </nav>
         {local && <SearchBox />}
       </header>
@@ -54,6 +62,8 @@ export default function App() {
             <Route path="/live" element={<LivePage />} />
             <Route path="/schedules" element={<SchedulesPage sourceKeys={config?.sources.map((source) => source.key) || []} />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/account" element={<AccountPage />} />
+            <Route path="/people" element={<PeoplePage />} />
             <Route path="*" element={<p>Nothing here. <NavLink to="/">Back to the start</NavLink></p>} />
           </Routes>
         )}

@@ -1,9 +1,12 @@
-# Publishes the web app to GitHub Pages as a static site: meetings, live, schedules, and settings, kept in each
-# browser (IndexedDB) and synced with a hub (docs/hub/hub.md) set under Settings. Turn on Pages for the repository with
-# "GitHub Actions" as the source, then run it from the Actions tab (add `push: { branches: [main] }` under `on:` to
-# publish on every push).
+# Publishes the web app to GitHub Pages: meetings, live, schedules, and the rest, kept in each browser (IndexedDB),
+# and synced with a hub when one is set: the PAGES_HUB_URL variable (your hub's api.php address) makes it the default,
+# and anyone can change it under Settings. Without it, the site keeps everything in the browser. Turn on Pages for the
+# repository with "GitHub Actions" as the source; it runs by hand, or on every push to main once the PAGES_ON_PUSH
+# variable is true. See docs/hub/deploy.md.
 name: Pages
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || vars.PAGES_ON_PUSH == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +30,7 @@ jobs:
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
           VITE_ROUTER: hash
+          VITE_HUB_URL: ${{ vars.PAGES_HUB_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist

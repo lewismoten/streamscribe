@@ -14,17 +14,19 @@ import { merge } from './merge.js';
 //   getRecord(collection, id), putRecord(record), listRecords(collection)        hub versions
 //   getPending(collection, id), putPending(change), deletePending(collection, id), listPending()
 //
-// Hub API (see hub-php/api.php): GET {hub}/changes?since=rev&limit=n, POST {hub}/records with an X-Streamscribe-Key.
+// Hub API (see hub-php/api.php): GET {hub}/changes?since=rev&limit=n, POST {hub}/records with an X-Streamscribe-Key
+// (recorders, scripts) or a signed-in person's X-Streamscribe-Token.
 /** @typedef {{ collection: string, id: string }} Change */
 export class SyncClient {
   /**
-   * @param {{ store: any, hubUrl?: string, key?: string, fetchImpl?: typeof fetch,
+   * @param {{ store: any, hubUrl?: string, key?: string, token?: string, fetchImpl?: typeof fetch,
    *   onChange?: (changes: Change[]) => void }} options
    */
-  constructor({ store, hubUrl = '', key = '', fetchImpl = (...args) => globalThis.fetch(...args), onChange = () => {} }) {
+  constructor({ store, hubUrl = '', key = '', token = '', fetchImpl = (...args) => globalThis.fetch(...args), onChange = () => {} }) {
     this.store = store;
     this.hubUrl = hubUrl.replace(/\/+$/, '');
     this.key = key;
+    this.token = token; // a signed-in person's session (X-Streamscribe-Token), instead of a key
     this.fetch = fetchImpl; // (called as a method, so browsers need the wrapper above rather than fetch itself)
     this.onChange = onChange;
   }
@@ -76,7 +78,8 @@ export class SyncClient {
   async request(method, path, body) {
     const response = await this.fetch(this.hubUrl + path, {
       method,
-      headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(this.key ? { 'x-streamscribe-key': this.key } : {}) },
+      headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(this.key ? { 'x-streamscribe-key': this.key } : {}),
+        ...(this.token ? { 'x-streamscribe-token': this.token } : {}) },
       body: body ? JSON.stringify(body) : undefined
     });
     const text = await response.text();
