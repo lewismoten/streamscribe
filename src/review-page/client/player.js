@@ -34,7 +34,7 @@ function showPosition(seconds, { seek = true } = {}) {
   position = Math.max(0, Math.min(endSeconds, seconds));
   updateSliderRange();
   slider.value = position;
-  $('position').textContent = fmt(position);
+  if (document.activeElement !== $('position')) $('position').value = fmt(position);
   updateOverlay();
   syncTranscript();
   updateNowScene();
@@ -240,3 +240,53 @@ function showFileNote(failed, detail = '') {
 if (location.protocol === 'file:') showFileNote(false);
 
 $('display-open').addEventListener('click', () => { if ($('display-dialog').open) $('display-dialog').close(); else $('display-dialog').show(); });
+
+// The position is also a box to type a time into. Enter goes there: a video time (1:04:44, 64:44, or 3884 seconds) or
+// a time of day (2:19 PM, 2:19:46 pm, 9a). Escape, or leaving the box, puts the current position back.
+function positionAtTimeOfDay(hours, minutes, seconds, half) {
+  const startMs = clockMs(0);
+  if (startMs === null) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: page.timeZone, hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' })
+    .formatToParts(new Date(startMs)).map((part) => [part.type, part.value]));
+  const startOfDay = Number(parts.hour) * 3600 + Number(parts.minute) * 60 + Number(parts.second);
+  // After midnight belongs to the same meeting, the next day.
+  let offset = ((hours % 12) + (half === 'p' ? 12 : 0)) * 3600 + minutes * 60 + seconds - startOfDay;
+  if (offset < 0) offset += 86400;
+  // The moment that aired then: a meeting built from several pieces has a clock for each.
+  const target = startMs + offset * 1000;
+  let found = null;
+  page.clocks.forEach(([start, zero], index) => {
+    const at = (target - zero) / 1000;
+    const next = page.clocks[index + 1];
+    if (at >= start - 1 && (!next || at < next[0])) found = at;
+  });
+  return found ?? offset;
+}
+function parseTypedTime(text) {
+  const value = String(text || '').trim().toLowerCase();
+  const timeOfDay = value.match(/^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*([ap])\.?\s*m?\.?$/);
+  if (timeOfDay) return positionAtTimeOfDay(Number(timeOfDay[1]), Number(timeOfDay[2] || 0), Number(timeOfDay[3] || 0), timeOfDay[4]);
+  return parse(value);
+}
+const positionBox = $('position');
+positionBox.addEventListener('focus', () => positionBox.select());
+positionBox.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const seconds = parseTypedTime(positionBox.value);
+    if (seconds === null || seconds < 0) {
+      positionBox.classList.add('invalid');
+      positionBox.title = 'Not a time: try 1:04:44, 64:44, 3884, or 2:19 PM';
+      return;
+    }
+    positionBox.blur();
+    showPosition(seconds);
+  } else if (event.key === 'Escape') {
+    positionBox.blur();
+  }
+});
+positionBox.addEventListener('blur', () => {
+  positionBox.classList.remove('invalid');
+  positionBox.title = 'Type a time and press Enter to go there: 1:04:44, 64:44, seconds, or a time of day such as 2:19 PM';
+  positionBox.value = fmt(position);
+});

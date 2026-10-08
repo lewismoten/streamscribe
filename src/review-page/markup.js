@@ -37,7 +37,7 @@ export function renderMarkup(playback, escapeText) {
 <div class="toolbar" id="toolbar" role="toolbar" aria-label="Player">
   <a class="home" id="home" href="/" title="The streamscribe library" aria-label="Library" hidden>🏠</a>
   <button type="button" id="play" title="Play or pause (Space)" aria-label="Play">▶︎</button>
-  <span class="position" id="position">00:00:00</span>
+  <input type="text" class="position" id="position" value="00:00:00" spellcheck="false" autocomplete="off" aria-label="Video position" title="Type a time and press Enter to go there: 1:04:44, 64:44, seconds, or a time of day such as 2:19 PM">
   <button type="button" id="live-edge" class="live-edge" hidden title="Still being captured: jump to the latest moment">● Live</button>
   <button type="button" id="prev-frame" title="Previous frame (,)" aria-label="Previous frame" hidden>◀</button>
   <button type="button" id="next-frame" title="Next frame (.)" aria-label="Next frame" hidden>▶</button>

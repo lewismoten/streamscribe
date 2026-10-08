@@ -383,6 +383,11 @@ dialog h2.drag-handle { cursor: move; user-select: none; touch-action: none; }
 dialog h2.drag-handle::after { content: '  ⠿'; color: var(--muted); font-weight: 400; }
 .label { color: var(--muted); font-variant-numeric: tabular-nums; }
 .position { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 5.5em; }
+input.position { width: 6.2em; min-width: 0; padding: 2px 4px; font: inherit; font-weight: 600; color: inherit; background: transparent;
+  border: 1px solid transparent; border-radius: 6px; }
+input.position:hover { border-color: var(--line); }
+input.position:focus { border-color: var(--start); background: var(--card); outline: none; }
+input.position.invalid { border-color: var(--end); }
 button, select, input[type=text] { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
 button { cursor: pointer; }
 button:disabled { opacity: 0.5; cursor: default; }
