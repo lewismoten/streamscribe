@@ -125,9 +125,17 @@ export function renderMarkup(playback, escapeText) {
   <div class="row">
     <button type="button" id="playlist-play" title="Play the clips one after another">▶ Play all</button>
     <button type="button" class="start" id="playlist-video" title="Join the clips into one video and download it">⬇ Video</button>
-    <button type="button" id="playlist-text" title="Download what is said in the clips, as text">⬇ Transcript</button>
-    <button type="button" id="playlist-captions" title="Download closed captions timed to the playlist video (.srt, for YouTube)">⬇ Captions (.srt)</button>
+    <button type="button" id="playlist-text" title="Download what is said in the clips, in the transcript format chosen in 🎛 (captions are timed to the playlist video)">⬇ Transcript</button>
+    <button type="button" id="playlist-paste" title="Add several clips at once by pasting their start and end times">📋 Paste clips…</button>
     <span class="label" id="playlist-status" role="status"></span>
+  </div>
+  <div class="playlist-paste" id="playlist-paste-panel" hidden>
+    <textarea id="playlist-paste-text" rows="5" spellcheck="false" aria-label="Clips to add, one per line" placeholder="One clip per line: its start and end, then a name if you like&#10;00:12:30 - 00:14:00 Public comment&#10;2:19 PM to 2:21:30 PM"></textarea>
+    <div class="row">
+      <button type="button" class="start" id="playlist-paste-add" disabled>Add clips</button>
+      <button type="button" id="playlist-paste-cancel">Cancel</button>
+      <span class="label" id="playlist-paste-status" role="status"></span>
+    </div>
   </div>
 </section>
 <section class="agenda-panel" id="votes-panel" aria-labelledby="votes-title">
@@ -262,6 +270,12 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
       <label><input type="checkbox" id="play-boosts"> 🔊 Boost quiet speakers <span class="hint">where boosts were saved in Boost &amp; re-transcribe</span></label>
       <label><input type="checkbox" id="auto-zoom"> 🔍 Magnify whoever is speaking <span class="hint">where the camera view has zoom areas</span></label>
     </div>
+    <h2>Transcript downloads</h2>
+    <div class="settings">
+      <label>Format <select id="download-format" aria-label="Transcript download format"></select></label>
+      <label>Times <select id="download-times" aria-label="Times in simple transcripts"></select> <span class="hint">in simple transcripts</span></label>
+    </div>
+    <p class="hint">Every ⬇ transcript button uses these: the whole meeting, a chapter, and the playlist. Word for word lists each word with its video time; closed captions are timed from the start of what's downloaded.</p>
     <div class="row"><button value="done" class="start">Done</button></div>
   </form>
 </dialog>

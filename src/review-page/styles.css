@@ -98,6 +98,8 @@ h1 { margin: 0 0 4px; font-size: 1.4rem; }
   padding: 8px 10px; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
 .download-menu[hidden] { display: none; }
 .download-menu button { text-align: left; }
+.download-menu .menu-row { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); margin-bottom: 2px; }
+.playlist-paste textarea { width: 100%; font: 0.85rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
 #playlist-list li.current { background: color-mix(in srgb, var(--start) 14%, transparent); }
 .picker-edit input { flex: 1; min-width: 0; }
 .w { border-radius: 3px; }

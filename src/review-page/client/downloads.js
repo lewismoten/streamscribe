@@ -1,19 +1,23 @@
-// The transcript as text, for the whole meeting or one chapter: the meeting name, chapter headings, who said what
-// ("Name, role: words"; a new line for each speaker change, pause, and minute), the time of day as each minute
-// begins ("[02:19:46 PM]"), and motions, seconds, and votes with how each member voted. Corrections are applied.
-const stampFormat = new Intl.DateTimeFormat('en-US', { timeZone: page.timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-const stampAt = (seconds) => '[' + (clockMs(seconds) === null ? fmt(seconds) : stampFormat.format(new Date(clockMs(seconds)))) + ']';
+// Transcript downloads, in the format chosen in 🎛 (remembered): a simple transcript (who said what, with the time as
+// each minute begins), word for word (each word with its video time), or closed captions (.srt). Every download
+// button (whole meeting, a chapter, the playlist) uses it. Corrections are applied.
+const TRANSCRIPT_FORMATS = { simple: 'Simple transcript (.txt)', words: 'Word for word (.txt)', captions: 'Closed captions (.srt)' };
+let transcriptFormat = 'simple';
+try { transcriptFormat = Object.keys(TRANSCRIPT_FORMATS).includes(localStorage.getItem('thumbnails.transcriptFormat')) ? localStorage.getItem('thumbnails.transcriptFormat') : 'simple'; } catch {}
+// Times in simple transcripts: the video time, the date and time of day, or both (also chosen in 🎛, remembered).
+const STAMP_STYLES = { both: 'Video time and date/time', video: 'Video time', clock: 'Date and time' };
+let stampStyle = 'both';
+try { stampStyle = Object.keys(STAMP_STYLES).includes(localStorage.getItem('thumbnails.stampStyle')) ? localStorage.getItem('thumbnails.stampStyle') : 'both'; } catch {}
+const stampFormat = new Intl.DateTimeFormat('en-US', { timeZone: page.timeZone, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const stampAt = (seconds) => {
+  const clock = clockMs(seconds) === null ? '' : stampFormat.format(new Date(clockMs(seconds)));
+  if (stampStyle === 'video' || !clock) return '[' + fmt(seconds) + ']';
+  return '[' + (stampStyle === 'clock' ? clock : fmt(seconds) + ' · ' + clock) + ']';
+};
 const speakerLabel = (ids) => (ids.length ? ids.map((id) => nameAndRole(peopleMap.get(id) || { id, name: id })).join(' & ') : 'Unknown speaker');
-function transcriptText(chapter) {
-  const header = [meetingName || document.title || 'Meeting', ...(chapter ? ['Chapter: ' + chapter.title] : []), ''];
-  return [...header, ...transcriptLines(chapter, !chapter)].join(String.fromCharCode(10)) + String.fromCharCode(10);
-}
-// The text lines for a stretch (null for everything); withChapters puts each chapter's heading where it starts.
-function transcriptLines(chapter, withChapters) {
-  const out = [];
-  // One blank line at most between parts.
-  const add = (text) => { if (text || out[out.length - 1]) out.push(text); };
-  const inRange = (seconds) => !chapter || (seconds >= chapter.from - 0.01 && seconds < chapter.to);
+// What happens besides speech, in order: chapter starts (withChapters), motions, seconds, and each vote's result with
+// how every member voted (where the roll call settled it).
+function transcriptEvents(withChapters) {
   const personName = (id) => shownName(peopleMap.get(id) || { id, name: id });
   const events = [];
   if (withChapters) agendaItems.forEach((item) => events.push({ at: item.at, chapter: item.title }));
@@ -32,7 +36,15 @@ function transcriptLines(chapter, withChapters) {
     // The result goes where the roll call settled it (or where the vote opened, if it never was).
     events.push({ at: decidedAt(vote) ?? vote.at, text: '🗳 Vote: ' + (vote.motion || 'Motion') + ' — ' + describeTally(vote) + (roll ? ' (' + roll + ')' : '') });
   });
-  events.sort((left, right) => left.at - right.at);
+  return events.sort((left, right) => left.at - right.at);
+}
+// The text lines for a stretch (null for everything); withChapters puts each chapter's heading where it starts.
+function transcriptLines(chapter, withChapters) {
+  const out = [];
+  // One blank line at most between parts.
+  const add = (text) => { if (text || out[out.length - 1]) out.push(text); };
+  const inRange = (seconds) => !chapter || (seconds >= chapter.from - 0.01 && seconds < chapter.to);
+  const events = transcriptEvents(withChapters);
   let eventIndex = 0;
   let line = null;
   let lastMinute = null;
@@ -57,7 +69,7 @@ function transcriptLines(chapter, withChapters) {
       const shown = word.edited ? word.display : word.text;
       if (!shown) return;
       // Each minute of the time of day (the stamps show it), or of the video when that isn't known.
-      const minute = clockMs(word.at) === null ? Math.floor(word.at / 60) : Math.floor(clockMs(word.at) / 60000);
+      const minute = clockMs(word.at) === null || stampStyle === 'video' ? Math.floor(word.at / 60) : Math.floor(clockMs(word.at) / 60000);
       if (minute !== lastMinute) {
         closeLine();
         add('');
@@ -153,9 +165,79 @@ function chapterRange(item) {
   const next = agendaItems[agendaItems.indexOf(item) + 1];
   return { title: item.title, from: item.at, to: next ? next.at : endSeconds };
 }
-function downloadTranscript(chapter) {
-  downloadFile((meetingName || 'transcript') + (chapter ? ' - ' + chapter.title : '') + '.txt', transcriptText(chapter), 'text/plain;charset=utf-8');
+// Word for word: each word on its own line with its video time (00:02:16.420), a ">> Name, role" line where the
+// speaker changes, chapter headings (withChapters), and motions, seconds, and votes where they happened.
+const preciseStamp = (seconds) => fmt(seconds) + '.' + String(Math.round((Math.max(0, seconds) % 1) * 1000) % 1000).padStart(3, '0');
+function wordLines(range, withChapters) {
+  const out = [];
+  const add = (text) => { if (text || out[out.length - 1]) out.push(text); };
+  const inRange = (seconds) => !range || (seconds >= range.from - 0.01 && seconds < range.to);
+  const events = transcriptEvents(withChapters);
+  let eventIndex = 0;
+  let lastLabel = null;
+  const eventsUntil = (seconds) => {
+    while (eventIndex < events.length && events[eventIndex].at <= seconds) {
+      const event = events[eventIndex++];
+      if (!inRange(event.at)) continue;
+      if (event.chapter) { add(''); out.push(preciseStamp(event.at) + '  == ' + event.chapter + ' =='); add(''); lastLabel = null; } else out.push(preciseStamp(event.at) + '  ' + event.text);
+    }
+  };
+  wordsIn(range).forEach((word) => {
+    eventsUntil(word.at);
+    const label = speakerLabel(word.ids);
+    if (label !== lastLabel) { out.push(preciseStamp(word.at) + '  >> ' + label); lastLabel = label; }
+    out.push(preciseStamp(word.at) + '  ' + word.text);
+  });
+  eventsUntil(range ? range.to : Infinity);
+  return out;
 }
+// Downloads a transcript of the whole meeting (ranges null), one chapter, or the playlist's clips, in the chosen format.
+function downloadAs(ranges, kind) {
+  const NL = String.fromCharCode(10);
+  const name = (meetingName || 'transcript') + (kind === 'chapter' ? ' - ' + ranges[0].title : kind === 'playlist' ? ' - playlist' : '');
+  if (transcriptFormat === 'captions') {
+    // Timed from the start of what's downloaded: the meeting, the chapter, or the playlist video.
+    downloadFile(name + '.srt', captionsFor(ranges || [{ from: 0, to: endSeconds }]), 'application/x-subrip;charset=utf-8');
+    return;
+  }
+  const words = transcriptFormat === 'words';
+  const linesFor = (range, withChapters) => (words ? wordLines(range, withChapters) : transcriptLines(range, withChapters));
+  const lines = [meetingName || document.title || 'Meeting'];
+  if (kind === 'chapter') lines.push('Chapter: ' + ranges[0].title);
+  if (kind === 'playlist') lines.push('Playlist: ' + ranges.length + ' clips, ' + fmt(ranges.reduce((sum, range) => sum + (range.to - range.from), 0)));
+  if (words) lines.push('Word for word, with the video time of each word');
+  lines.push('');
+  if (kind === 'playlist') {
+    ranges.forEach((range, index) => {
+      lines.push('== Clip ' + (index + 1) + ': ' + range.title + ' (' + fmt(range.from) + '–' + fmt(range.to) + ') ==', '');
+      lines.push(...linesFor(range, false), '');
+    });
+  } else {
+    lines.push(...linesFor(ranges ? ranges[0] : null, kind === 'meeting'));
+  }
+  downloadFile(name + (words ? ' - word for word' : '') + '.txt', lines.join(NL) + NL, 'text/plain;charset=utf-8');
+}
+function downloadTranscript(chapter) {
+  downloadAs(chapter ? [chapter] : null, chapter ? 'chapter' : 'meeting');
+}
+// The format and times settings in 🎛.
+function showDownloadSettings() {
+  $('download-format').value = transcriptFormat;
+  $('download-times').value = stampStyle;
+  $('download-times').disabled = transcriptFormat !== 'simple';
+}
+Object.entries(TRANSCRIPT_FORMATS).forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; $('download-format').appendChild(option); });
+Object.entries(STAMP_STYLES).forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; $('download-times').appendChild(option); });
+$('download-format').addEventListener('change', () => {
+  transcriptFormat = $('download-format').value;
+  try { localStorage.setItem('thumbnails.transcriptFormat', transcriptFormat); } catch {}
+  showDownloadSettings();
+});
+$('download-times').addEventListener('change', () => {
+  stampStyle = $('download-times').value;
+  try { localStorage.setItem('thumbnails.stampStyle', stampStyle); } catch {}
+});
+showDownloadSettings();
 // ⬇ beside the find box: the whole meeting, or the chapter being played.
 const downloadMenu = document.createElement('div');
 downloadMenu.className = 'download-menu';
@@ -167,8 +249,12 @@ $('transcript-download').addEventListener('click', (event) => {
   downloadMenu.textContent = '';
   const head = document.createElement('div');
   head.className = 'picker-head';
-  head.textContent = 'Download the transcript as text';
+  head.textContent = 'Download the transcript';
   downloadMenu.appendChild(head);
+  const format = document.createElement('div');
+  format.className = 'menu-row';
+  format.textContent = TRANSCRIPT_FORMATS[transcriptFormat] + (transcriptFormat === 'simple' ? ', ' + STAMP_STYLES[stampStyle].toLowerCase() : '') + ' — change in 🎛';
+  downloadMenu.appendChild(format);
   const option = (label, chapter) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -177,11 +263,6 @@ $('transcript-download').addEventListener('click', (event) => {
     downloadMenu.appendChild(button);
   };
   option('⬇ Whole meeting', null);
-  const captions = document.createElement('button');
-  captions.type = 'button';
-  captions.textContent = '⬇ Captions for the whole meeting (.srt)';
-  captions.addEventListener('click', () => { downloadMenu.hidden = true; downloadFile((meetingName || 'transcript') + '.srt', captionsFor([{ from: 0, to: endSeconds }]), 'application/x-subrip;charset=utf-8'); });
-  downloadMenu.appendChild(captions);
   const current = agendaIndexAt(position);
   if (current >= 0) option('⬇ This chapter: ' + agendaItems[current].title, chapterRange(agendaItems[current]));
   downloadMenu.hidden = false;

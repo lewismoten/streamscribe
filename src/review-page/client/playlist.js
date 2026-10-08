@@ -63,7 +63,13 @@ function renderPlaylist() {
   const total = playlist.reduce((sum, clip) => sum + (clip.to - clip.from), 0);
   $('playlist-total').textContent = playlist.length ? playlist.length + ' clip' + (playlist.length === 1 ? '' : 's') + ', ' + fmt(total) : '';
   $('playlist-empty').hidden = playlist.length > 0;
-  ['playlist-play', 'playlist-video', 'playlist-text', 'playlist-captions'].forEach((id) => { $(id).disabled = playlist.length === 0; });
+  ['playlist-play', 'playlist-video', 'playlist-text'].forEach((id) => { $(id).disabled = playlist.length === 0; });
+}
+// A clip is named after its chapter, or else the first words said in it.
+function clipTitle(from, to) {
+  const chapter = agendaIndexAt(from + 0.01);
+  const firstWords = wordsIn({ from, to }).slice(0, 8).map((word) => word.text).join(' ');
+  return chapter >= 0 ? agendaItems[chapter].title : (firstWords || 'Clip at ' + fmt(from));
 }
 function setPlaylistShown(shown) {
   $('playlist-panel').hidden = !shown;
@@ -77,11 +83,7 @@ $('playlist-add').addEventListener('click', () => {
     $('snapshot-status').textContent = 'Mark the clip first: ✂⟦ where it starts and ⟧✂ where it ends';
     return;
   }
-  // Named after its chapter, or else the first words said in it.
-  const chapter = agendaIndexAt(start + 0.01);
-  const firstWords = wordsIn({ from: start, to: end }).slice(0, 8).map((word) => word.text).join(' ');
-  const title = chapter >= 0 ? agendaItems[chapter].title : (firstWords || 'Clip at ' + fmt(start));
-  playlist = [...playlist, { id: Date.now().toString(36), from: Number(start.toFixed(3)), to: Number(end.toFixed(3)), title }];
+  playlist = [...playlist, { id: Date.now().toString(36), from: Number(start.toFixed(3)), to: Number(end.toFixed(3)), title: clipTitle(start, end) }];
   setPlaylistShown(true);
   savePlaylist('Added ' + fmt(start) + '–' + fmt(end) + ' as clip ' + playlist.length);
   $('snapshot-status').textContent = 'Added to the playlist as clip ' + playlist.length + '; mark the next one';
@@ -106,18 +108,8 @@ video.addEventListener('timeupdate', () => {
     renderPlaylist();
   }
 });
-$('playlist-text').addEventListener('click', () => {
-  const NL = String.fromCharCode(10);
-  const lines = [meetingName || document.title || 'Meeting', 'Playlist: ' + playlist.length + ' clips, ' + fmt(playlist.reduce((sum, clip) => sum + (clip.to - clip.from), 0)), ''];
-  playlistRanges().forEach((range, index) => {
-    lines.push('== Clip ' + (index + 1) + ': ' + range.title + ' (' + fmt(range.from) + '–' + fmt(range.to) + ') ==', '');
-    lines.push(...transcriptLines(range, false), '');
-  });
-  downloadFile((meetingName || 'transcript') + ' - playlist.txt', lines.join(NL) + NL, 'text/plain;charset=utf-8');
-});
-$('playlist-captions').addEventListener('click', () => {
-  downloadFile((meetingName || 'transcript') + ' - playlist.srt', captionsFor(playlistRanges()), 'application/x-subrip;charset=utf-8');
-});
+// In the format chosen in 🎛; captions are timed to the playlist video.
+$('playlist-text').addEventListener('click', () => downloadAs(playlistRanges(), 'playlist'));
 $('playlist-video').addEventListener('click', async () => {
   const button = $('playlist-video');
   button.disabled = true;
@@ -158,3 +150,51 @@ if (location.protocol !== 'file:') {
 }
 renderPlaylist();
 
+
+// Pasting clips: one per line, a start and an end (video times such as 00:12:30, or times of day such as 2:19 PM, as
+// the position box takes them), then a name if wanted. Lines without two times are pointed out and skipped.
+const clipTime = /\d{1,2}(?::\d{2}){1,2}(?:\.\d+)?(?:\s*[ap]\.?\s*m\b\.?)?|\d{1,2}\s*[ap]\.?\s*m\b\.?/gi;
+function parseClipLines(text) {
+  const clips = [];
+  const skipped = [];
+  String(text || '').split(/\r?\n/).forEach((raw, index) => {
+    const line = raw.trim();
+    if (!line) return;
+    const times = [...line.matchAll(clipTime)];
+    const from = times[0] ? parseTypedTime(times[0][0]) : null;
+    const to = times[1] ? parseTypedTime(times[1][0]) : null;
+    if (from === null || to === null || !(to > from)) { skipped.push(index + 1); return; }
+    const name = line.slice(times[1].index + times[1][0].length).replace(/^[\s\-–—:|,.)\]]+/, '').trim();
+    clips.push({ from: Math.max(0, from), to: Math.min(endSeconds, to), title: name });
+  });
+  return { clips, skipped };
+}
+function showPasteCheck() {
+  const { clips, skipped } = parseClipLines($('playlist-paste-text').value);
+  $('playlist-paste-add').disabled = clips.length === 0;
+  $('playlist-paste-add').textContent = clips.length ? 'Add ' + clips.length + ' clip' + (clips.length === 1 ? '' : 's') : 'Add clips';
+  $('playlist-paste-status').textContent = skipped.length
+    ? 'Line' + (skipped.length === 1 ? ' ' : 's ') + skipped.join(', ') + (skipped.length === 1 ? ' doesn’t' : ' don’t') + ' have a start and an end'
+    : '';
+}
+$('playlist-paste').addEventListener('click', () => {
+  const panel = $('playlist-paste-panel');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) { $('playlist-paste-text').focus(); showPasteCheck(); }
+});
+$('playlist-paste-text').addEventListener('input', showPasteCheck);
+$('playlist-paste-cancel').addEventListener('click', () => { $('playlist-paste-panel').hidden = true; });
+$('playlist-paste-add').addEventListener('click', () => {
+  const { clips } = parseClipLines($('playlist-paste-text').value);
+  if (!clips.length) return;
+  const stamp = Date.now();
+  playlist = [...playlist, ...clips.map((clip, index) => ({
+    id: (stamp + index).toString(36),
+    from: Number(clip.from.toFixed(3)),
+    to: Number(clip.to.toFixed(3)),
+    title: clip.title || clipTitle(clip.from, clip.to)
+  }))];
+  $('playlist-paste-text').value = '';
+  $('playlist-paste-panel').hidden = true;
+  savePlaylist('Added ' + clips.length + ' clip' + (clips.length === 1 ? '' : 's'));
+});
