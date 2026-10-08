@@ -8,47 +8,62 @@ function renderMembers() {
     list.appendChild(empty);
     return;
   }
-  [...people].sort((a, b) => a.name.localeCompare(b.name)).forEach((person) => {
-    const member = voteData.members.find((item) => item.id === person.id);
-    const row = document.createElement('li');
-    const label = document.createElement('label');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = Boolean(member);
-    box.addEventListener('change', () => {
-      voteData.members = box.checked ? [...voteData.members, { id: person.id, leftAt: null, arrivedAt: null }] : voteData.members.filter((item) => item.id !== person.id);
-      saveVotes(box.checked ? shownName(person) + ' votes in this meeting' : shownName(person) + ' no longer listed as voting');
+  [...people]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((person) => {
+      const member = voteData.members.find((item) => item.id === person.id);
+      const row = document.createElement('li');
+      const label = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = Boolean(member);
+      box.addEventListener('change', () => {
+        voteData.members = box.checked
+          ? [...voteData.members, { id: person.id, leftAt: null, arrivedAt: null }]
+          : voteData.members.filter((item) => item.id !== person.id);
+        saveVotes(
+          box.checked ? shownName(person) + ' votes in this meeting' : shownName(person) + ' no longer listed as voting'
+        );
+      });
+      const name = document.createElement('span');
+      name.textContent = nameAndRole(person);
+      label.append(box, avatar(person), name);
+      row.appendChild(label);
+      if (member) {
+        const moment = (field, verb) => {
+          if (member[field] !== null && member[field] !== undefined) {
+            const note = document.createElement('span');
+            note.className = 'label';
+            note.textContent = verb + ' ' + fmt(member[field]);
+            const clear = document.createElement('button');
+            clear.type = 'button';
+            clear.title = 'Clear';
+            clear.textContent = '✕';
+            clear.addEventListener('click', () => {
+              member[field] = null;
+              saveVotes('Cleared');
+            });
+            row.append(note, clear);
+          } else {
+            const mark = document.createElement('button');
+            mark.type = 'button';
+            mark.textContent = verb[0].toUpperCase() + verb.slice(1) + ' here';
+            mark.title =
+              verb === 'left'
+                ? 'They left the meeting at the current position'
+                : 'They arrived at the current position';
+            mark.addEventListener('click', () => {
+              member[field] = Number(position.toFixed(1));
+              saveVotes(shownName(person) + ' ' + verb + ' at ' + fmt(position));
+            });
+            row.appendChild(mark);
+          }
+        };
+        moment('leftAt', 'left');
+        moment('arrivedAt', 'arrived');
+      }
+      list.appendChild(row);
     });
-    const name = document.createElement('span');
-    name.textContent = nameAndRole(person);
-    label.append(box, avatar(person), name);
-    row.appendChild(label);
-    if (member) {
-      const moment = (field, verb) => {
-        if (member[field] !== null && member[field] !== undefined) {
-          const note = document.createElement('span');
-          note.className = 'label';
-          note.textContent = verb + ' ' + fmt(member[field]);
-          const clear = document.createElement('button');
-          clear.type = 'button';
-          clear.title = 'Clear';
-          clear.textContent = '✕';
-          clear.addEventListener('click', () => { member[field] = null; saveVotes('Cleared'); });
-          row.append(note, clear);
-        } else {
-          const mark = document.createElement('button');
-          mark.type = 'button';
-          mark.textContent = verb[0].toUpperCase() + verb.slice(1) + ' here';
-          mark.title = verb === 'left' ? 'They left the meeting at the current position' : 'They arrived at the current position';
-          mark.addEventListener('click', () => { member[field] = Number(position.toFixed(1)); saveVotes(shownName(person) + ' ' + verb + ' at ' + fmt(position)); });
-          row.appendChild(mark);
-        }
-      };
-      moment('leftAt', 'left');
-      moment('arrivedAt', 'arrived');
-    }
-    list.appendChild(row);
-  });
 }
 // Left-to-right order of the voting members (the overlay and roll call follow it).
 function renderSeatOrder() {
@@ -89,7 +104,14 @@ function showVoteRule() {
   $('vote-needed').value = voteData.needed ?? '';
   $('vote-seats').placeholder = String(voteData.members.length || 'auto');
   $('vote-needed').placeholder = String(Math.floor(rule.seats / 2) + 1);
-  $('vote-rule').textContent = 'A motion passes once ' + rule.needed + ' vote aye; it fails once nays and absences reach ' + rule.failAt + ', or when everyone has voted without ' + rule.needed + ' ayes.';
+  $('vote-rule').textContent =
+    'A motion passes once ' +
+    rule.needed +
+    ' vote aye; it fails once nays and absences reach ' +
+    rule.failAt +
+    ', or when everyone has voted without ' +
+    rule.needed +
+    ' ayes.';
 }
 for (const field of ['seats', 'needed']) {
   $('vote-' + field).addEventListener('change', () => {
@@ -130,8 +152,12 @@ function renderVoteMembers() {
     const label = document.createElement('strong');
     label.textContent = choiceNames[status];
     const history = document.createElement('small');
-    history.textContent = editChanges.filter((change) => change.id === id).sort((a, b) => a.at - b.at)
-      .map((change) => choiceNames[change.choice] + ' ' + fmt(change.at)).join(', ') || 'no votes recorded';
+    history.textContent =
+      editChanges
+        .filter((change) => change.id === id)
+        .sort((a, b) => a.at - b.at)
+        .map((change) => choiceNames[change.choice] + ' ' + fmt(change.at))
+        .join(', ') || 'no votes recorded';
     button.append(avatar(person), name, label, history);
     button.addEventListener('click', () => toggleVote(id));
     box.appendChild(button);
@@ -143,7 +169,10 @@ function renderVoteMembers() {
 function toggledChanges(vote, changes, id, seconds) {
   const at = Number(seconds.toFixed(2));
   let next = [...changes];
-  const last = next.filter((change) => change.id === id).sort((a, b) => a.at - b.at).at(-1);
+  const last = next
+    .filter((change) => change.id === id)
+    .sort((a, b) => a.at - b.at)
+    .at(-1);
   if (last && Math.abs(last.at - at) <= 2) {
     const choice = cycle[(cycle.indexOf(last.choice) + 1) % cycle.length];
     next = next.filter((change) => change !== last);
@@ -163,7 +192,14 @@ function toggleVote(id) {
 }
 function updateVoteTally() {
   const draft = { ...editVote, outcome: $('vote-outcome').value };
-  $('vote-tally').textContent = 'At ' + fmt(position) + ': ' + describeTally(draft, position, editChanges) + '. Final: ' + describeTally(draft, Infinity, editChanges) + '.';
+  $('vote-tally').textContent =
+    'At ' +
+    fmt(position) +
+    ': ' +
+    describeTally(draft, position, editChanges) +
+    '. Final: ' +
+    describeTally(draft, Infinity, editChanges) +
+    '.';
 }
 function openVoteEditor(vote) {
   voteEditing = vote || null;
@@ -173,7 +209,7 @@ function openVoteEditor(vote) {
   $('vote-dialog-title').textContent = vote ? 'Edit vote' : 'Record a vote';
   $('vote-time').value = fmtPrecise(at);
   $('vote-show').value = vote?.showSeconds || 20;
-  $('vote-motion').value = vote ? (vote.motion || 'Motion') : 'Motion';
+  $('vote-motion').value = vote ? vote.motion || 'Motion' : 'Motion';
   $('vote-outcome').value = vote?.outcome || 'auto';
   $('vote-delete').hidden = !vote;
   $('vote-dialog-status').textContent = '';
@@ -186,7 +222,10 @@ function openVoteEditor(vote) {
   updateVoteOverlay();
 }
 $('vote-add').addEventListener('click', () => openVoteEditor(null));
-$('vote-now').addEventListener('click', () => { $('vote-time').value = fmtPrecise(position); renderVoteMembers(); });
+$('vote-now').addEventListener('click', () => {
+  $('vote-time').value = fmtPrecise(position);
+  renderVoteMembers();
+});
 $('vote-time').addEventListener('change', renderVoteMembers);
 $('vote-outcome').addEventListener('change', updateVoteTally);
 $('vote-all-for').addEventListener('click', () => {
@@ -200,22 +239,47 @@ $('vote-all-for').addEventListener('click', () => {
   renderVoteMembers();
 });
 $('vote-cancel').addEventListener('click', () => $('vote-dialog').close());
-$('vote-dialog').addEventListener('close', () => { voteClickMode = 'vote'; voteOverlayKey = null; updateVoteOverlay(); });
-['vote-motion', 'vote-time', 'vote-moved-by', 'vote-moved-at', 'vote-seconded-by', 'vote-seconded-at', 'vote-outcome'].forEach((id) => {
-  $(id).addEventListener('input', () => { voteOverlayKey = null; updateVoteOverlay(); });
-  $(id).addEventListener('change', () => { voteOverlayKey = null; updateVoteOverlay(); });
+$('vote-dialog').addEventListener('close', () => {
+  voteClickMode = 'vote';
+  voteOverlayKey = null;
+  updateVoteOverlay();
+});
+[
+  'vote-motion',
+  'vote-time',
+  'vote-moved-by',
+  'vote-moved-at',
+  'vote-seconded-by',
+  'vote-seconded-at',
+  'vote-outcome'
+].forEach((id) => {
+  $(id).addEventListener('input', () => {
+    voteOverlayKey = null;
+    updateVoteOverlay();
+  });
+  $(id).addEventListener('change', () => {
+    voteOverlayKey = null;
+    updateVoteOverlay();
+  });
 });
 $('vote-delete').addEventListener('click', async () => {
   if (!voteEditing || !confirm('Remove this vote?')) return;
   const before = voteData.votes;
   voteData.votes = voteData.votes.filter((item) => item.id !== voteEditing.id);
-  if (await saveVotes('Removed the vote')) $('vote-dialog').close(); else voteData.votes = before;
+  if (await saveVotes('Removed the vote')) $('vote-dialog').close();
+  else voteData.votes = before;
 });
 $('vote-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const at = parse($('vote-time').value);
-  if (at === null || at < 0 || at > endSeconds) { $('vote-dialog-status').textContent = 'Enter a time between 00:00:00 and ' + fmt(endSeconds); return; }
-  if (!$('vote-motion').value.trim()) { $('vote-dialog-status').textContent = 'Say what the motion is'; return; }
+  if (at === null || at < 0 || at > endSeconds) {
+    $('vote-dialog-status').textContent = 'Enter a time between 00:00:00 and ' + fmt(endSeconds);
+    return;
+  }
+  if (!$('vote-motion').value.trim()) {
+    $('vote-dialog-status').textContent = 'Say what the motion is';
+    return;
+  }
   const vote = {
     id: voteEditing ? voteEditing.id : Date.now().toString(36),
     at: Number(at.toFixed(3)),
@@ -228,14 +292,28 @@ $('vote-form').addEventListener('submit', async (event) => {
   };
   // Final statuses, for anything that only needs the result.
   vote.results = {};
-  Object.entries(voteState(vote, Infinity).statuses).forEach(([id, status]) => { if (status !== 'pending') vote.results[id] = status; });
-  for (const [role, label] of [['movedBy', 'motion'], ['secondedBy', 'second']]) {
-    if (vote[role] && vote[role].at === null) { $('vote-dialog-status').textContent = 'Enter when the ' + label + ' was made (or press ⏱ Now)'; return; }
+  Object.entries(voteState(vote, Infinity).statuses).forEach(([id, status]) => {
+    if (status !== 'pending') vote.results[id] = status;
+  });
+  for (const [role, label] of [
+    ['movedBy', 'motion'],
+    ['secondedBy', 'second']
+  ]) {
+    if (vote[role] && vote[role].at === null) {
+      $('vote-dialog-status').textContent = 'Enter when the ' + label + ' was made (or press ⏱ Now)';
+      return;
+    }
   }
   const before = voteData.votes;
-  voteData.votes = voteEditing ? voteData.votes.map((item) => (item.id === vote.id ? vote : item)) : [...voteData.votes, vote];
-  if (await saveVotes((voteEditing ? 'Saved the vote at ' : 'Recorded the vote at ') + fmt(vote.at))) $('vote-dialog').close();
-  else { voteData.votes = before; $('vote-dialog-status').textContent = $('votes-status').textContent; }
+  voteData.votes = voteEditing
+    ? voteData.votes.map((item) => (item.id === vote.id ? vote : item))
+    : [...voteData.votes, vote];
+  if (await saveVotes((voteEditing ? 'Saved the vote at ' : 'Recorded the vote at ') + fmt(vote.at)))
+    $('vote-dialog').close();
+  else {
+    voteData.votes = before;
+    $('vote-dialog-status').textContent = $('votes-status').textContent;
+  }
 });
 
 // Who moved and seconded, and when. People to pick from: the voting members first, then everyone else.
@@ -248,17 +326,22 @@ function fillMotionPeople(vote) {
     none.textContent = '—';
     select.appendChild(none);
     const memberIds = voteData.members.map((item) => item.id);
-    const groups = [['Voting members', people.filter((person) => memberIds.includes(person.id))], ['Others', people.filter((person) => !memberIds.includes(person.id))]];
+    const groups = [
+      ['Voting members', people.filter((person) => memberIds.includes(person.id))],
+      ['Others', people.filter((person) => !memberIds.includes(person.id))]
+    ];
     groups.forEach(([label, list]) => {
       if (!list.length) return;
       const group = document.createElement('optgroup');
       group.label = label;
-      [...list].sort((a, b) => a.name.localeCompare(b.name)).forEach((person) => {
-        const option = document.createElement('option');
-        option.value = person.id;
-        option.textContent = shownName(person);
-        group.appendChild(option);
-      });
+      [...list]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach((person) => {
+          const option = document.createElement('option');
+          option.value = person.id;
+          option.textContent = shownName(person);
+          group.appendChild(option);
+        });
       select.appendChild(group);
     });
     const entry = vote ? vote[role + 'By'] : null;
@@ -291,5 +374,7 @@ for (const role of ['moved', 'seconded']) {
     const spoke = lastSpokeBefore(id, voteAt);
     if (spoke !== null) $('vote-' + role + '-at').value = fmtPrecise(spoke);
   });
-  $('vote-' + role + '-now').addEventListener('click', () => { $('vote-' + role + '-at').value = fmtPrecise(position); });
+  $('vote-' + role + '-now').addEventListener('click', () => {
+    $('vote-' + role + '-at').value = fmtPrecise(position);
+  });
 }

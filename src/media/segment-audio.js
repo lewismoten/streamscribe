@@ -6,8 +6,20 @@ import { runCommand } from '../util/process.js';
 // The first segment after a stream identifier renewal (Swagit's, about hourly) can carry a few audio packets stamped ~45 seconds
 // before its video. Returns how far into the file (by its timestamps) the real content starts: 0 for a normal one.
 export async function strayLeadSeconds(file) {
-  const packets = (await runCommand(TOOLS.ffprobe, ['-v', 'error', '-show_entries', 'packet=codec_type,pts_time', '-of', 'csv=p=0', file]))
-    .split(/\r?\n/).map((line) => line.split(',')).filter(([type, time]) => (type === 'video' || type === 'audio') && Number.isFinite(Number(time)));
+  const packets = (
+    await runCommand(TOOLS.ffprobe, [
+      '-v',
+      'error',
+      '-show_entries',
+      'packet=codec_type,pts_time',
+      '-of',
+      'csv=p=0',
+      file
+    ])
+  )
+    .split(/\r?\n/)
+    .map((line) => line.split(','))
+    .filter(([type, time]) => (type === 'video' || type === 'audio') && Number.isFinite(Number(time)));
   const firstVideo = Math.min(...packets.filter(([type]) => type === 'video').map(([, time]) => Number(time)));
   const first = Math.min(...packets.map(([, time]) => Number(time)));
   return Number.isFinite(firstVideo) && firstVideo - first >= 1 ? firstVideo - first : 0;
@@ -17,7 +29,9 @@ export async function strayLeadSeconds(file) {
 // on its own (so the live capture's and the archive's different layouts, and stray packets, don't matter), and
 // moments that weren't captured become silence, so a second into the WAV is a second of video position.
 export async function extractRangeAudio(sessionDir, session, from, to, outputPath, tempDir, concurrency = 8) {
-  const overlapping = session.retained.filter((item) => item.videoStart < to && item.videoStart + item.durationSeconds > from);
+  const overlapping = session.retained.filter(
+    (item) => item.videoStart < to && item.videoStart + item.durationSeconds > from
+  );
   if (overlapping.length === 0) {
     throw new Error('Nothing was captured in that range');
   }
@@ -37,23 +51,49 @@ export async function extractRangeAudio(sessionDir, session, from, to, outputPat
   }
 
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(concurrency, parts.length) }, async () => {
-    while (next < parts.length) {
-      const index = next++;
-      const part = parts[index];
-      part.file = path.join(tempDir, `part-${String(index).padStart(5, '0')}.wav`);
-      const output = ['-ac', '1', '-ar', '44100', '-c:a', 'pcm_s16le', part.file];
-      if (part.silence) {
-        await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono', '-t', part.silence.toFixed(3), ...output]);
-        continue;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, parts.length) }, async () => {
+      while (next < parts.length) {
+        const index = next++;
+        const part = parts[index];
+        part.file = path.join(tempDir, `part-${String(index).padStart(5, '0')}.wav`);
+        const output = ['-ac', '1', '-ar', '44100', '-c:a', 'pcm_s16le', part.file];
+        if (part.silence) {
+          await runCommand(TOOLS.ffmpeg, [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-y',
+            '-f',
+            'lavfi',
+            '-i',
+            'anullsrc=r=44100:cl=mono',
+            '-t',
+            part.silence.toFixed(3),
+            ...output
+          ]);
+          continue;
+        }
+        const file = path.join(sessionDir, 'segments', part.item.fileName);
+        // Seeking inside a segment that starts with stray packets has to skip past them.
+        const lead = part.start > 0 || part.end < part.item.durationSeconds ? await strayLeadSeconds(file) : 0;
+        await runCommand(TOOLS.ffmpeg, [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
+          '-ss',
+          (lead + part.start).toFixed(3),
+          '-t',
+          (part.end - part.start).toFixed(3),
+          '-i',
+          file,
+          '-vn',
+          ...output
+        ]);
       }
-      const file = path.join(sessionDir, 'segments', part.item.fileName);
-      // Seeking inside a segment that starts with stray packets has to skip past them.
-      const lead = part.start > 0 || part.end < part.item.durationSeconds ? await strayLeadSeconds(file) : 0;
-      await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y',
-        '-ss', (lead + part.start).toFixed(3), '-t', (part.end - part.start).toFixed(3), '-i', file, '-vn', ...output]);
-    }
-  }));
+    })
+  );
 
   await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
   await joinExactly(parts, outputPath);
@@ -68,7 +108,9 @@ const SAMPLE_RATE = 44100;
 async function joinExactly(parts, outputPath) {
   let position = 0;
   let written = 0;
-  const totalSamples = Math.round(parts.reduce((total, part) => total + (part.silence ?? part.end - part.start), 0) * SAMPLE_RATE);
+  const totalSamples = Math.round(
+    parts.reduce((total, part) => total + (part.silence ?? part.end - part.start), 0) * SAMPLE_RATE
+  );
   const out = await fs.promises.open(outputPath, 'w');
   try {
     await out.write(wavHeader(totalSamples * 2), 0, 44, 0);
@@ -110,7 +152,8 @@ async function wavData(file) {
   const buffer = await fs.promises.readFile(file);
   for (let at = 12; at + 8 <= buffer.length;) {
     const size = buffer.readUInt32LE(at + 4);
-    if (buffer.toString('ascii', at, at + 4) === 'data') return buffer.subarray(at + 8, Math.min(buffer.length, at + 8 + size));
+    if (buffer.toString('ascii', at, at + 4) === 'data')
+      return buffer.subarray(at + 8, Math.min(buffer.length, at + 8 + size));
     at += 8 + size + (size % 2);
   }
   return Buffer.alloc(0);

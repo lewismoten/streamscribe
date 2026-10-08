@@ -19,6 +19,7 @@ Builds the complete meeting from your live capture plus the archived copy (the o
    - the archive after your capture ended
 
    The live capture is used wherever it exists, so anything the county cut from the archive (a recess, for example) stays in. Live segments are hard-linked, so they take no extra disk space. Archive pieces are cut into 10-second segments without re-encoding, which takes seconds. The first segment after each stream renewal carries a few stray audio packets stamped long before its video. The meeting uses a cleaned copy of that segment, and the captured original is left alone.
+
 3. **Carries over your speaker marks, agenda items, votes, and transcript edits** from the sessions, moved to the meeting's timeline. Agenda items come in the same way as speaker marks: on every build until you add or change one on the meeting's page.
    - Until you mark speakers on the meeting's own page, every rebuild picks up the sessions' latest marks.
    - After that, the meeting's marks are kept, and `--reimport-speakers` replaces them with the sessions' marks.
@@ -48,6 +49,7 @@ Options:
 - `--realign`: download and line up the archive again
 - `--reimport-speakers`: replace the meeting's speaker marks with the sessions'
 - `--output <folder>`: another meeting folder
+- `--source <key>`: look for the day's sessions in this source only
 
 Typical meeting:
 

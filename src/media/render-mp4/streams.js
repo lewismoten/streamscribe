@@ -4,8 +4,28 @@ import { SOURCES } from '../../config/runtime-config.js';
 import { readFile, rename, rm, writeFile } from 'fs/promises';
 import { fileExists, loadJson, writeJsonAtomically } from '../../util/fs-utils.js';
 import { loadSessionSegments } from '../../sessions/session.js';
-import { defaultGapThresholdSeconds, defaultWidth, defaultHeight, defaultFrameRate, defaultAudioSampleRate, buildGapOverlayText, normalizeSegmentClip, renderGapClip, probeVideoFile } from './clips.js';
-import { safeFileComponent, formatEasternFileTimestamp, formatEasternWallClock, formatClock, evenNumber, positiveNumberOrDefault, positiveIntegerOrDefault, escapeConcatPath, execFileText } from './format.js';
+import {
+  defaultGapThresholdSeconds,
+  defaultWidth,
+  defaultHeight,
+  defaultFrameRate,
+  defaultAudioSampleRate,
+  buildGapOverlayText,
+  normalizeSegmentClip,
+  renderGapClip,
+  probeVideoFile
+} from './clips.js';
+import {
+  safeFileComponent,
+  formatEasternFileTimestamp,
+  formatEasternWallClock,
+  formatClock,
+  evenNumber,
+  positiveNumberOrDefault,
+  positiveIntegerOrDefault,
+  escapeConcatPath,
+  execFileText
+} from './format.js';
 
 // A session's segments grouped by stream identifier, and each group's timeline (captured stretches and gaps).
 
@@ -27,8 +47,11 @@ export async function renderStreamIdentityGroup(session, sessionData, group, opt
     gapThresholdSeconds: options.gapThresholdSeconds,
     timeline: options.timeline,
     // The meeting's name (set on its page), else the session's title, else the source's name.
-    meetingTitle: String((await loadJson(path.join(session.sessionDir, 'meeting-info.json'), null))?.name || sessionData.title || '').trim()
-      || `${SOURCES.find((source) => session.sessionDir.startsWith(source.storageDir))?.name || 'Meeting'} ${session.captureId}`,
+    meetingTitle:
+      String(
+        (await loadJson(path.join(session.sessionDir, 'meeting-info.json'), null))?.name || sessionData.title || ''
+      ).trim() ||
+      `${SOURCES.find((source) => session.sessionDir.startsWith(source.storageDir))?.name || 'Meeting'} ${session.captureId}`,
     intentionallyDiscardedSequences: options.intentionallyDiscardedSequences
   });
 
@@ -40,7 +63,10 @@ export async function renderStreamIdentityGroup(session, sessionData, group, opt
     if (item.type === 'segment') {
       const sourcePath = path.join(session.sessionDir, 'segments', item.fileName);
       // Named by sequence (not list position) so cached clips stay correct when the gap list changes.
-      const destinationPath = path.join(clipDir, `segment-${String(item.sequence).padStart(6, '0')}${options.burnWallClock ? '-clock' : ''}.mp4`);
+      const destinationPath = path.join(
+        clipDir,
+        `segment-${String(item.sequence).padStart(6, '0')}${options.burnWallClock ? '-clock' : ''}.mp4`
+      );
       await normalizeSegmentClip(sourcePath, destinationPath, {
         ffmpegPath: options.ffmpegPath,
         width,
@@ -57,7 +83,10 @@ export async function renderStreamIdentityGroup(session, sessionData, group, opt
       continue;
     }
 
-    const destinationPath = path.join(clipDir, `gap-after-${String(item.afterSequence).padStart(6, '0')}-${Math.round(item.durationSeconds * 1000)}ms.mp4`);
+    const destinationPath = path.join(
+      clipDir,
+      `gap-after-${String(item.afterSequence).padStart(6, '0')}-${Math.round(item.durationSeconds * 1000)}ms.mp4`
+    );
     await renderGapClip(destinationPath, {
       ffmpegPath: options.ffmpegPath,
       width,
@@ -99,14 +128,21 @@ export async function renderStreamIdentityGroup(session, sessionData, group, opt
     await rm(outputPartialPath, { force: true });
     await execFileText(options.ffmpegPath, [
       '-hide_banner',
-      '-loglevel', 'error',
+      '-loglevel',
+      'error',
       '-y',
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', concatListPath,
-      '-c', 'copy',
-      '-f', 'mp4',
-      '-movflags', '+faststart',
+      '-f',
+      'concat',
+      '-safe',
+      '0',
+      '-i',
+      concatListPath,
+      '-c',
+      'copy',
+      '-f',
+      'mp4',
+      '-movflags',
+      '+faststart',
       outputPartialPath
     ]);
     await rename(outputPartialPath, outputPath);
@@ -238,11 +274,11 @@ export function buildStitchedTimeline(segmentEntries, options) {
   const items = [];
   const gapThresholdSeconds = Number(options.gapThresholdSeconds || defaultGapThresholdSeconds);
   const meetingTitle = String(options.meetingTitle || 'Meeting').trim();
-  const intentionallyDiscardedSequences = options.intentionallyDiscardedSequences instanceof Set
-    ? options.intentionallyDiscardedSequences
-    : new Set();
+  const intentionallyDiscardedSequences =
+    options.intentionallyDiscardedSequences instanceof Set ? options.intentionallyDiscardedSequences : new Set();
   const timeline = options.timeline || { positions: new Map(), clockZero: null, typicalDuration: 10 };
-  const airTime = (position) => (timeline.clockZero === null || !Number.isFinite(position) ? null : (timeline.clockZero + position) * 1000);
+  const airTime = (position) =>
+    timeline.clockZero === null || !Number.isFinite(position) ? null : (timeline.clockZero + position) * 1000;
   let outputSeconds = 0;
 
   for (let index = 0; index < segmentEntries.length; index += 1) {
@@ -261,8 +297,9 @@ export function buildStitchedTimeline(segmentEntries, options) {
       const missingSeconds = missingCount * timeline.typicalDuration;
       if (missingCount > 0 && missingSeconds > gapThresholdSeconds) {
         const previousPosition = timeline.positions.get(Number(previous.sequence));
-        const lostAt = airTime(previousPosition + positiveNumberOrDefault(previous.durationSeconds, 0))
-          ?? Date.parse(String(previous.capturedAt || ''));
+        const lostAt =
+          airTime(previousPosition + positiveNumberOrDefault(previous.durationSeconds, 0)) ??
+          Date.parse(String(previous.capturedAt || ''));
         const resumeAt = airTime(position) ?? Date.parse(String(entry.capturedAt || ''));
         const gapStartSeconds = outputSeconds;
         const gapEndSeconds = outputSeconds + missingSeconds;
@@ -310,7 +347,10 @@ export function buildStitchedTimeline(segmentEntries, options) {
 // Video positions by sequence, the session's clock origin, and the usual segment length.
 export async function loadTimeline(sessionDir) {
   const session = await loadSessionSegments(sessionDir);
-  const durations = session.retained.map((item) => item.durationSeconds).filter((value) => value > 0).sort((a, b) => a - b);
+  const durations = session.retained
+    .map((item) => item.durationSeconds)
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b);
   return {
     positions: new Map(session.retained.map((item) => [item.sequence, item.videoStart])),
     clockZero: session.clockZero,

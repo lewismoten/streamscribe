@@ -15,12 +15,24 @@ function speakersAt(seconds) {
   const index = turnIndexAt(seconds);
   return index < 0 ? [] : turns[index].speakers;
 }
-const photoUrl = (person) => page.peopleUrl + '/' + encodeURIComponent(person.photo) + '?v=' + (person.photoVersion || 0);
-const initialsOf = (name) => String(name || '?').split(' ').filter(Boolean).map((word) => word[0]).slice(0, 2).join('').toUpperCase();
+const photoUrl = (person) =>
+  page.peopleUrl + '/' + encodeURIComponent(person.photo) + '?v=' + (person.photoVersion || 0);
+const initialsOf = (name) =>
+  String(name || '?')
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 // A name that isn't known (marked so, blank, or "Unknown") shows the person's role instead, or "Unknown".
-const isNameUnknown = (person) => Boolean(person?.nameUnknown) || !String(person?.name || '').trim() || /^unknown$/i.test(String(person?.name || '').trim());
-const shownName = (person) => (!person ? 'Unknown' : (isNameUnknown(person) ? (person.role || 'Unknown') : person.name));
-const nameAndRole = (person) => (isNameUnknown(person) ? shownName(person) : person.name + (person.role ? ', ' + person.role : ''));
+const isNameUnknown = (person) =>
+  Boolean(person?.nameUnknown) ||
+  !String(person?.name || '').trim() ||
+  /^unknown$/i.test(String(person?.name || '').trim());
+const shownName = (person) => (!person ? 'Unknown' : isNameUnknown(person) ? person.role || 'Unknown' : person.name);
+const nameAndRole = (person) =>
+  isNameUnknown(person) ? shownName(person) : person.name + (person.role ? ', ' + person.role : '');
 function avatar(person) {
   // A group entry (such as everyone reciting the Pledge together) shows its emoji instead of a photo.
   if (person?.icon) {
@@ -44,11 +56,16 @@ function avatar(person) {
 async function putFile(url, body, type) {
   if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
   const response = await fetch(url, { method: 'PUT', headers: { 'content-type': type }, body });
-  if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
+  if (!response.ok)
+    throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
 }
 async function saveTurns() {
   try {
-    await putFile('../speakers.json', JSON.stringify({ updatedAt: new Date().toISOString(), turns }, null, 2), 'application/json');
+    await putFile(
+      '../speakers.json',
+      JSON.stringify({ updatedAt: new Date().toISOString(), turns }, null, 2),
+      'application/json'
+    );
     $('speakers-status').textContent = 'Saved';
   } catch (error) {
     $('speakers-status').textContent = 'Not saved: ' + error.message;
@@ -63,7 +80,8 @@ function setSpeakersNow(ids) {
 function setSpeakersAt(moment, ids, tolerance) {
   const at = Math.round(moment * 100) / 100;
   const existing = turns.find((turn) => Math.abs(turn.at - at) <= tolerance);
-  if (existing) existing.speakers = ids; else turns.push({ at, speakers: ids });
+  if (existing) existing.speakers = ids;
+  else turns.push({ at, speakers: ids });
   turns.sort((a, b) => a.at - b.at);
   turns = turns.filter((turn, index) => turn.speakers.join(',') !== (index ? turns[index - 1].speakers.join(',') : ''));
   speakersChanged();
@@ -81,10 +99,14 @@ function speakersChanged() {
   renderTranscript();
 }
 // Groups of people (saved with the roster, so every meeting shares them). Voting members of this meeting come first.
-let rosterGroups = Array.isArray(page.peopleGroups) ? page.peopleGroups : ['Elected officials', 'County staff', 'Residents', 'Vendors', 'Other organizations'];
+let rosterGroups = Array.isArray(page.peopleGroups)
+  ? page.peopleGroups
+  : ['Elected officials', 'County staff', 'Residents', 'Vendors', 'Other organizations'];
 // Starts as compact circles grouped side by side; Names shows the full details.
 let peopleView = 'icons';
-try { peopleView = localStorage.getItem('thumbnails.peopleLayout') === 'names' ? 'names' : 'icons'; } catch {}
+try {
+  peopleView = localStorage.getItem('thumbnails.peopleLayout') === 'names' ? 'names' : 'icons';
+} catch {}
 function personChip(person, voting) {
   const chip = document.createElement('span');
   chip.className = 'person-chip';
@@ -103,7 +125,7 @@ function personChip(person, voting) {
   const name = document.createElement('strong');
   name.textContent = shownName(person);
   const role = document.createElement('small');
-  role.textContent = isNameUnknown(person) ? 'name not known' : (person.role || '');
+  role.textContent = isNameUnknown(person) ? 'name not known' : person.role || '';
   text.append(name, role);
   button.append(avatar(person), text);
   button.addEventListener('click', () => toggleSpeaker(person.id));
@@ -132,13 +154,21 @@ function peopleSection(title, target, list, extras) {
   chips.className = 'people-chips';
   list.forEach((person) => chips.appendChild(personChip(person, Boolean(target.voting))));
   section.append(heading, chips);
-  section.addEventListener('dragover', (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; section.classList.add('drop'); });
-  section.addEventListener('dragleave', (event) => { if (!section.contains(event.relatedTarget)) section.classList.remove('drop'); });
+  section.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    section.classList.add('drop');
+  });
+  section.addEventListener('dragleave', (event) => {
+    if (!section.contains(event.relatedTarget)) section.classList.remove('drop');
+  });
   section.addEventListener('drop', (event) => {
     event.preventDefault();
     section.classList.remove('drop');
     let dragged = null;
-    try { dragged = JSON.parse(event.dataTransfer.getData('text/plain')); } catch {}
+    try {
+      dragged = JSON.parse(event.dataTransfer.getData('text/plain'));
+    } catch {}
     if (dragged?.id) dropPerson(dragged, target);
   });
   return section;
@@ -170,7 +200,7 @@ async function dropPerson(dragged, target) {
 }
 async function saveGroups(groups, list, done) {
   // Read the latest roster first: reading it also refreshes the saved group list, which must not replace the new one.
-  const fresh = list || await latestPeople();
+  const fresh = list || (await latestPeople());
   const before = rosterGroups;
   rosterGroups = groups;
   try {
@@ -190,7 +220,9 @@ $('group-add').addEventListener('click', async () => {
 });
 function setPeopleView(view) {
   peopleView = view;
-  try { localStorage.setItem('thumbnails.peopleLayout', view); } catch {}
+  try {
+    localStorage.setItem('thumbnails.peopleLayout', view);
+  } catch {}
   $('people').classList.toggle('icons-only', view === 'icons');
   $('people-names').classList.toggle('on', view === 'names');
   $('people-icons').classList.toggle('on', view === 'icons');
@@ -205,37 +237,61 @@ function renderPeople() {
   const memberIds = voteData.members.map((member) => member.id);
   const voting = memberIds.map((id) => peopleMap.get(id)).filter(Boolean);
   const others = people.filter((person) => !memberIds.includes(person.id));
-  const label = (text) => { const span = document.createElement('span'); span.textContent = text; return [span]; };
+  const label = (text) => {
+    const span = document.createElement('span');
+    span.textContent = text;
+    return [span];
+  };
   box.appendChild(peopleSection('🗳 Voting members', { voting: true }, voting, label));
   // Groups in their saved order, then any group someone has that isn't listed yet.
   const groups = [...rosterGroups];
-  others.forEach((person) => { if (person.group && !groups.includes(person.group)) groups.push(person.group); });
+  others.forEach((person) => {
+    if (person.group && !groups.includes(person.group)) groups.push(person.group);
+  });
   groups.forEach((group) => {
     const members = others.filter((person) => person.group === group).sort(byName);
-    box.appendChild(peopleSection(group, { group }, members, (title) => {
-      const name = document.createElement('span');
-      name.className = 'group-name';
-      name.textContent = title;
-      name.title = 'Click to rename';
-      name.addEventListener('click', async () => {
-        const renamed = (prompt('Rename the group "' + title + '" to:', title) || '').trim();
-        if (!renamed || renamed === title) return;
-        const list = (await latestPeople()).map((person) => (person.group === title ? { ...person, group: renamed } : person));
-        await saveGroups(rosterGroups.includes(title) ? rosterGroups.map((item) => (item === title ? renamed : item)) : [...rosterGroups, renamed], list, 'Renamed the group to ' + renamed);
-      });
-      const parts = [name];
-      if (!members.length) {
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.textContent = '✕';
-        remove.title = 'Remove this empty group';
-        remove.addEventListener('click', () => saveGroups(rosterGroups.filter((item) => item !== title), null, 'Removed the group ' + title));
-        parts.push(remove);
-      }
-      return parts;
-    }));
+    box.appendChild(
+      peopleSection(group, { group }, members, (title) => {
+        const name = document.createElement('span');
+        name.className = 'group-name';
+        name.textContent = title;
+        name.title = 'Click to rename';
+        name.addEventListener('click', async () => {
+          const renamed = (prompt('Rename the group "' + title + '" to:', title) || '').trim();
+          if (!renamed || renamed === title) return;
+          const list = (await latestPeople()).map((person) =>
+            person.group === title ? { ...person, group: renamed } : person
+          );
+          await saveGroups(
+            rosterGroups.includes(title)
+              ? rosterGroups.map((item) => (item === title ? renamed : item))
+              : [...rosterGroups, renamed],
+            list,
+            'Renamed the group to ' + renamed
+          );
+        });
+        const parts = [name];
+        if (!members.length) {
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.textContent = '✕';
+          remove.title = 'Remove this empty group';
+          remove.addEventListener('click', () =>
+            saveGroups(
+              rosterGroups.filter((item) => item !== title),
+              null,
+              'Removed the group ' + title
+            )
+          );
+          parts.push(remove);
+        }
+        return parts;
+      })
+    );
   });
-  box.appendChild(peopleSection('Not grouped', { group: '' }, others.filter((person) => !person.group).sort(byName), label));
+  box.appendChild(
+    peopleSection('Not grouped', { group: '' }, others.filter((person) => !person.group).sort(byName), label)
+  );
   $('people-empty').hidden = people.length > 0;
   lastSpeakerKey = null;
   updateSpeakerUi();
@@ -253,9 +309,12 @@ function updateSpeakerUi() {
   if (key === lastSpeakerKey) return;
   lastSpeakerKey = key;
   updateNowSpeakers(ids);
-  document.querySelectorAll('#people .person').forEach((button) => button.setAttribute('aria-pressed', ids.includes(button.dataset.id) ? 'true' : 'false'));
+  document
+    .querySelectorAll('#people .person')
+    .forEach((button) => button.setAttribute('aria-pressed', ids.includes(button.dataset.id) ? 'true' : 'false'));
   const names = ids.map((id) => (peopleMap.get(id) ? shownName(peopleMap.get(id)) : id));
-  $('speakers-now').textContent = (names.length ? names.join(', ') : 'nobody marked') + (index >= 0 ? ' (since ' + fmt(turns[index].at) + ')' : '');
+  $('speakers-now').textContent =
+    (names.length ? names.join(', ') : 'nobody marked') + (index >= 0 ? ' (since ' + fmt(turns[index].at) + ')' : '');
   const cards = $('speaker-cards');
   cards.textContent = '';
   ids.forEach((id) => {
@@ -299,8 +358,11 @@ $('speaker-next').addEventListener('click', () => {
 function setSpeakerOverlay(visible) {
   $('show-speakers').checked = visible;
   $('speaker-cards').hidden = !visible;
-  try { localStorage.setItem('thumbnails.showSpeakers', visible ? '1' : '0'); } catch {}
+  try {
+    localStorage.setItem('thumbnails.showSpeakers', visible ? '1' : '0');
+  } catch {}
 }
 $('show-speakers').addEventListener('change', () => setSpeakerOverlay($('show-speakers').checked));
-try { if (localStorage.getItem('thumbnails.showSpeakers') === '1') setSpeakerOverlay(true); } catch {}
-
+try {
+  if (localStorage.getItem('thumbnails.showSpeakers') === '1') setSpeakerOverlay(true);
+} catch {}

@@ -21,10 +21,12 @@ export function formatEasternFileTimestamp(value) {
     minute: '2-digit',
     second: '2-digit',
     hourCycle: 'h23'
-  }).formatToParts(date).reduce((result, part) => {
-    result[part.type] = part.value;
-    return result;
-  }, {});
+  })
+    .formatToParts(date)
+    .reduce((result, part) => {
+      result[part.type] = part.value;
+      return result;
+    }, {});
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}-${parts.minute}-${parts.second}`;
 }
 

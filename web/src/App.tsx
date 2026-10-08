@@ -29,8 +29,13 @@ export default function App() {
   const account = useAccount();
   useEffect(() => {
     refreshAccount();
-    api.config()
-      .then((value) => { setTimeZone(value.timeZone); setConfig(value); setMode('local'); })
+    api
+      .config()
+      .then((value) => {
+        setTimeZone(value.timeZone);
+        setConfig(value);
+        setMode('local');
+      })
       .catch(() => setMode('static'));
     startSyncing(30);
   }, []);
@@ -41,26 +46,41 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <NavLink to="/" className="brand"><img src={`${import.meta.env.BASE_URL}favicon.ico`} alt="" />Stream Scribe</NavLink>
+        <NavLink to="/" className="brand">
+          <img src={`${import.meta.env.BASE_URL}favicon.ico`} alt="" />
+          Stream Scribe
+        </NavLink>
         <nav>
-          {local && <NavLink to="/" end>Library</NavLink>}
+          {local && (
+            <NavLink to="/" end>
+              Library
+            </NavLink>
+          )}
           {local && <NavLink to="/search">Search</NavLink>}
           {local && <NavLink to="/capture">Capture</NavLink>}
-          <NavLink to={local ? '/published' : '/'} end={!local}>Published</NavLink>
+          <NavLink to={local ? '/published' : '/'} end={!local}>
+            Published
+          </NavLink>
           {(local || viewer) && <NavLink to="/meetings">Meetings</NavLink>}
           {viewer && <NavLink to="/live">Live</NavLink>}
           {viewer && <NavLink to="/agents">Agents</NavLink>}
           <NavLink to="/schedules">Schedules</NavLink>
           {(can('manage.users', account) || can('review', account)) && <NavLink to="/people">People</NavLink>}
           <NavLink to="/settings">Settings</NavLink>
-          <NavLink to="/account" className="account-link">{account.user ? `👤 ${account.user.displayName || account.user.username}` : 'Sign in'}</NavLink>
+          <NavLink to="/account" className="account-link">
+            {account.user ? `👤 ${account.user.displayName || account.user.username}` : 'Sign in'}
+          </NavLink>
         </nav>
         {local && <SearchBox />}
       </header>
       <main className="page">
         {mode !== 'checking' && (
           <Routes>
-            {local ? <Route path="/" element={<Library config={config} />} /> : <Route path="/" element={<PublishedList />} />}
+            {local ? (
+              <Route path="/" element={<Library config={config} />} />
+            ) : (
+              <Route path="/" element={<PublishedList />} />
+            )}
             <Route path="/published" element={<PublishedList />} />
             <Route path="/published/:id" element={<PublicationPage />} />
             <Route path="/agents" element={<AgentsPage />} />
@@ -70,11 +90,21 @@ export default function App() {
             <Route path="/meetings" element={<MeetingsPage />} />
             <Route path="/meetings/:id" element={<MeetingPage />} />
             <Route path="/live" element={<LivePage />} />
-            <Route path="/schedules" element={<SchedulesPage sourceKeys={config?.sources.map((source) => source.key) || []} />} />
+            <Route
+              path="/schedules"
+              element={<SchedulesPage sourceKeys={config?.sources.map((source) => source.key) || []} />}
+            />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/people" element={<PeoplePage />} />
-            <Route path="*" element={<p>Nothing here. <NavLink to="/">Back to the start</NavLink></p>} />
+            <Route
+              path="*"
+              element={
+                <p>
+                  Nothing here. <NavLink to="/">Back to the start</NavLink>
+                </p>
+              }
+            />
           </Routes>
         )}
       </main>
@@ -91,8 +121,16 @@ function SearchBox() {
     if (text.trim()) navigate(`/search?q=${encodeURIComponent(text.trim())}`);
   };
   return (
-    <form className="topsearch" onSubmit={submit} role="search">
-      <input type="search" value={text} onChange={(event) => setText(event.target.value)} placeholder="Search all transcripts" aria-label="Search all transcripts" />
-    </form>
+    <search className="topsearch">
+      <form onSubmit={submit}>
+        <input
+          type="search"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="Search all transcripts"
+          aria-label="Search all transcripts"
+        />
+      </form>
+    </search>
   );
 }

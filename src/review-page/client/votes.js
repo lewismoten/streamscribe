@@ -1,32 +1,51 @@
 // Votes ({session}/votes.json, saved through the local server): the meeting's voting members (with when anyone
 // left or arrived), and each vote's time, motion, every member's choice, and outcome.
-let voteData = { members: page.votes.members || [], votes: page.votes.votes || [], seats: page.votes.seats ?? null, needed: page.votes.needed ?? null };
+let voteData = {
+  members: page.votes.members || [],
+  votes: page.votes.votes || [],
+  seats: page.votes.seats ?? null,
+  needed: page.votes.needed ?? null
+};
 // Each vote keeps every member's status changes in order ({ id, choice, at }), so the roll call can be replayed.
 const cycle = ['pending', 'for', 'against', 'abstain', 'absent'];
 const choiceNames = { for: 'Aye', against: 'Nay', abstain: 'Abstain', absent: 'Absent', pending: 'Not voted' };
 const choiceMarks = { for: '✔', against: '✖', abstain: '–', absent: '', pending: '' };
 // Short label: a person's last name; a group entry (with an icon) or unknown name in full.
-const lastName = (person) => (isNameUnknown(person) || person.icon ? shownName(person) : (person.name.split(' ').filter(Boolean).slice(-1)[0] || person.name));
+const lastName = (person) =>
+  isNameUnknown(person) || person.icon
+    ? shownName(person)
+    : person.name.split(' ').filter(Boolean).slice(-1)[0] || person.name;
 // The district from a role such as "Supervisor, South River District" (shown without the word District).
 function districtOf(person) {
-  const parts = String(person.role || '').split(',').map((part) => part.trim()).filter(Boolean);
+  const parts = String(person.role || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
   const district = parts.find((part) => /district/i.test(part)) || (parts.length > 1 ? parts[parts.length - 1] : '');
   return district.replace(/ *district$/i, '');
 }
 function memberPresent(member, seconds) {
-  return !((member.leftAt !== null && member.leftAt !== undefined && seconds >= member.leftAt)
-    || (member.arrivedAt !== null && member.arrivedAt !== undefined && seconds < member.arrivedAt));
+  return !(
+    (member.leftAt !== null && member.leftAt !== undefined && seconds >= member.leftAt) ||
+    (member.arrivedAt !== null && member.arrivedAt !== undefined && seconds < member.arrivedAt)
+  );
 }
 // Votes saved before the roll call was recorded only have final results: treat them as cast when the vote opened.
 function voteChanges(vote) {
   if (Array.isArray(vote.changes)) return vote.changes;
-  return Object.entries(vote.results || {}).filter(([, choice]) => choice !== 'absent').map(([id, choice]) => ({ id, choice, at: vote.at }));
+  return Object.entries(vote.results || {})
+    .filter(([, choice]) => choice !== 'absent')
+    .map(([id, choice]) => ({ id, choice, at: vote.at }));
 }
 function voterIds(vote, changes) {
   // Current members, plus anyone recorded in this vote who has since been unchecked.
   const ids = voteData.members.map((item) => item.id);
-  (changes || (vote ? voteChanges(vote) : [])).forEach((change) => { if (!ids.includes(change.id)) ids.push(change.id); });
-  Object.keys(vote?.results || {}).forEach((id) => { if (!ids.includes(id)) ids.push(id); });
+  (changes || (vote ? voteChanges(vote) : [])).forEach((change) => {
+    if (!ids.includes(change.id)) ids.push(change.id);
+  });
+  Object.keys(vote?.results || {}).forEach((id) => {
+    if (!ids.includes(id)) ids.push(id);
+  });
   return ids;
 }
 // A member's status at a moment: their latest change by then; absent if they weren't in the meeting when the vote
@@ -52,7 +71,11 @@ function voteState(vote, seconds = Infinity, changes) {
   const ids = voterIds(vote, list);
   const counts = { for: 0, against: 0, abstain: 0, absent: 0, pending: 0 };
   const statuses = {};
-  ids.forEach((id) => { const status = statusAt(vote, id, seconds, list); statuses[id] = status; counts[status] += 1; });
+  ids.forEach((id) => {
+    const status = statusAt(vote, id, seconds, list);
+    statuses[id] = status;
+    counts[status] += 1;
+  });
   const rule = voteRule(ids.length);
   let outcome = 'pending';
   if (counts.for >= rule.needed) outcome = 'passed';
@@ -69,18 +92,52 @@ function describeTally(vote, seconds = Infinity, changes) {
   const state = voteState(vote, seconds, changes);
   const { counts } = state;
   if (state.outcome === 'pending') {
-    return (seconds === Infinity ? 'Undecided: ' : 'Voting: ') + counts.for + ' aye, ' + counts.against + ' nay'
-      + (counts.abstain ? ', ' + counts.abstain + ' abstain' : '') + (counts.absent ? ', ' + counts.absent + ' absent' : '') + (counts.pending ? ', ' + counts.pending + ' not voted' : '');
+    return (
+      (seconds === Infinity ? 'Undecided: ' : 'Voting: ') +
+      counts.for +
+      ' aye, ' +
+      counts.against +
+      ' nay' +
+      (counts.abstain ? ', ' + counts.abstain + ' abstain' : '') +
+      (counts.absent ? ', ' + counts.absent + ' absent' : '') +
+      (counts.pending ? ', ' + counts.pending + ' not voted' : '')
+    );
   }
-  const extras = [counts.abstain ? counts.abstain + ' abstained' : '', counts.absent ? counts.absent + ' absent' : '', counts.pending ? counts.pending + ' not voted' : ''].filter(Boolean).join(', ');
-  return (state.outcome === 'passed' ? 'Passed ' : 'Failed ') + counts.for + '–' + counts.against + (extras ? ' (' + extras + ')' : '');
+  const extras = [
+    counts.abstain ? counts.abstain + ' abstained' : '',
+    counts.absent ? counts.absent + ' absent' : '',
+    counts.pending ? counts.pending + ' not voted' : ''
+  ]
+    .filter(Boolean)
+    .join(', ');
+  return (
+    (state.outcome === 'passed' ? 'Passed ' : 'Failed ') +
+    counts.for +
+    '–' +
+    counts.against +
+    (extras ? ' (' + extras + ')' : '')
+  );
 }
 async function saveVotes(done) {
   try {
     if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
-    const response = await fetch('../votes.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ updatedAt: new Date().toISOString(), seats: voteData.seats, needed: voteData.needed, members: voteData.members, votes: voteData.votes }, null, 2) });
-    if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
+    const response = await fetch('../votes.json', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(
+        {
+          updatedAt: new Date().toISOString(),
+          seats: voteData.seats,
+          needed: voteData.needed,
+          members: voteData.members,
+          votes: voteData.votes
+        },
+        null,
+        2
+      )
+    });
+    if (!response.ok)
+      throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
     $('votes-status').textContent = done || 'Saved';
     renderVotes();
     renderTranscript();
@@ -111,16 +168,20 @@ function renderVotes() {
     const state = voteState(vote, Infinity);
     const faces = document.createElement('span');
     faces.className = 'vote-faces ' + state.outcome;
-    const credit = (entry, verb) => (entry?.id ? verb + ' by ' + shownName(peopleMap.get(entry.id) || { id: entry.id, name: entry.id }) : '');
-    faces.title = [describeTally(vote), credit(vote.movedBy, 'moved'), credit(vote.secondedBy, 'seconded')].filter(Boolean).join('; ');
+    const credit = (entry, verb) =>
+      entry?.id ? verb + ' by ' + shownName(peopleMap.get(entry.id) || { id: entry.id, name: entry.id }) : '';
+    faces.title = [describeTally(vote), credit(vote.movedBy, 'moved'), credit(vote.secondedBy, 'seconded')]
+      .filter(Boolean)
+      .join('; ');
     faces.setAttribute('aria-label', faces.title);
     voterIds(vote, voteChanges(vote)).forEach((id) => {
       const person = peopleMap.get(id) || { id, name: id };
       const status = state.statuses[id] || statusAt(vote, id, Infinity);
       const face = document.createElement('span');
       face.className = 'vote-face' + (status === 'absent' ? ' absent' : '') + (status === 'pending' ? ' pending' : '');
-      const order = vote.movedBy?.id === id ? 1 : (vote.secondedBy?.id === id ? 2 : 0);
-      face.title = shownName(person) + ': ' + choiceNames[status] + (order === 1 ? ' (moved)' : order === 2 ? ' (seconded)' : '');
+      const order = vote.movedBy?.id === id ? 1 : vote.secondedBy?.id === id ? 2 : 0;
+      face.title =
+        shownName(person) + ': ' + choiceNames[status] + (order === 1 ? ' (moved)' : order === 2 ? ' (seconded)' : '');
       face.appendChild(avatar(person));
       if (status !== 'absent' && status !== 'pending') {
         const badge = document.createElement('span');
@@ -155,4 +216,3 @@ function renderVotes() {
   voteOverlayKey = null;
   updateVoteOverlay();
 }
-

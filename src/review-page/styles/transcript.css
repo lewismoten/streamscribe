@@ -1,0 +1,251 @@
+/* The player layout and the transcript beside it: scenes, turns, paragraphs, and minute rows. */
+/* The video up to 960px; the transcript takes the rest of a wide window (at least 420px). */
+.player-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 960px) minmax(420px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.player-main {
+  min-width: 0;
+}
+/* Beside the video: as tall as the window and pinned while the page scrolls, so long agenda or vote lists under the
+   video don't stretch it. */
+.transcript {
+  position: sticky;
+  top: 8px;
+  align-self: start;
+  height: calc(100vh - 16px);
+  max-height: calc(100vh - 16px);
+  min-height: 320px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.transcript[hidden] {
+  display: none;
+}
+.transcript-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.transcript-head input {
+  flex: 1;
+  min-width: 0;
+}
+.transcript-body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.transcript-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0 4px;
+}
+.now-scene {
+  position: relative;
+  flex: 0 0 auto;
+  margin: 0;
+  background: #000;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.now-scene[hidden] {
+  display: none;
+}
+.now-scene img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.now-scene figcaption {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+  font-variant-numeric: tabular-nums;
+}
+.transcript-list p {
+  margin: 0;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+.transcript-list p:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+.transcript-list p.active {
+  background: color-mix(in srgb, var(--start) 16%, transparent);
+  border-left-color: var(--start);
+}
+.transcript-list p.match {
+  box-shadow: inset 0 0 0 2px var(--end);
+}
+.transcript-list section {
+  position: relative;
+}
+.transcript-list figure {
+  position: relative;
+  width: 160px;
+  margin: 6px 10px;
+  cursor: pointer;
+}
+.transcript-list figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: #000;
+}
+.transcript-list figcaption {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+  font-variant-numeric: tabular-nums;
+}
+/* The transcript as a conversation: voting members on the right, everyone else on the left. */
+.turn {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.turn.first {
+  padding-top: 8px;
+}
+.turn.right {
+  flex-direction: row-reverse;
+}
+.turn .face {
+  flex: 0 0 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.turn .face > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 52px;
+}
+.turn .face .avatar {
+  width: 36px;
+  height: 36px;
+}
+.turn .face small {
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.bubble {
+  max-width: calc(100% - 64px);
+  padding: 3px 10px 5px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.turn.left .bubble {
+  border-top-left-radius: 4px;
+}
+.turn.right .bubble {
+  border-top-right-radius: 4px;
+  background: color-mix(in srgb, var(--start) 10%, var(--card));
+}
+.turn:not(.first) .bubble {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+.para {
+  position: relative;
+  margin: 0;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.para + .para {
+  margin-top: 6px;
+}
+.para.active {
+  background: color-mix(in srgb, var(--start) 12%, transparent);
+}
+.para .line-boost {
+  position: absolute;
+  top: -10px;
+  right: -6px;
+}
+.para:hover .line-boost {
+  display: inline-block;
+}
+.w.match {
+  box-shadow: 0 2px 0 var(--end);
+}
+.w.retranscribed {
+  color: color-mix(in srgb, var(--fg) 75%, var(--start));
+}
+.minute-row {
+  margin: 8px auto 2px;
+  width: fit-content;
+  padding: 1px 10px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.minute-row:hover {
+  color: var(--fg);
+}
+.silence-row {
+  margin: 4px 8px;
+  padding: 2px 8px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border-top: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line);
+  cursor: pointer;
+}
+.silence-row:hover {
+  color: var(--fg);
+}
+.silence-row button {
+  margin-left: 8px;
+  padding: 0 6px;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+.w.edited {
+  text-decoration: underline dotted color-mix(in srgb, var(--start) 80%, transparent);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+.w.deleted {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+.picker-edit {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 6px;
+}

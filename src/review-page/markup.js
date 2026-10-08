@@ -1,4 +1,4 @@
-// The review page's HTML: the player, toolbar, panels, and dialogs (styles.css and client/ are added around it by
+// The review page's HTML: the player, toolbar, panels, and dialogs (styles/ and client/ are added around it by
 // page.js). playback carries the few values shown in it.
 export function renderMarkup(playback, escapeText) {
   return `</head>

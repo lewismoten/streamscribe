@@ -1,6 +1,7 @@
 // Copy this file to config.local.js (git ignores it) and edit it. Every setting is optional except sources.
 export default {
-  // Where captures, transcripts, and state go (default: ./data). One folder per source, plus data/state.
+  // Where captures, transcripts, and state go (default: ./data; the DATA_DIR and STATE_DIR environment variables
+  // override these). One folder per source, plus data/state.
   // dataDir: '/Volumes/Archive/streamscribe',
   // stateDir: '/Volumes/Archive/streamscribe/state',
 
@@ -24,7 +25,7 @@ export default {
     context: 'Springfield City Council meeting in Springfield, Illinois.',
     // Names and terms Whisper should expect, most important first (as many as fit go into its prompt). Mishearings are
     // better fixed with `npm run transcript-corrections`, which keeps them in transcription-corrections.local.json.
-    vocabulary: ['Mayor Jane Smith', 'Council Member Lee', 'Elm Street', 'Lincoln Park'],
+    vocabulary: ['Mayor Jane Smith', 'Council Member Lee', 'Elm Street', 'Lincoln Park']
     // correctionsFile: 'transcription-corrections.local.json',
     // corrections: { 'heard as': 'should be' }
   },
@@ -58,6 +59,9 @@ export default {
       newSessionAfterStandbyMinutes: 10,
       // Also start a new session folder at every stream identifier change (Swagit renews it hourly, mid-meeting).
       splitOnStreamIdentifierChange: false
+      // Where this source's files go (default: data/<key>/), and its live captures (default: <storageDir>/live).
+      // storageDir: '/Volumes/Archive/springfield-council',
+      // liveStorageDir: '/Volumes/Archive/springfield-council/live',
     }
     // {
     //   key: 'warren-county-va',
@@ -68,10 +72,12 @@ export default {
     // }
   ],
 
-  // The recorder service (npm run recorder; see docs/recorder/recorder.md): records the meetings on the hub's schedule.
+  // The recorder (agent; npm run recorder, see docs/recorder/recorder.md): records the meetings on the hub's schedule
+  // and does work from its queue. An agent installed from the hub's Agents page has this written for it.
   recorder: {
-    // The hub (docs/hub/hub.md) and this recorder's key (made with php tools/new-key.php recorder "Name").
-    // hubUrl: 'https://example.com/streamscribe/api.php',
+    // The hub (docs/hub/hub.md) and this recorder's key (from the Agents page's installer, or made by hand with
+    // php tools/new-key.php recorder "Name").
+    // hubUrl: 'https://example.com/hub/api.php',
     // key: 'ss_…',
     // id: 'office-mac',            // default: this computer's name
     // name: 'Office Mac',
@@ -88,6 +94,12 @@ export default {
     // After a meeting's scheduled end, stop when the standby slide has shown this long, or no new video has come
     // this long, and at the latest this long past the end (minutes). Each schedule can override these.
     overrun: { standbyMinutes: 10, idleMinutes: 15, capMinutes: 240 },
-    minFreeGb: 2
+    minFreeGb: 2,
+    // How long its claim on a meeting or a job lasts between renewals (seconds).
+    leaseSeconds: 300,
+    // The light copies sent to the hub (npm run publish-media, and agents' encode jobs; docs/media/publish-media.md):
+    // silent video height, frame rate, quality (CRF, lower is better) and cap, audio bit rate, and how many days the
+    // video stays on the hub (audio stays).
+    media: { height: 360, fps: 15, crf: 34, maxrateKbps: 150, audioKbps: 48, keepVideoDays: 365 }
   }
 };

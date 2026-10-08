@@ -1,0 +1,169 @@
+/* A recording's page: its picture, side panels, chapters, votes, transcript, and capture log. */
+.recording-head {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.recording-picture {
+  width: 280px;
+  max-width: 40%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.meta {
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.live-text {
+  color: var(--live);
+  font-weight: 600;
+}
+.recording-columns {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.side .panel {
+  margin-bottom: 0;
+}
+.panel > h2 {
+  margin-bottom: 8px;
+}
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+a.time {
+  color: var(--accent);
+}
+.chapters,
+.votes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 420px;
+  overflow: auto;
+}
+.chapters li,
+.votes li {
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+.chapters li:first-child,
+.votes li:first-child {
+  border-top: 0;
+}
+.votes li {
+  padding-left: 8px;
+  border-left: 3px solid transparent;
+}
+.votes li.passed {
+  border-left-color: var(--pass);
+}
+.votes li.failed {
+  border-left: 3px dotted var(--fail);
+}
+.votes .muted {
+  font-size: 0.84rem;
+}
+.transcript {
+  min-width: 0;
+}
+.transcript .panel-head input {
+  flex: 1;
+  min-width: 180px;
+}
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.transcript .lines {
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+}
+.lines li {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 10px;
+  padding: 3px 0;
+}
+mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.capture .state {
+  font-weight: 600;
+}
+.capture .state.on {
+  color: var(--live);
+}
+.latest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+.latest .button {
+  margin-left: 8px;
+}
+.log {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  padding: 10px;
+  margin: 6px 0 0;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .topsearch {
+    margin-left: 0;
+    width: 100%;
+  }
+  .topsearch input {
+    width: 100%;
+  }
+  .recording-head {
+    flex-direction: column;
+  }
+  .recording-picture {
+    max-width: 100%;
+    width: 100%;
+  }
+  .recording-columns {
+    grid-template-columns: 1fr;
+  }
+}

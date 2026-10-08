@@ -18,15 +18,38 @@ export async function splitTranscript(sessionDir, newDir, boundarySeconds) {
   }
   const newTranscriptDir = path.join(newDir, 'transcripts');
   fs.mkdirSync(newTranscriptDir, { recursive: true });
-  const shift = (line) => ({ ...line, startSeconds: line.startSeconds - boundarySeconds, endSeconds: line.endSeconds - boundarySeconds });
-  await writeJsonAtomically(path.join(transcriptDir, 'raw.json'), { ...raw, lines: raw.lines.filter((line) => line.startSeconds < boundarySeconds) });
-  await writeJsonAtomically(path.join(newTranscriptDir, 'raw.json'), { ...raw, sessionDir: newDir, lines: raw.lines.filter((line) => line.startSeconds >= boundarySeconds).map(shift) });
+  const shift = (line) => ({
+    ...line,
+    startSeconds: line.startSeconds - boundarySeconds,
+    endSeconds: line.endSeconds - boundarySeconds
+  });
+  await writeJsonAtomically(path.join(transcriptDir, 'raw.json'), {
+    ...raw,
+    lines: raw.lines.filter((line) => line.startSeconds < boundarySeconds)
+  });
+  await writeJsonAtomically(path.join(newTranscriptDir, 'raw.json'), {
+    ...raw,
+    sessionDir: newDir,
+    lines: raw.lines.filter((line) => line.startSeconds >= boundarySeconds).map(shift)
+  });
 
   const edits = await loadJson(path.join(transcriptDir, 'edits.json'));
   if (edits && Object.keys(edits).length > 0) {
     const entries = Object.entries(edits).map(([key, text]) => [Number(key), text]);
-    await writeJsonAtomically(path.join(transcriptDir, 'edits.json'), Object.fromEntries(entries.filter(([start]) => start < boundarySeconds).map(([start, text]) => [String(start), text])));
-    await writeJsonAtomically(path.join(newTranscriptDir, 'edits.json'), Object.fromEntries(entries.filter(([start]) => start >= boundarySeconds).map(([start, text]) => [String(start - boundarySeconds), text])));
+    await writeJsonAtomically(
+      path.join(transcriptDir, 'edits.json'),
+      Object.fromEntries(
+        entries.filter(([start]) => start < boundarySeconds).map(([start, text]) => [String(start), text])
+      )
+    );
+    await writeJsonAtomically(
+      path.join(newTranscriptDir, 'edits.json'),
+      Object.fromEntries(
+        entries
+          .filter(([start]) => start >= boundarySeconds)
+          .map(([start, text]) => [String(start - boundarySeconds), text])
+      )
+    );
   }
   await renderFinalTranscript(sessionDir);
   await renderFinalTranscript(newDir);
@@ -49,7 +72,11 @@ export async function splitSlides(sessionDir, newDir, boundarySeconds) {
     const before = slide.showings.filter((showing) => showing.startSeconds < boundarySeconds);
     const after = slide.showings
       .filter((showing) => showing.startSeconds >= boundarySeconds)
-      .map((showing) => ({ ...showing, startSeconds: showing.startSeconds - boundarySeconds, endSeconds: showing.endSeconds - boundarySeconds }));
+      .map((showing) => ({
+        ...showing,
+        startSeconds: showing.startSeconds - boundarySeconds,
+        endSeconds: showing.endSeconds - boundarySeconds
+      }));
     if (after.length > 0) {
       const fileName = `slide-${formatPosition(after[0].startSeconds).replace(/:/g, '-')}.png`;
       fs.copyFileSync(path.join(slidesDir, slide.fileName), path.join(newSlidesDir, fileName));
@@ -64,7 +91,10 @@ export async function splitSlides(sessionDir, newDir, boundarySeconds) {
   // Scan progress refers to parts of the unsplit session; fingerprints in slides.json still prevent duplicates
   // when either session is scanned again.
   fs.rmSync(path.join(slidesDir, 'progress.json'), { force: true });
-  await writeJsonAtomically(path.join(slidesDir, 'slides.json'), { ...index, slides: kept.map((slide, number) => ({ ...slide, number: number + 1 })) });
+  await writeJsonAtomically(path.join(slidesDir, 'slides.json'), {
+    ...index,
+    slides: kept.map((slide, number) => ({ ...slide, number: number + 1 }))
+  });
   await writeJsonAtomically(path.join(newSlidesDir, 'slides.json'), { ...index, sessionDir: newDir, slides: moved });
   fs.writeFileSync(path.join(slidesDir, 'index.html'), renderContactSheet(kept, sessionDir));
   fs.writeFileSync(path.join(newSlidesDir, 'index.html'), renderContactSheet(moved, newDir));
@@ -81,10 +111,18 @@ export async function splitRetranscriptions(sessionDir, newDir, boundarySeconds)
   }
   const shift = (value) => Number((value - boundarySeconds).toFixed(3));
   const kept = index.portions.filter((portion) => portion.from < boundarySeconds);
-  const moved = index.portions.filter((portion) => portion.from >= boundarySeconds).map((portion) => ({
-    ...portion, from: shift(portion.from), to: shift(portion.to),
-    lines: portion.lines.map((line) => ({ ...line, startSeconds: shift(line.startSeconds), endSeconds: shift(line.endSeconds) }))
-  }));
+  const moved = index.portions
+    .filter((portion) => portion.from >= boundarySeconds)
+    .map((portion) => ({
+      ...portion,
+      from: shift(portion.from),
+      to: shift(portion.to),
+      lines: portion.lines.map((line) => ({
+        ...line,
+        startSeconds: shift(line.startSeconds),
+        endSeconds: shift(line.endSeconds)
+      }))
+    }));
   await writeJsonAtomically(file, { ...index, portions: kept });
   fs.mkdirSync(path.join(newDir, 'transcripts'), { recursive: true });
   await writeJsonAtomically(path.join(newDir, 'transcripts', 'retranscribed.json'), { ...index, portions: moved });
@@ -97,9 +135,16 @@ export async function splitBoosts(sessionDir, newDir, boundarySeconds) {
   if (!index?.boosts?.length) {
     return;
   }
-  const kept = index.boosts.filter((item) => item.from < boundarySeconds).map((item) => ({ ...item, to: Math.min(item.to, boundarySeconds) }));
-  const moved = index.boosts.filter((item) => item.to > boundarySeconds)
-    .map((item) => ({ ...item, from: Number((Math.max(item.from, boundarySeconds) - boundarySeconds).toFixed(3)), to: Number((item.to - boundarySeconds).toFixed(3)) }));
+  const kept = index.boosts
+    .filter((item) => item.from < boundarySeconds)
+    .map((item) => ({ ...item, to: Math.min(item.to, boundarySeconds) }));
+  const moved = index.boosts
+    .filter((item) => item.to > boundarySeconds)
+    .map((item) => ({
+      ...item,
+      from: Number((Math.max(item.from, boundarySeconds) - boundarySeconds).toFixed(3)),
+      to: Number((item.to - boundarySeconds).toFixed(3))
+    }));
   await writeJsonAtomically(file, { ...index, boosts: kept });
   await writeJsonAtomically(path.join(newDir, 'audio-boosts.json'), { ...index, boosts: moved });
 }
@@ -112,8 +157,12 @@ export async function splitAgenda(sessionDir, newDir, boundarySeconds) {
     return;
   }
   await writeJsonAtomically(file, { ...index, items: index.items.filter((item) => item.at < boundarySeconds) });
-  await writeJsonAtomically(path.join(newDir, 'agenda.json'), { ...index, items: index.items.filter((item) => item.at >= boundarySeconds)
-    .map((item) => ({ ...item, at: Number((item.at - boundarySeconds).toFixed(3)) })) });
+  await writeJsonAtomically(path.join(newDir, 'agenda.json'), {
+    ...index,
+    items: index.items
+      .filter((item) => item.at >= boundarySeconds)
+      .map((item) => ({ ...item, at: Number((item.at - boundarySeconds).toFixed(3)) }))
+  });
 }
 
 // Votes go with the session they were taken in; both sessions keep the voting members (departures and arrivals
@@ -128,19 +177,41 @@ export async function splitVotes(sessionDir, newDir, boundarySeconds) {
   const members = index.members || [];
   const before = (value) => (value !== null && value !== undefined && value < boundarySeconds ? value : null);
   const after = (value) => (value !== null && value !== undefined && value >= boundarySeconds ? shift(value) : null);
-  await writeJsonAtomically(file, { ...index,
-    members: members.map((member) => ({ ...member, leftAt: before(member.leftAt), arrivedAt: before(member.arrivedAt) })),
-    votes: (index.votes || []).filter((vote) => vote.at < boundarySeconds) });
-  await writeJsonAtomically(path.join(newDir, 'votes.json'), { ...index,
+  await writeJsonAtomically(file, {
+    ...index,
+    members: members.map((member) => ({
+      ...member,
+      leftAt: before(member.leftAt),
+      arrivedAt: before(member.arrivedAt)
+    })),
+    votes: (index.votes || []).filter((vote) => vote.at < boundarySeconds)
+  });
+  await writeJsonAtomically(path.join(newDir, 'votes.json'), {
+    ...index,
     // Someone who left before the split is absent for the whole new session.
-    members: members.map((member) => ({ ...member, leftAt: before(member.leftAt) !== null ? 0 : after(member.leftAt), arrivedAt: after(member.arrivedAt) })),
-    votes: (index.votes || []).filter((vote) => vote.at >= boundarySeconds).map((vote) => ({
-      ...vote,
-      at: shift(vote.at),
-      ...(Array.isArray(vote.changes) ? { changes: vote.changes.map((change) => ({ ...change, at: shift(change.at) })) } : {}),
-      movedBy: vote.movedBy?.at !== null && vote.movedBy?.at !== undefined ? { ...vote.movedBy, at: shift(vote.movedBy.at) } : vote.movedBy,
-      secondedBy: vote.secondedBy?.at !== null && vote.secondedBy?.at !== undefined ? { ...vote.secondedBy, at: shift(vote.secondedBy.at) } : vote.secondedBy
-    })) });
+    members: members.map((member) => ({
+      ...member,
+      leftAt: before(member.leftAt) !== null ? 0 : after(member.leftAt),
+      arrivedAt: after(member.arrivedAt)
+    })),
+    votes: (index.votes || [])
+      .filter((vote) => vote.at >= boundarySeconds)
+      .map((vote) => ({
+        ...vote,
+        at: shift(vote.at),
+        ...(Array.isArray(vote.changes)
+          ? { changes: vote.changes.map((change) => ({ ...change, at: shift(change.at) })) }
+          : {}),
+        movedBy:
+          vote.movedBy?.at !== null && vote.movedBy?.at !== undefined
+            ? { ...vote.movedBy, at: shift(vote.movedBy.at) }
+            : vote.movedBy,
+        secondedBy:
+          vote.secondedBy?.at !== null && vote.secondedBy?.at !== undefined
+            ? { ...vote.secondedBy, at: shift(vote.secondedBy.at) }
+            : vote.secondedBy
+      }))
+  });
 }
 
 // Moves speaker marks at or after the split into the new session; whoever was speaking at the split carries over.
@@ -150,7 +221,8 @@ export async function splitSpeakers(sessionDir, newDir, boundarySeconds) {
     return;
   }
   const kept = index.turns.filter((turn) => turn.at < boundarySeconds);
-  const moved = index.turns.filter((turn) => turn.at >= boundarySeconds)
+  const moved = index.turns
+    .filter((turn) => turn.at >= boundarySeconds)
     .map((turn) => ({ ...turn, at: Number((turn.at - boundarySeconds).toFixed(1)) }));
   const carried = kept.at(-1);
   if (carried?.speakers.length && moved[0]?.at !== 0) {
@@ -186,7 +258,11 @@ export async function splitThumbnails(sessionDir, newDir, boundarySeconds) {
     }
   }
   await writeJsonAtomically(path.join(thumbsDir, 'thumbnails.json'), { ...index, thumbnails: kept });
-  await writeJsonAtomically(path.join(newThumbsDir, 'thumbnails.json'), { ...index, sessionDir: newDir, thumbnails: moved });
+  await writeJsonAtomically(path.join(newThumbsDir, 'thumbnails.json'), {
+    ...index,
+    sessionDir: newDir,
+    thumbnails: moved
+  });
   // Scene changes no longer match either timeline; extract-thumbnails detects them again for each.
   fs.rmSync(path.join(thumbsDir, 'scenes.json'), { force: true });
   fs.rmSync(path.join(thumbsDir, 'scenes'), { recursive: true, force: true });

@@ -25,7 +25,9 @@ export async function discoverLiveEntries(source, context) {
       continue;
     }
     visited.add(liveUrl);
-    context.setCurrentLabel?.(`${source.key} | discover ${visited.size}/${Math.max(queue.length + visited.size, seedUrls.length)}`);
+    context.setCurrentLabel?.(
+      `${source.key} | discover ${visited.size}/${Math.max(queue.length + visited.size, seedUrls.length)}`
+    );
     const fetchResult = await fetchWithRedirectCookies(liveUrl, {
       ...pageFetchOptions(),
       headers: {
@@ -39,7 +41,11 @@ export async function discoverLiveEntries(source, context) {
 
     const html = await response.text();
     context.onVisibleOutput?.();
-    for (const candidateUrl of sourceProvider(source).candidatePageUrls(html, fetchResult.finalUrl, decodeHtmlEntities)) {
+    for (const candidateUrl of sourceProvider(source).candidatePageUrls(
+      html,
+      fetchResult.finalUrl,
+      decodeHtmlEntities
+    )) {
       if (!visited.has(candidateUrl) && !queue.includes(candidateUrl)) {
         queue.push(candidateUrl);
       }
@@ -114,10 +120,16 @@ export function buildLiveStreamEntry(hlsUrl, source, pageUrl = hlsUrl, livePageU
 }
 
 export function getMonitorUrls(source) {
-  return Array.from(new Set([
-    ...(Array.isArray(source?.liveUrls) ? source.liveUrls : []),
-    ...(Array.isArray(source?.discoveryUrls) ? source.discoveryUrls : [])
-  ].map((item) => String(item || '').trim()).filter(Boolean)));
+  return Array.from(
+    new Set(
+      [
+        ...(Array.isArray(source?.liveUrls) ? source.liveUrls : []),
+        ...(Array.isArray(source?.discoveryUrls) ? source.discoveryUrls : [])
+      ]
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 export async function fetchLiveVideoPage(pageUrl) {
@@ -150,7 +162,9 @@ export function extractHlsUrl(html, baseUrl) {
 
   for (const pattern of patterns) {
     for (const match of String(html || '').matchAll(pattern)) {
-      const candidate = String(match[1] || '').trim().replace(/\\\//g, '/');
+      const candidate = String(match[1] || '')
+        .trim()
+        .replace(/\\\//g, '/');
       if (!candidate || !/\.m3u8\b/i.test(candidate)) {
         continue;
       }
@@ -172,10 +186,12 @@ export function extractAnchorText(html) {
 }
 
 export function cleanInlineText(value) {
-  return decodeHtmlEntities(String(value || '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim());
+  return decodeHtmlEntities(
+    String(value || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 export function extractMeetingTitle(html, pageUrl) {

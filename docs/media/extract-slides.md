@@ -26,7 +26,7 @@ Output goes to `{session}/slides/`:
 
 Options:
 
-- `--session <folder>` (default: the most recently updated capture)
+- `--session <folder>` (default: the most recently updated capture; `--source <key>` limits the search to one source)
 - `--min-seconds 4`: how long an image must stay still to count as a slide
 - `--noise -60`: how much frame-to-frame change (in dB) still counts as still; raise it (for example `-50`) if slides are missed, lower it if still camera shots are picked up
 - `--match-distance 16`: how many of the 256 whole-frame points may differ for two stills to count as the same slide

@@ -25,9 +25,13 @@ export default { DATA_ROOT, STATE_ROOT, SOURCES, TOOLS, TRANSCRIPTION, HTTP, LOC
 
 async function loadLocalConfig() {
   // STREAMSCRIBE_CONFIG points to another settings file (for tests, or several setups side by side).
-  const configPath = process.env.STREAMSCRIBE_CONFIG ? path.resolve(process.env.STREAMSCRIBE_CONFIG) : path.join(repoRoot, 'config.local.js');
+  const configPath = process.env.STREAMSCRIBE_CONFIG
+    ? path.resolve(process.env.STREAMSCRIBE_CONFIG)
+    : path.join(repoRoot, 'config.local.js');
   if (!fs.existsSync(configPath)) {
-    throw new Error(`Missing ${configPath}. Copy config.example.js to config.local.js at the repository root and edit it.`);
+    throw new Error(
+      `Missing ${configPath}. Copy config.example.js to config.local.js at the repository root and edit it.`
+    );
   }
   const module = await import(pathToFileURL(configPath).href);
   const value = module.default;
@@ -53,7 +57,14 @@ function normalizeSource(value) {
   }
   const storageDir = String(value.storageDir || path.join(DATA_ROOT, key)).trim();
   // Without a provider named, Swagit addresses imply Swagit; anything else is plain HLS.
-  const provider = String(value.provider || ([...liveUrls, ...discoveryUrls].some((url) => /(?:^|\.)swagit\.com$/i.test(new URL(url).hostname)) ? 'swagit' : 'hls')).trim().toLowerCase();
+  const provider = String(
+    value.provider ||
+      ([...liveUrls, ...discoveryUrls].some((url) => /(?:^|\.)swagit\.com$/i.test(new URL(url).hostname))
+        ? 'swagit'
+        : 'hls')
+  )
+    .trim()
+    .toLowerCase();
   return {
     key,
     name: String(value.name || key).trim(),
@@ -81,7 +92,12 @@ function normalizeTools(value) {
     // whisper.cpp's command-line tool (brew install whisper-cpp); runs Whisper on Apple Silicon GPUs.
     whisperCpp: 'whisper-cli'
   };
-  return Object.fromEntries(Object.entries({ ...defaults, ...tools }).map(([key, fallback]) => [key, String(tools[key] || fallback).trim() || fallback]));
+  return Object.fromEntries(
+    Object.entries({ ...defaults, ...tools }).map(([key, fallback]) => [
+      key,
+      String(tools[key] || fallback).trim() || fallback
+    ])
+  );
 }
 
 function normalizeTranscriptionConfig(value) {
@@ -90,7 +106,9 @@ function normalizeTranscriptionConfig(value) {
   return {
     // whisper.cpp model files (download from huggingface.co/ggerganov/whisper.cpp and ggml-org/whisper-vad).
     whisperCppModel: String(transcription.whisperCppModel || path.join(whisperCppDir, 'ggml-large-v3.bin')).trim(),
-    whisperCppVadModel: String(transcription.whisperCppVadModel ?? path.join(whisperCppDir, 'ggml-silero-v5.1.2.bin')).trim(),
+    whisperCppVadModel: String(
+      transcription.whisperCppVadModel ?? path.join(whisperCppDir, 'ggml-silero-v5.1.2.bin')
+    ).trim(),
     // What is being transcribed, which starts Whisper's prompt (for example "Warren County public meeting in Front
     // Royal, Virginia.").
     context: String(transcription.context || 'Public meeting.').trim(),
@@ -99,12 +117,22 @@ function normalizeTranscriptionConfig(value) {
       ? transcription.vocabulary.map((term) => String(term || '').trim()).filter(Boolean)
       : [],
     // File holding transcript corrections, managed with `npm run transcript-corrections` (git ignores it).
-    correctionsFile: path.resolve(repoRoot, String(transcription.correctionsFile || 'transcription-corrections.local.json')),
+    correctionsFile: path.resolve(
+      repoRoot,
+      String(transcription.correctionsFile || 'transcription-corrections.local.json')
+    ),
     // Mishearings to fix after transcribing: { 'heard as': 'should be' }, matched case-insensitively on word boundaries.
     // Prefer the corrections file; entries here are merged with it.
-    corrections: transcription.corrections && typeof transcription.corrections === 'object' && !Array.isArray(transcription.corrections)
-      ? Object.fromEntries(Object.entries(transcription.corrections).map(([heard, fixed]) => [String(heard).trim(), String(fixed ?? '').trim()]).filter(([heard]) => heard))
-      : {},
+    corrections:
+      transcription.corrections &&
+      typeof transcription.corrections === 'object' &&
+      !Array.isArray(transcription.corrections)
+        ? Object.fromEntries(
+            Object.entries(transcription.corrections)
+              .map(([heard, fixed]) => [String(heard).trim(), String(fixed ?? '').trim()])
+              .filter(([heard]) => heard)
+          )
+        : {},
     whisperLanguage: String(process.env.WHISPER_LANGUAGE || transcription.whisperLanguage || 'en').trim() || 'en'
   };
 }
@@ -119,25 +147,41 @@ function normalizeHttpConfig(value) {
     // Catching up on earlier segments when a live capture starts: two requests a second.
     liveBackfill: { cooldownMs: 500, burst: 1 }
   };
-  const configuredProfiles = http.profiles && typeof http.profiles === 'object' && !Array.isArray(http.profiles) ? http.profiles : {};
-  const profiles = Object.fromEntries(Object.entries({ ...defaultProfiles, ...configuredProfiles })
-    .filter(([, profile]) => profile && typeof profile === 'object')
-    .map(([name, profile]) => [name, {
-      cooldownMs: normalizeNonNegativeNumber(profile.cooldownMs, cooldownMs),
-      burst: normalizePositiveInteger(profile.burst, burst)
-    }]));
+  const configuredProfiles =
+    http.profiles && typeof http.profiles === 'object' && !Array.isArray(http.profiles) ? http.profiles : {};
+  const profiles = Object.fromEntries(
+    Object.entries({ ...defaultProfiles, ...configuredProfiles })
+      .filter(([, profile]) => profile && typeof profile === 'object')
+      .map(([name, profile]) => [
+        name,
+        {
+          cooldownMs: normalizeNonNegativeNumber(profile.cooldownMs, cooldownMs),
+          burst: normalizePositiveInteger(profile.burst, burst)
+        }
+      ])
+  );
   profiles.default = { cooldownMs, burst };
   const robots = http.robots && typeof http.robots === 'object' && !Array.isArray(http.robots) ? http.robots : {};
   return {
-    userAgent: String(http.userAgent || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138 Safari/537.36').trim(),
+    userAgent: String(
+      http.userAgent ||
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138 Safari/537.36'
+    ).trim(),
     profiles,
     robots: {
       enabled: process.env.ROBOTS_CHECK === '0' ? false : robots.enabled !== false,
       userAgentToken: String(robots.userAgentToken || 'streamscribe').trim(),
       cacheHours: normalizeNonNegativeNumber(robots.cacheHours, 24),
-      onUnreachable: String(robots.onUnreachable || 'allow').trim().toLowerCase() === 'disallow' ? 'disallow' : 'allow',
+      onUnreachable:
+        String(robots.onUnreachable || 'allow')
+          .trim()
+          .toLowerCase() === 'disallow'
+          ? 'disallow'
+          : 'allow',
       honorCrawlDelay: robots.honorCrawlDelay !== false,
-      ignoreHosts: Array.isArray(robots.ignoreHosts) ? robots.ignoreHosts.map((host) => String(host || '').trim()).filter(Boolean) : []
+      ignoreHosts: Array.isArray(robots.ignoreHosts)
+        ? robots.ignoreHosts.map((host) => String(host || '').trim()).filter(Boolean)
+        : []
     }
   };
 }
@@ -148,9 +192,17 @@ function normalizeHttpConfig(value) {
 function normalizeRecorderConfig(value) {
   const recorder = value && typeof value === 'object' ? value : {};
   const number = (item, fallback) => (Number.isFinite(Number(item)) && Number(item) >= 0 ? Number(item) : fallback);
-  const host = os.hostname().toLowerCase().replace(/\.local$/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'recorder';
+  const host =
+    os
+      .hostname()
+      .toLowerCase()
+      .replace(/\.local$/, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'recorder';
   return {
-    hubUrl: String(recorder.hubUrl || '').trim().replace(/\/+$/, ''),
+    hubUrl: String(recorder.hubUrl || '')
+      .trim()
+      .replace(/\/+$/, ''),
     key: String(recorder.key || ''),
     id: String(recorder.id || host),
     name: String(recorder.name || os.hostname()),

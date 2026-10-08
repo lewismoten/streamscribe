@@ -16,9 +16,9 @@ It works on the same recordings as `npm run publish-library`, which sends their 
 
 For each part of a recording, in `{part}/published/`:
 
-| File | Setting | About |
-| --- | --- | --- |
-| `audio.m4a` | AAC-LC, 48 kbit/s, mono, 44.1 kHz | 23 MB an hour |
+| File             | Setting                                                                                  | About                 |
+| ---------------- | ---------------------------------------------------------------------------------------- | --------------------- |
+| `audio.m4a`      | AAC-LC, 48 kbit/s, mono, 44.1 kHz                                                        | 23 MB an hour         |
 | `video-360p.mp4` | H.264 High, 640×360, 15 fps, CRF 34, capped at 150 kbit/s, keyframe every 10 s, no sound | 24 MB an hour or less |
 
 So a 4-hour meeting comes to about 180 MB, compared with about 3.6 GB captured.

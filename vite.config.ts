@@ -9,9 +9,13 @@ import react from '@vitejs/plugin-react';
 const siteUrl = (process.env.VITE_SITE_URL || '').replace(/\/+$/, '');
 const sharing = {
   name: 'sharing-preview',
-  transformIndexHtml: (html: string) => (siteUrl
-    ? html.replace('</head>', `  <meta property="og:url" content="${siteUrl}/">\n  <meta property="og:image" content="${siteUrl}/socialpreview.jpg">\n  <meta property="og:image:width" content="640">\n  <meta property="og:image:height" content="320">\n</head>`)
-    : html)
+  transformIndexHtml: (html: string) =>
+    siteUrl
+      ? html.replace(
+          '</head>',
+          `  <meta property="og:url" content="${siteUrl}/">\n  <meta property="og:image" content="${siteUrl}/socialpreview.jpg">\n  <meta property="og:image:width" content="640">\n  <meta property="og:image:height" content="320">\n</head>`
+        )
+      : html
 };
 
 export default defineConfig({

@@ -2,7 +2,16 @@ import fs from 'fs';
 import path from 'path';
 import { formatSessionFolderName, loadSessionSegments, parseSegmentIdentifier, readSessionLines } from './session.js';
 import { forgetCaptureState, assertCaptureStopped } from './capture-guard.js';
-import { splitTranscript, splitSlides, splitRetranscriptions, splitBoosts, splitAgenda, splitVotes, splitSpeakers, splitThumbnails } from './split-marks.js';
+import {
+  splitTranscript,
+  splitSlides,
+  splitRetranscriptions,
+  splitBoosts,
+  splitAgenda,
+  splitVotes,
+  splitSpeakers,
+  splitThumbnails
+} from './split-marks.js';
 import { splitSilenceLog, splitIdentityLog, splitSessionRecords } from './split-records.js';
 
 // Splits one captured live session into two at a segment sequence number, for example when two meetings
@@ -23,13 +32,19 @@ async function main() {
   const before = segments.filter((item) => item.sequence < splitSequence);
   const after = segments.filter((item) => item.sequence >= splitSequence);
   if (before.length === 0 || after.length === 0) {
-    throw new Error(`Sequence ${splitSequence} does not split the session (${segments[0].sequence}-${segments.at(-1).sequence})`);
+    throw new Error(
+      `Sequence ${splitSequence} does not split the session (${segments[0].sequence}-${segments.at(-1).sequence})`
+    );
   }
 
   const newDir = path.join(path.dirname(sessionDir), formatSessionFolderName(new Date(after[0].capturedAt)));
   console.log(`Split ${path.basename(sessionDir)} at sequence ${splitSequence}:`);
-  console.log(`  keep ${before.length} segments (${before[0].sequence}-${before.at(-1).sequence}) in ${path.basename(sessionDir)}`);
-  console.log(`  move ${after.length} segments (${after[0].sequence}-${after.at(-1).sequence}) to ${path.basename(newDir)}`);
+  console.log(
+    `  keep ${before.length} segments (${before[0].sequence}-${before.at(-1).sequence}) in ${path.basename(sessionDir)}`
+  );
+  console.log(
+    `  move ${after.length} segments (${after[0].sequence}-${after.at(-1).sequence}) to ${path.basename(newDir)}`
+  );
   if (!options.apply) {
     console.log('Dry run; pass --apply to split.');
     return;
@@ -59,8 +74,16 @@ async function main() {
   const discarded = await readSessionLines(sessionDir, 'discarded-segments.jsonl');
   const discardedSequence = (entry) => Number(entry.sequence ?? String(entry.key || '').split('|')[0]);
   if (discarded.length > 0) {
-    writeLines(sessionDir, 'discarded-segments.jsonl', discarded.filter((entry) => discardedSequence(entry) < splitSequence));
-    writeLines(newDir, 'discarded-segments.jsonl', discarded.filter((entry) => discardedSequence(entry) >= splitSequence));
+    writeLines(
+      sessionDir,
+      'discarded-segments.jsonl',
+      discarded.filter((entry) => discardedSequence(entry) < splitSequence)
+    );
+    writeLines(
+      newDir,
+      'discarded-segments.jsonl',
+      discarded.filter((entry) => discardedSequence(entry) >= splitSequence)
+    );
   }
 
   for (const fileName of ['master.m3u8', 'latest.m3u8']) {
@@ -72,7 +95,14 @@ async function main() {
 
   await splitSilenceLog(sessionDir, newDir, splitSequence);
   await splitIdentityLog(sessionDir, newDir, splitSequence, before, after);
-  await splitSessionRecords(sessionDir, newDir, splitSequence, before, after, discarded.filter((entry) => discardedSequence(entry) >= splitSequence));
+  await splitSessionRecords(
+    sessionDir,
+    newDir,
+    splitSequence,
+    before,
+    after,
+    discarded.filter((entry) => discardedSequence(entry) >= splitSequence)
+  );
   await splitRetranscriptions(sessionDir, newDir, boundarySeconds);
   await splitBoosts(sessionDir, newDir, boundarySeconds);
   await splitAgenda(sessionDir, newDir, boundarySeconds);
@@ -93,7 +123,9 @@ function parseArgs(argv) {
     else if (argv[index] === '--at-transition') options.atTransition = argv[++index] || '';
   }
   if (!options.session || (!Number.isFinite(options.atSequence) && !options.atTransition)) {
-    throw new Error('Usage: npm run split-session -- --session <folder> (--at-sequence N | --at-transition <identifier>) [--apply]');
+    throw new Error(
+      'Usage: npm run split-session -- --session <folder> (--at-sequence N | --at-transition <identifier>) [--apply]'
+    );
   }
   if (!Number.isFinite(options.atSequence)) {
     options.atSequence = null;
@@ -114,7 +146,8 @@ function writeLines(dir, fileName, entries) {
 }
 
 // Started by bin/split-session.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

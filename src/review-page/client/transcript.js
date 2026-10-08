@@ -11,9 +11,13 @@ function updateNowScene() {
   if (index < 0) return;
   $('now-scene-image').src = scenes[index][1];
   renderViewSelect();
-  $('now-scene-time').textContent = fmt(scenes[index][0]) + (clockMs(scenes[index][0]) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(scenes[index][0]))));
+  $('now-scene-time').textContent =
+    fmt(scenes[index][0]) +
+    (clockMs(scenes[index][0]) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(scenes[index][0]))));
 }
-$('now-scene').addEventListener('click', () => { if (nowScene >= 0) showPosition(page.scenes[nowScene][0]); });
+$('now-scene').addEventListener('click', () => {
+  if (nowScene >= 0) showPosition(page.scenes[nowScene][0]);
+});
 function updateNowSpeakers(ids) {
   const faces = $('now-speakers');
   faces.textContent = '';
@@ -21,7 +25,10 @@ function updateNowSpeakers(ids) {
     const person = peopleMap.get(id) || { id, name: id };
     const face = avatar(person);
     face.title = nameAndRole(person) + ' — click to clip everything they say here';
-    face.addEventListener('click', (event) => { event.stopPropagation(); clipSpeaker(id, position); });
+    face.addEventListener('click', (event) => {
+      event.stopPropagation();
+      clipSpeaker(id, position);
+    });
     faces.appendChild(face);
   });
 }
@@ -38,53 +45,8 @@ let lineElements = [];
 let pieceList = [];
 const silenceMinimumSeconds = 8;
 const paragraphPauseSeconds = 2;
-// Word corrections ({ transcript, line, index, original, text }; text '' deletes the word, and several words replace
-// it), saved in {session}/word-edits.json. Each applies only while the word there is still the one corrected.
-let wordEdits = [];
-const wordEditFor = (line, index, original) => wordEdits.find((edit) => edit.transcript === transcriptName && edit.line === line && edit.index === index && edit.original === original);
-async function saveWordEdit(word, text) {
-  const original = word.edited ? word.original : word.text;
-  wordEdits = wordEdits.filter((edit) => !(edit.transcript === transcriptName && edit.line === word.line && edit.index === word.index));
-  if (text !== original) wordEdits.push({ transcript: transcriptName, line: word.line, index: word.index, at: word.at, original, text, updatedAt: new Date().toISOString() });
-  renderTranscript();
-  try {
-    await putFile('../word-edits.json', JSON.stringify({ updatedAt: new Date().toISOString(), note: 'Word corrections from the thumbnails page: line is the line start (seconds), index the word number in it.', edits: wordEdits }, null, 2), 'application/json');
-    $('snapshot-status').textContent = text === original ? 'Restored “' + original + '”' : (text ? 'Corrected “' + original + '” to “' + text + '”' : 'Deleted “' + original + '”');
-  } catch (error) {
-    $('snapshot-status').textContent = 'Correction not saved: ' + error.message;
-  }
-}
 let activePiece = -1;
 let nowWord = null;
-// A transcript line's words, each { text, at, end, line, index } with any correction (edited, display, original):
-// times from the transcript where it has them (transcribe --best), or else estimated.
-function lineWordList(startSeconds, endSeconds, text, timedWords) {
-  const words = timedWords && timedWords.length
-    ? timedWords.map(([at, end, said]) => ({ text: said, at: Math.round(at * 100) / 100, end: Number(end) }))
-    : lineWords(startSeconds, endSeconds, text);
-  // Corrections made on this page (word-edits.json), matched by line, word number, and the word as transcribed.
-  const lineKey = Math.round(startSeconds * 100) / 100;
-  words.forEach((word, wordIndex) => {
-    word.line = lineKey;
-    word.index = wordIndex;
-    if (!(word.end > word.at)) word.end = wordIndex + 1 < words.length ? words[wordIndex + 1].at : endSeconds;
-    const edit = wordEditFor(lineKey, wordIndex, word.text);
-    if (edit) { word.original = word.text; word.edited = true; word.display = edit.text; }
-  });
-  return words;
-}
-// A line's words with estimated times (whisper times whole lines): the line's time shared out by word length.
-function lineWords(startSeconds, endSeconds, text) {
-  const parts = String(text).split(' ').filter(Boolean);
-  const total = parts.reduce((sum, word) => sum + word.length + 1, 0) || 1;
-  const span = Math.max(0.01, endSeconds - startSeconds);
-  let used = 0;
-  return parts.map((word) => {
-    const at = Math.round((startSeconds + span * used / total) * 100) / 100;
-    used += word.length + 1;
-    return { text: word, at };
-  });
-}
 function renderTranscript() {
   const keepScroll = transcriptList.scrollTop;
   transcriptList.textContent = '';
@@ -108,13 +70,30 @@ function renderTranscript() {
   voteData.votes.forEach((vote) => {
     const nameOf = (entry) => shownName(peopleMap.get(entry.id) || { id: entry.id, name: entry.id });
     if (vote.movedBy?.id && vote.movedBy.at !== null && vote.movedBy.at !== undefined) {
-      voteEvents.push({ at: vote.movedBy.at, text: '✋ ' + fmt(vote.movedBy.at) + '  Motion by ' + nameOf(vote.movedBy) + (vote.motion ? ': ' + vote.motion : '') });
+      voteEvents.push({
+        at: vote.movedBy.at,
+        text:
+          '✋ ' + fmt(vote.movedBy.at) + '  Motion by ' + nameOf(vote.movedBy) + (vote.motion ? ': ' + vote.motion : '')
+      });
     }
     if (vote.secondedBy?.id && vote.secondedBy.at !== null && vote.secondedBy.at !== undefined) {
-      voteEvents.push({ at: vote.secondedBy.at, text: '✋ ' + fmt(vote.secondedBy.at) + '  Seconded by ' + nameOf(vote.secondedBy) });
+      voteEvents.push({
+        at: vote.secondedBy.at,
+        text: '✋ ' + fmt(vote.secondedBy.at) + '  Seconded by ' + nameOf(vote.secondedBy)
+      });
     }
     const decided = decidedAt(vote);
-    voteEvents.push({ at: vote.at, text: '🗳 ' + fmt(vote.at) + '  Vote: ' + (vote.motion || 'motion') + ' — ' + describeTally(vote) + (decided !== null ? ' (decided ' + fmt(decided) + ')' : '') });
+    voteEvents.push({
+      at: vote.at,
+      text:
+        '🗳 ' +
+        fmt(vote.at) +
+        '  Vote: ' +
+        (vote.motion || 'motion') +
+        ' — ' +
+        describeTally(vote) +
+        (decided !== null ? ' (decided ' + fmt(decided) + ')' : '')
+    });
   });
   const sortedVotes = voteEvents.sort((left, right) => left.at - right.at);
   let voteIndex = 0;
@@ -130,7 +109,8 @@ function renderTranscript() {
     heading.className = 'agenda-heading';
     heading.textContent = item.title;
     const when = document.createElement('small');
-    when.textContent = fmt(item.at) + (clockMs(item.at) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(item.at))));
+    when.textContent =
+      fmt(item.at) + (clockMs(item.at) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(item.at))));
     heading.appendChild(when);
     heading.addEventListener('click', () => showPosition(item.at));
     section.appendChild(heading);
@@ -145,7 +125,8 @@ function renderTranscript() {
     image.alt = '';
     image.src = scene[1];
     const caption = document.createElement('figcaption');
-    caption.textContent = fmt(scene[0]) + (clockMs(scene[0]) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(scene[0]))));
+    caption.textContent =
+      fmt(scene[0]) + (clockMs(scene[0]) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(scene[0]))));
     figure.append(image, caption);
     figure.addEventListener('click', () => showPosition(scene[0]));
     section.appendChild(figure);
@@ -159,13 +140,23 @@ function renderTranscript() {
     row.className = 'silence-row';
     const length = to - from;
     const label = document.createElement('span');
-    label.textContent = '⏸ No words for ' + (length >= 60 ? Math.floor(length / 60) + ' min ' + Math.round(length % 60) + ' s' : Math.round(length) + ' s');
-    row.title = 'Nothing was transcribed from ' + fmt(from) + ' to ' + fmt(to) + ' (silence, or speech too quiet to make out) — click to go there';
+    label.textContent =
+      '⏸ No words for ' +
+      (length >= 60 ? Math.floor(length / 60) + ' min ' + Math.round(length % 60) + ' s' : Math.round(length) + ' s');
+    row.title =
+      'Nothing was transcribed from ' +
+      fmt(from) +
+      ' to ' +
+      fmt(to) +
+      ' (silence, or speech too quiet to make out) — click to go there';
     const boostGap = document.createElement('button');
     boostGap.type = 'button';
     boostGap.textContent = '🔊 Boost & re-transcribe';
     boostGap.title = 'Raise the volume of this stretch, listen, and transcribe it again';
-    boostGap.addEventListener('click', (event) => { event.stopPropagation(); openBoostDialog(Math.max(0, from - 0.5), to + 0.5); });
+    boostGap.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openBoostDialog(Math.max(0, from - 0.5), to + 0.5);
+    });
     row.append(label, boostGap);
     row.addEventListener('click', () => showPosition(from));
     section.appendChild(row);
@@ -179,10 +170,15 @@ function renderTranscript() {
   let lastWordEnd = null;
   const turnTimes = turns.map((turn) => turn.at);
   const speakersFor = (seconds) => {
-    let low = 0, high = turnTimes.length - 1, found = -1;
+    let low = 0,
+      high = turnTimes.length - 1,
+      found = -1;
     while (low <= high) {
       const middle = (low + high) >> 1;
-      if (turnTimes[middle] <= seconds + 0.15) { found = middle; low = middle + 1; } else high = middle - 1;
+      if (turnTimes[middle] <= seconds + 0.15) {
+        found = middle;
+        low = middle + 1;
+      } else high = middle - 1;
     }
     return found < 0 ? [] : turns[found].speakers;
   };
@@ -190,7 +186,8 @@ function renderTranscript() {
     const row = document.createElement('div');
     row.className = 'minute-row';
     const at = minute * 60;
-    row.textContent = fmt(at) + (clockMs(at) === null ? '' : ' · ' + clockFormat.format(new Date(clockMs(at))).replace(':00 ', ' '));
+    row.textContent =
+      fmt(at) + (clockMs(at) === null ? '' : ' · ' + clockFormat.format(new Date(clockMs(at))).replace(':00 ', ' '));
     row.addEventListener('click', () => showPosition(at));
     section.appendChild(row);
   };
@@ -208,7 +205,10 @@ function renderTranscript() {
         item.className = 'who-person';
         item.title = nameAndRole(person) + ' — click to clip everything they say here';
         const at = lastWordEnd ?? 0;
-        item.addEventListener('click', (event) => { event.stopPropagation(); clipSpeaker(id, Number(row.dataset.start || at) + 0.01); });
+        item.addEventListener('click', (event) => {
+          event.stopPropagation();
+          clipSpeaker(id, Number(row.dataset.start || at) + 0.01);
+        });
         const label = document.createElement('small');
         label.textContent = lastName(person);
         item.append(avatar(person), label);
@@ -238,7 +238,10 @@ function renderTranscript() {
     element.dataset.start = startAt;
     bubble.body.appendChild(element);
     const own = { el: element, element, start: startAt, end: startAt, words: [] };
-    boostButton.addEventListener('click', (event) => { event.stopPropagation(); openBoostDialog(Math.max(0, own.start - 0.5), own.end + 0.5); });
+    boostButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openBoostDialog(Math.max(0, own.start - 0.5), own.end + 0.5);
+    });
     if (!bubble.row.dataset.start) bubble.row.dataset.start = startAt;
     pieceList.push(own);
     paragraph = own;
@@ -266,15 +269,19 @@ function renderTranscript() {
     const words = lineWordList(startSeconds, endSeconds, text, timedWords);
     words.forEach((word, wordIndex) => {
       const minute = Math.floor(word.at / 60);
-      if (minute !== lastMinute) { minuteRow(minute); lastMinute = minute; }
+      if (minute !== lastMinute) {
+        minuteRow(minute);
+        lastMinute = minute;
+      }
       const ids = speakersFor(word.at + 0.01);
       // Anything added to the section since (a heading, a vote, an image, a gap, a minute) ends the bubble.
       if (!bubble || bubble.key !== ids.join(',') || section.lastElementChild !== bubble.row) openBubble(ids);
-      if (!paragraph || (lastWordEnd !== null && word.at - lastWordEnd >= paragraphPauseSeconds)) openParagraph(word.at);
+      if (!paragraph || (lastWordEnd !== null && word.at - lastWordEnd >= paragraphPauseSeconds))
+        openParagraph(word.at);
       const span = document.createElement('span');
       span.className = 'w';
       span.dataset.line = index;
-      span.textContent = word.edited ? (word.display || word.original) : word.text;
+      span.textContent = word.edited ? word.display || word.original : word.text;
       if (word.edited) {
         span.classList.add(word.display ? 'edited' : 'deleted');
         span.title = word.display ? 'Corrected from “' + word.original + '”' : 'Deleted: “' + word.original + '”';
@@ -311,13 +318,21 @@ function renderTranscript() {
 // Scrolls the list so a line sits a third of the way down.
 function scrollToLine(line) {
   const offset = line.getBoundingClientRect().top - transcriptList.getBoundingClientRect().top;
-  transcriptList.scrollTo({ top: Math.max(0, transcriptList.scrollTop + offset - transcriptList.clientHeight / 3), behavior: 'smooth' });
+  transcriptList.scrollTo({
+    top: Math.max(0, transcriptList.scrollTop + offset - transcriptList.clientHeight / 3),
+    behavior: 'smooth'
+  });
 }
 function pieceAt(seconds) {
-  let low = 0, high = pieceList.length - 1, found = -1;
+  let low = 0,
+    high = pieceList.length - 1,
+    found = -1;
   while (low <= high) {
     const middle = (low + high) >> 1;
-    if (pieceList[middle].start <= seconds + 0.05) { found = middle; low = middle + 1; } else high = middle - 1;
+    if (pieceList[middle].start <= seconds + 0.05) {
+      found = middle;
+      low = middle + 1;
+    } else high = middle - 1;
   }
   return found;
 }
@@ -336,23 +351,3 @@ function syncTranscript() {
   }
   updateNowWord();
 }
-// The word being said, highlighted (smoothly while playing).
-function updateNowWord() {
-  const piece = pieceList[activePiece];
-  let found = null;
-  if (piece && position <= piece.end + 0.3) {
-    for (const [at, span] of piece.words) { if (at <= position + 0.02) found = span; else break; }
-  }
-  if (found === nowWord) return;
-  nowWord?.classList.remove('now');
-  found?.classList.add('now');
-  nowWord = found;
-}
-function followWords() {
-  if (video.paused || !playerReady) return;
-  const current = toPosition(video.currentTime);
-  if (Math.abs(current - position) < 1) { position = current; updateNowWord(); }
-  requestAnimationFrame(followWords);
-}
-video.addEventListener('play', () => requestAnimationFrame(followWords));
-

@@ -1,8 +1,11 @@
-# Publishes the web app to GitHub Pages: meetings, live, schedules, and the rest, kept in each browser (IndexedDB),
-# and synced with a hub when one is set: the PAGES_HUB_URL variable (your hub's api.php address) makes it the default,
-# and anyone can change it under Settings. Without it, the site keeps everything in the browser. Turn on Pages for the
-# repository with "GitHub Actions" as the source; it runs by hand, or on every push to main once the PAGES_ON_PUSH
-# variable is true. See docs/hub/deploy.md.
+# Publishes the web app to GitHub Pages, for any fork of this repository. Two ways it can work:
+#   - on its own: each visitor's browser keeps its own data (IndexedDB); nothing is shared. This is the default.
+#   - with a hub: set the PAGES_HUB_URL variable to a hub's api.php address (such as
+#     https://streamscribe.lewismoten.com/hub/api.php), and the site syncs with it; the hub's config.php must list
+#     https://<owner>.github.io in allowed_origins.
+# Visitors can point the site at another hub, or none, under Settings either way. To use it: in the repository's
+# Settings → Pages choose "GitHub Actions" as the source, then run this workflow from the Actions tab; set the
+# PAGES_ON_PUSH variable to true to publish on every push to main. See docs/hub/deploy.md.
 name: Pages
 on:
   push:
@@ -28,7 +31,9 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          VITE_BASE: /${{ github.event.repository.name }}/
+          # A <owner>.github.io repository is served from the root; any other from /<repository>/.
+          VITE_BASE: ${{ endsWith(github.event.repository.name, '.github.io') && '/' || format('/{0}/', github.event.repository.name) }}
+          VITE_SITE_URL: ${{ endsWith(github.event.repository.name, '.github.io') && format('https://{0}', github.event.repository.name) || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
           VITE_ROUTER: hash
           VITE_HUB_URL: ${{ vars.PAGES_HUB_URL }}
       - uses: actions/upload-pages-artifact@v3

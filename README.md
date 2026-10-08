@@ -1,124 +1,56 @@
-# streamscribe
+# Stream Scribe
 
-![Stream Scribe: Capture. Search. Research.](docs/socialpreview.jpg)
+![Stream Scribe: capture, search, research. Independent archives for live government meetings.](docs/socialpreview.jpg)
 
-Capture public meeting livestreams, fill the gaps from the official archive, transcribe them locally with Whisper, and review them on a page with speakers, chapters, votes, audio boosts, a magnifier, and clips. Everything runs on your own machine.
+Stream Scribe keeps an independent archive of public meetings that are streamed live. It records the livestream, fills any gaps from the official recording, and transcribes it on your own computer with Whisper. Then you can review a meeting: who spoke, the agenda, and the votes. Publish notes, transcripts, and clips, each linked back to the official sources.
 
-It keeps the whole meeting, including the parts an official archive sometimes leaves out: the live capture is the primary record, and the archived copy only fills what the capture missed.
+## Three ways to use it
 
-## Requirements
+|                                    | What you get                                                              | What you need                    |
+| ---------------------------------- | ------------------------------------------------------------------------- | -------------------------------- |
+| **On your computer**               | Everything: capture livestreams, transcribe, review, and the web app      | Node.js 24, ffmpeg, whisper.cpp  |
+| **In your browser** (GitHub Pages) | The web app, with your data kept in your browser                          | A fork of this repository        |
+| **With a hub**                     | A shared archive: recorders on a schedule, accounts, publishing, podcasts | PHP 8 hosting (or someone's hub) |
 
-- Node.js 20 or later (no npm packages)
-- [ffmpeg](https://ffmpeg.org) and ffprobe (Homebrew's `ffmpeg-full` includes drawtext for burned-in clocks)
-- [whisper.cpp](https://github.com/ggerganov/whisper.cpp) (`brew install whisper-cpp`) with a model such as `ggml-large-v3.bin` and the Silero VAD model, in `~/.cache/whisper-cpp/` by default
+### On your computer
 
-## Setup
+You need [Node.js](https://nodejs.org) 24 or later, [ffmpeg](https://ffmpeg.org), and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) (`brew install ffmpeg-full whisper-cpp` on a Mac). You also need a Whisper model, such as `ggml-large-v3.bin`, and the Silero VAD model, both in `~/.cache/whisper-cpp/`.
 
 ```bash
 npm install
-cp config.example.js config.local.js
+cp config.example.js config.local.js   # add your sources: the livestreams to record
 npm run build
-npm start
+npm start                              # http://127.0.0.1:4873
 ```
 
-Edit `config.local.js` first: add a `sources` entry for each stream (its live `.m3u8` playlist or the pages that lead to it), the transcription context and vocabulary, and tool paths if they aren't on your PATH. `config.example.js` documents every option.
+Capture a meeting from the Capture page, then run `npm run transcribe` and review it from the library. [A meeting, start to finish](docs/guide.md) walks through it.
 
-`npm start` opens the library at http://127.0.0.1:4873/ (`-- --port` and `--host` change that).
+### In your browser
 
-## The web app
+Fork this repository. In its Settings → Pages, choose **GitHub Actions** as the source, then run the **Pages** workflow from the Actions tab. You get the web app at `https://<you>.github.io/<repository>/`. Each visitor's data stays in their own browser (IndexedDB): schedules, and anything imported under Settings.
 
-- **Library:** every recording, newest first and grouped by day. That covers live captures, full meetings, and downloaded official recordings, each with its picture, length, and what's been marked (transcript lines, chapters, votes, speaker changes). **▶ Review** opens the review page. **Details** shows the chapters, the votes with their results, the captures a meeting was built from, and the transcript; every time links to that moment on the review page. Captures already joined into a full meeting are hidden unless you ask for them.
-- **Search:** finds words in every transcript at once, matching word forms ("budget" also finds "budgets" and "budgeted"); use quotes for an exact phrase. Results are grouped by recording, and each line opens the review page at that moment.
-- **Capture:** starts and stops the live capture of each source. Each capture runs as its own process, so restarting the server doesn't interrupt it. A thumbnail watcher keeps the review page current while it records, so you can watch and scrub it live. The page shows the capture's log and its newest recording, and won't start a second capture beside one already running, including one started from a terminal.
-- **Review page:** the existing per-recording page, with the player, transcript, speakers, chapters, votes, boosts, clips, and the magnifier. 🏠 returns to the library.
-- **Published, Meetings, Live, Agents, Schedules, People, Account, Settings:** the hub's side, once a hub is set under Settings. It's an independent archive: meetings are private (recordings, transcripts, stills, the live view, audio and video), for signed-in people whose group may see them. **Published** is for everyone: notes, summaries, transcript excerpts, and clips you publish from a meeting page, each linking to the official recording, plus a podcast of the clips. **Agents** shows your recorders, online or not, and the work queued for them (cutting clips, encoding), with progress. Schedules sets when meetings happen, one-off or repeating. These pages also work as a static site, on the hub's own server or GitHub Pages (docs/hub/hub.md).
+To show a hub's meetings and publications instead, set the repository variable `PAGES_HUB_URL` to its address (such as `https://example.com/hub/api.php`) and run the workflow again. Visitors can also enter a hub address under Settings.
 
-### Recorders and the hub
+### With a hub
 
-To record meetings on a schedule, run a recorder on a machine with disk (`npm run recorder`, docs/recorder/recorder.md). It reads schedules from a hub (a small PHP API with SQLite, `hub-php/`, docs/hub/hub.md), and starts capturing a few minutes before each meeting. If the meeting runs long, it keeps going until the stream shows the standby slide or stops sending video. While recording it reports live pictures and quick transcripts; afterwards it sends the final transcript and stills. The video stays on the recorder. Several recorders can follow the same schedules as backups for each other: only one records each meeting. `npm run deploy:hub` (or GitHub Actions) puts the hub and the web app on your server over SSH (docs/hub/deploy.md).
+The hub is a small PHP and SQLite service for ordinary shared hosting.
 
-The library is kept in a SQLite database, `data/streamscribe.db`. It holds the recordings and their transcripts (indexed for search), plus everything saved on the review page: speaker marks, chapters, votes, camera views, boosts, meeting names, and each source's people. The server finds new recordings, transcripts, and files changed by the scripts every half minute (**↻ Rescan** does it at once). Each save is also written to its JSON file beside the video, so the command-line scripts keep working with it.
+- **What it holds:** schedules, the meetings recorders send it (private, for the people you allow), accounts and groups, and what you publish for everyone.
+- **Agents:** recorders that record on a schedule and do the heavy work. Install one on a Raspberry Pi with a single command from the hub's Agents page.
+- **Setup:** `npm run deploy:hub`, or the Deploy hub workflow, puts the hub and the web app on your server. See [the hub](docs/hub/hub.md) and [deploying it](docs/hub/deploy.md).
 
-To work on the web app, run `npm run dev` and open http://localhost:5173/: Vite reloads the app as you edit `web/src`, and the server restarts when `server/` changes. `npm run typecheck` checks both.
+## Documentation
 
-## A meeting, start to finish
-
-1. **Capture** while it's live: **Start capture** on the Capture page (or `npm run capture`). It recovers the minutes before you started (as far back as the server keeps them) and any gaps from network drops.
-2. **Transcribe**, even while still recording: `npm run transcribe`. Fix mishearings once with `npm run transcript-corrections -- add "heard as" "should be"`; they apply to every transcript.
-3. **Review** it from the library. Mark speakers, chapters (agenda items), and votes; boost quiet speakers and transcribe them again; magnify whoever is speaking; download clips, with or without the overlays. A capture started outside the app gets its page from `npm run extract-thumbnails` (add `-- --watch` during the meeting to follow it live).
-4. **Complete it** once the official recording is posted: `npm run build-meeting -- --url <its page or video link>` (or `--file <video>`). It joins the archive and your capture into one full meeting, carrying your marks over.
-
-## Scripts
-
-| Command | What it does |
-| --- | --- |
-| `start` | Runs the streamscribe server: the web app, its API, and the data folders |
-| `dev` | Runs the server and Vite for working on the web app |
-| `build` | Builds the web app into `web/dist` |
-| [`capture`](docs/capture/capture.md) | Records live HLS streams segment by segment, recovering earlier and missed segments |
-| [`transcribe`](docs/transcription/transcribe.md) | Transcribes a captured session locally with whisper.cpp |
-| [`transcribe-media`](docs/transcription/transcribe-media.md) | Transcribes any video or audio file, or part of one |
-| [`transcript-corrections`](docs/transcription/transcript-corrections.md) | Manages mishearing corrections and line edits, and rebuilds transcripts |
-| [`combine-transcripts`](docs/transcription/combine-transcripts.md) | Combines the usual transcript with a `--best` one, chunk by chunk |
-| [`extract-thumbnails`](docs/review/extract-thumbnails.md) | Builds a session's thumbnails, camera changes, and review page |
-| [`extract-slides`](docs/media/extract-slides.md) | Saves each presentation slide shown during a session |
-| [`extract-clip`](docs/media/extract-clip.md) | Cuts an MP4 clip of a session |
-| `render-playlist` | Joins a playlist of clips into one video (used by the review page) |
-| [`render-mp4`](docs/media/render-mp4.md) | Stitches a session's segments into one MP4, optionally with a clock |
-| `publish-library` | Sends recordings in the library (details, transcripts, stills, marks) to the hub (docs/hub/deploy.md) |
-| [`publish-media`](docs/media/publish-media.md) | Makes light audio (also the podcast) and silent 360p video of recordings, and puts them on the hub |
-| `deploy:hub` | Puts the hub and the web app on your server over SSH (docs/hub/deploy.md) |
-| [`retranscribe-range`](docs/transcription/retranscribe-range.md) | Boosts the audio of part of a session and transcribes it again (used by the review page) |
-| [`split-session`](docs/capture/split-session.md) | Splits a session in two |
-| [`join-sessions`](docs/capture/join-sessions.md) | Joins sessions of one meeting into one |
-| [`backfill-from-archive`](docs/archive/backfill-from-archive.md) | Downloads the official recording, lines it up with the capture by audio, and cuts out what the capture missed |
-| [`build-meeting`](docs/archive/build-meeting.md) | Joins the capture and the archive into one complete meeting |
-| [`report-stream-identifiers`](docs/capture/report-stream-identifiers.md) | Reports stream identifier changes in captured sessions |
-| [`classify-swagit-standby`](docs/capture/classify-swagit-standby.md) | Finds Swagit standby-slide segments (Swagit sources only) |
-
-## Repository layout
-
-```text
-bin/                 one entry point per npm command (npm run capture runs bin/capture.js)
-src/
-  config/            settings (config.local.js), repository paths, the mounted-volume check
-  util/              files, processes, command-line options, HTML
-  net/               fetching with rate limits and robots.txt
-  providers/         streaming services: plain HLS, and swagit/ (discovery, identifiers, standby slides)
-  capture/           live capture: discovery, playlists, segments, backfill, sessions, stream identity, signals
-  sessions/          a session's segment timeline; splitting and joining sessions; identifier reports
-  transcription/     whisper.cpp, transcribe (speech detection, boosts), corrections, combining, re-transcribing
-  media/             thumbnails/ (frames, camera changes, title cards), clips/ (clips, playlists),
-                     render-mp4/, slides, audio, text recognition
-  archive/           official recordings: download and alignment (backfill-from-archive), full meetings (build-meeting)
-  recorder/          the recorder service: records scheduled meetings and reports them to the hub (docs/recorder/recorder.md)
-  dev/               the simulated live stream used for testing (npm run simulate-hls)
-  sync/              records shared with a hub: collections, schedules and recurrence, merging, the sync client
-  review-page/       the review page: page.js puts markup.js, styles.css, and client/ (its script, by feature)
-                     into each session's thumbnails/index.html
-hub-php/             the hub: a PHP API with SQLite that recorders report to and web apps sync with (docs/hub/hub.md)
-test/                npm test: recurrence, merging, and the hub's API against a local PHP server
-server/              the web server: library database, scan, capture jobs, and routes/ (api, files, session jobs, app)
-web/                 the web app (Vite, React, TypeScript)
-docs/                how each command works, by area
-```
-
-## Providers
-
-Any plain HLS stream works. A source's `provider` adds knowledge of a particular streaming service; [Swagit](https://swagit.com), used by many local governments, is built in (finding the live stream from a government's video page, its hourly stream identifier renewals, its standby slide, and downloading its archived meetings). See [capture: Providers](docs/capture/capture.md#providers) and [`scripts/providers`](src/providers/).
-
-## Data layout
-
-```text
-data/
-  streamscribe.db                            the library: recordings, transcripts, marks, people, capture jobs
-  logs/                                      logs of captures started from the web app
-  <source key>/
-    live/<stream>/<YYYY-MM-DD hh-mm-ss>/   one capture session: segments/, transcripts/, thumbnails/, slides/, marks
-    meetings/<date> video-<id>/              full meetings built from a capture and the archive
-    archive/<id>/                            downloaded official recordings and their alignment
-    people/                                  names, roles, groups, and face photos shared by the source's meetings
-  state/                                     capture state and the robots.txt cache
-```
-
-The server serves each source's folder at `/files/<source>/`.
+- **Using it:**
+  - [A meeting, start to finish](docs/guide.md)
+  - [All commands](docs/commands.md)
+  - [Capture](docs/capture/capture.md)
+  - [Transcription](docs/transcription/transcribe.md)
+  - [The review page](docs/review/extract-thumbnails.md)
+  - [Full meetings from the archive](docs/archive/build-meeting.md)
+- **Sharing it:**
+  - [The hub](docs/hub/hub.md)
+  - [Deploying](docs/hub/deploy.md)
+  - [Recorders and agents](docs/recorder/recorder.md)
+  - [Audio, video, and the podcast](docs/media/publish-media.md)
+- **Working on it:** [development](docs/development.md) covers the layout, conventions, and `npm run check` (format, lint, types, tests).

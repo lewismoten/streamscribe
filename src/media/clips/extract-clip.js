@@ -26,16 +26,26 @@ async function main() {
   }
 
   // Segments overlapping the range, in order. Missed or discarded moments inside it are simply absent.
-  const overlapping = session.retained.filter((item) => item.videoStart < options.to && item.videoStart + item.durationSeconds > options.from);
+  const overlapping = session.retained.filter(
+    (item) => item.videoStart < options.to && item.videoStart + item.durationSeconds > options.from
+  );
   if (overlapping.length === 0) {
     throw new Error(`Nothing was captured between ${formatPosition(options.from)} and ${formatPosition(options.to)}`);
   }
-  const gapSeconds = (options.to - options.from) - overlapping.reduce((total, item) => total + item.durationSeconds, 0)
-    + Math.max(0, options.from - overlapping[0].videoStart) + Math.max(0, (overlapping.at(-1).videoStart + overlapping.at(-1).durationSeconds) - options.to);
+  const gapSeconds =
+    options.to -
+    options.from -
+    overlapping.reduce((total, item) => total + item.durationSeconds, 0) +
+    Math.max(0, options.from - overlapping[0].videoStart) +
+    Math.max(0, overlapping.at(-1).videoStart + overlapping.at(-1).durationSeconds - options.to);
 
   const outputPath = options.output
     ? path.resolve(options.output)
-    : path.join(sessionDir, 'clips', `clip-${formatPosition(options.from).replace(/:/g, '-')}-to-${formatPosition(options.to).replace(/:/g, '-')}.mp4`);
+    : path.join(
+        sessionDir,
+        'clips',
+        `clip-${formatPosition(options.from).replace(/:/g, '-')}-to-${formatPosition(options.to).replace(/:/g, '-')}.mp4`
+      );
   await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'streamscribe-clip-'));
@@ -52,29 +62,72 @@ async function main() {
     let joinedSoFar = 0;
     for (const [index, run] of runs.entries()) {
       const listPath = path.join(tempDir, `segments-${index}.txt`);
-      await writeFile(listPath, run.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n'));
+      await writeFile(
+        listPath,
+        run.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n')
+      );
       // Offsets are measured in the joined segments, which skip the gaps.
       const joinedLength = run.reduce((total, item) => total + item.durationSeconds, 0);
       const startOffset = Math.max(0, options.from - run[0].videoStart);
-      const endOffset = Math.min(joinedLength, joinedLength - Math.max(0, (run.at(-1).videoStart + run.at(-1).durationSeconds) - options.to));
+      const endOffset = Math.min(
+        joinedLength,
+        joinedLength - Math.max(0, run.at(-1).videoStart + run.at(-1).durationSeconds - options.to)
+      );
       // Several stretches are cut to MPEG-TS and joined end to end, which keeps their timestamps in order.
       const single = runs.length === 1;
       const cutPath = single ? partialPath : path.join(tempDir, `cut-${index}.ts`);
       await runCommand(TOOLS.ffmpeg, [
-        '-hide_banner', '-loglevel', 'error', '-y',
-        '-f', 'concat', '-safe', '0', '-i', listPath,
-        '-ss', startOffset.toFixed(3), '-to', endOffset.toFixed(3),
-        '-map', '0:v:0', '-map', '0:a:0',
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-f',
+        'concat',
+        '-safe',
+        '0',
+        '-i',
+        listPath,
+        '-ss',
+        startOffset.toFixed(3),
+        '-to',
+        endOffset.toFixed(3),
+        '-map',
+        '0:v:0',
+        '-map',
+        '0:a:0',
         // Each later stretch's timestamps continue from where the one before ended.
-        ...(single ? [...codec, '-movflags', '+faststart', '-f', 'mp4'] : [...codec.filter((arg) => arg !== '-bsf:a' && arg !== 'aac_adtstoasc'), '-output_ts_offset', joinedSoFar.toFixed(3), '-f', 'mpegts']),
+        ...(single
+          ? [...codec, '-movflags', '+faststart', '-f', 'mp4']
+          : [
+              ...codec.filter((arg) => arg !== '-bsf:a' && arg !== 'aac_adtstoasc'),
+              '-output_ts_offset',
+              joinedSoFar.toFixed(3),
+              '-f',
+              'mpegts'
+            ]),
         cutPath
       ]);
       cuts.push(cutPath);
       joinedSoFar += endOffset - startOffset;
     }
     if (cuts.length > 1) {
-      await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', `concat:${cuts.join('|')}`,
-        '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', '-f', 'mp4', partialPath]);
+      await runCommand(TOOLS.ffmpeg, [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-i',
+        `concat:${cuts.join('|')}`,
+        '-c',
+        'copy',
+        '-bsf:a',
+        'aac_adtstoasc',
+        '-movflags',
+        '+faststart',
+        '-f',
+        'mp4',
+        partialPath
+      ]);
     }
     fs.renameSync(partialPath, outputPath);
   } finally {
@@ -82,7 +135,9 @@ async function main() {
   }
 
   const sizeMb = fs.statSync(outputPath).size / 1e6;
-  console.log(`Saved ${formatPosition(options.from)} to ${formatPosition(options.to)} (${formatPosition(options.to - options.from)}) to ${outputPath} (${sizeMb.toFixed(1)} MB)`);
+  console.log(
+    `Saved ${formatPosition(options.from)} to ${formatPosition(options.to)} (${formatPosition(options.to - options.from)}) to ${outputPath} (${sizeMb.toFixed(1)} MB)`
+  );
   if (gapSeconds > 1) {
     console.log(`  ${Math.round(gapSeconds)}s of that range was not captured, so the clip is shorter by that much.`);
   }
@@ -100,21 +155,26 @@ function parseArgs(argv) {
     else throw new Error(`Unknown option ${arg}`);
   }
   if (!options.session || options.from === null || options.to === null) {
-    throw new Error('Usage: npm run extract-clip -- --session <folder> --from HH:MM:SS --to HH:MM:SS [--output <file.mp4>] [--accurate]');
+    throw new Error(
+      'Usage: npm run extract-clip -- --session <folder> --from HH:MM:SS --to HH:MM:SS [--output <file.mp4>] [--accurate]'
+    );
   }
   return options;
 }
 
 function parsePosition(value) {
-  const parts = String(value || '').split(':').map(Number);
+  const parts = String(value || '')
+    .split(':')
+    .map(Number);
   if (parts.length === 0 || parts.some((part) => !Number.isFinite(part))) {
     throw new Error(`Invalid time "${value}" (use HH:MM:SS, MM:SS, or seconds)`);
   }
-  return parts.reduce((total, part) => (total * 60) + part, 0);
+  return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
 // Started by bin/extract-clip.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

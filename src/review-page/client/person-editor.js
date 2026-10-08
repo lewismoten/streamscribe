@@ -14,7 +14,11 @@ function openPersonEditor(person) {
   $('person-group').value = person?.group || '';
   $('person-icon').value = person?.icon || '';
   $('group-list').textContent = '';
-  rosterGroups.forEach((group) => { const option = document.createElement('option'); option.value = group; $('group-list').appendChild(option); });
+  rosterGroups.forEach((group) => {
+    const option = document.createElement('option');
+    option.value = group;
+    $('group-list').appendChild(option);
+  });
   $('person-status').textContent = '';
   $('person-delete').hidden = !person;
   cropFrame = null;
@@ -100,13 +104,22 @@ cropCanvas.addEventListener('pointermove', (event) => {
   const point = cropPoint(event);
   moveCrop(dragFrom.x + point.x - dragFrom.pointX, dragFrom.y + point.y - dragFrom.pointY);
 });
-cropCanvas.addEventListener('pointerup', () => { dragFrom = null; });
-cropCanvas.addEventListener('wheel', (event) => {
-  event.preventDefault();
-  resizeCrop(crop.r * (event.deltaY < 0 ? 1.08 : 1 / 1.08));
-}, { passive: false });
+cropCanvas.addEventListener('pointerup', () => {
+  dragFrom = null;
+});
+cropCanvas.addEventListener(
+  'wheel',
+  (event) => {
+    event.preventDefault();
+    resizeCrop(crop.r * (event.deltaY < 0 ? 1.08 : 1 / 1.08));
+  },
+  { passive: false }
+);
 $('crop-size').addEventListener('input', () => resizeCrop(Number($('crop-size').value)));
-$('crop-capture').addEventListener('click', () => { removePhoto = false; captureForCrop(); });
+$('crop-capture').addEventListener('click', () => {
+  removePhoto = false;
+  captureForCrop();
+});
 $('photo-none').addEventListener('click', () => {
   removePhoto = true;
   cropFrame = null;
@@ -119,17 +132,27 @@ $('person-add').addEventListener('click', () => openPersonEditor(null));
 
 async function latestPeople() {
   // Start from the saved roster, so people added from another meeting's page aren't lost.
-  const roster = await fetch(page.peopleUrl + '/people.json', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
+  const roster = await fetch(page.peopleUrl + '/people.json', { cache: 'no-store' })
+    .then((response) => (response.ok ? response.json() : null))
+    .catch(() => null);
   if (Array.isArray(roster?.groups)) rosterGroups = roster.groups;
   return roster?.people || people;
 }
 async function savePeople(list) {
-  await putFile(page.peopleUrl + '/people.json', JSON.stringify({ updatedAt: new Date().toISOString(), groups: rosterGroups, people: list }, null, 2), 'application/json');
+  await putFile(
+    page.peopleUrl + '/people.json',
+    JSON.stringify({ updatedAt: new Date().toISOString(), groups: rosterGroups, people: list }, null, 2),
+    'application/json'
+  );
   people = list;
   peopleMap = mapPeople();
 }
 function uniqueId(name, list) {
-  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'person';
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'person';
   let id = base;
   for (let count = 2; list.some((person) => person.id === id); count += 1) id = base + '-' + count;
   return id;
@@ -139,14 +162,22 @@ $('person-form').addEventListener('submit', async (event) => {
   const status = $('person-status');
   const name = $('person-name').value.trim();
   const unknown = $('person-unknown').checked || /^unknown$/i.test(name);
-  if (!name && !unknown) { status.textContent = 'Enter a name, or check Name not known'; return; }
-  if (unknown && !$('person-role').value.trim()) { status.textContent = 'Enter a role (it shows in place of the name)'; return; }
+  if (!name && !unknown) {
+    status.textContent = 'Enter a name, or check Name not known';
+    return;
+  }
+  if (unknown && !$('person-role').value.trim()) {
+    status.textContent = 'Enter a role (it shows in place of the name)';
+    return;
+  }
   $('person-save').disabled = true;
   status.textContent = 'Saving...';
   try {
     const list = await latestPeople();
     const isNew = !editing;
-    const person = editing ? { ...(list.find((item) => item.id === editing.id) || editing) } : { id: uniqueId(unknown ? 'unknown ' + $('person-role').value.trim() : name, list) };
+    const person = editing
+      ? { ...(list.find((item) => item.id === editing.id) || editing) }
+      : { id: uniqueId(unknown ? 'unknown ' + $('person-role').value.trim() : name, list) };
     person.name = unknown && /^unknown$/i.test(name) ? '' : name;
     person.nameUnknown = unknown;
     person.role = $('person-role').value.trim();
@@ -181,7 +212,8 @@ $('person-form').addEventListener('submit', async (event) => {
     $('person-dialog').close();
     renderPeople();
     // Someone just added is usually the one speaking.
-    if (isNew) toggleSpeaker(person.id); else speakersChanged();
+    if (isNew) toggleSpeaker(person.id);
+    else speakersChanged();
   } catch (error) {
     status.textContent = 'Not saved: ' + error.message;
   } finally {
@@ -189,7 +221,11 @@ $('person-form').addEventListener('submit', async (event) => {
   }
 });
 $('person-delete').addEventListener('click', async () => {
-  if (!editing || !confirm('Remove ' + editing.name + ' from the list of people? Their marks in meetings stay, shown by id.')) return;
+  if (
+    !editing ||
+    !confirm('Remove ' + editing.name + ' from the list of people? Their marks in meetings stay, shown by id.')
+  )
+    return;
   try {
     await savePeople((await latestPeople()).filter((item) => item.id !== editing.id));
     $('person-dialog').close();
@@ -215,5 +251,12 @@ function clipSpeaker(id, seconds) {
   showPosition(start);
   const person = peopleMap.get(id);
   $('boost-open').click();
-  $('boost-status').textContent = 'Clip set to ' + (person ? shownName(person) : id) + ' speaking, ' + fmt(start) + '-' + fmt(end) + '. Close this to keep the clip for extracting instead.';
+  $('boost-status').textContent =
+    'Clip set to ' +
+    (person ? shownName(person) : id) +
+    ' speaking, ' +
+    fmt(start) +
+    '-' +
+    fmt(end) +
+    '. Close this to keep the clip for extracting instead.';
 }

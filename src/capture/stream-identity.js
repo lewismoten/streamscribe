@@ -31,7 +31,8 @@ export function updateCurrentStreamMetrics(capture, segment, download) {
   stream.bytesCaptured += Number(download.bytes || 0);
   stream.capturedDurationSeconds += Number(segment.durationSeconds || 0);
   if (Number.isFinite(stream.lastSegmentSequence) && segment.sequence > stream.lastSegmentSequence + 1) {
-    stream.lostDurationSeconds += (segment.sequence - stream.lastSegmentSequence - 1) * Number(segment.durationSeconds || 0);
+    stream.lostDurationSeconds +=
+      (segment.sequence - stream.lastSegmentSequence - 1) * Number(segment.durationSeconds || 0);
   }
   stream.lastSegmentSequence = segment.sequence;
   stream.lastSegmentAt = download.capturedAt;
@@ -55,14 +56,18 @@ export function restoreCurrentStreamMetrics(capture, manifest) {
   }
   capture.currentStream = null;
   for (const entry of entries) {
-    updateCurrentStreamMetrics(capture, {
-      sequence: entry.sequence,
-      durationSeconds: entry.durationSeconds,
-      url: entry.sourceUrl
-    }, {
-      bytes: entry.bytes,
-      capturedAt: entry.capturedAt
-    });
+    updateCurrentStreamMetrics(
+      capture,
+      {
+        sequence: entry.sequence,
+        durationSeconds: entry.durationSeconds,
+        url: entry.sourceUrl
+      },
+      {
+        bytes: entry.bytes,
+        capturedAt: entry.capturedAt
+      }
+    );
   }
 }
 
@@ -93,9 +98,9 @@ export async function updateStreamIdentityLog(segment, download, capture) {
     };
     log.events.push(event);
     console.log(
-      `[live ${formatCaptureLabel(capture)}] stream transition ${event.from} -> ${event.to}`
-        + ` | seq ${event.fromLastSequence} -> ${event.toFirstSequence}`
-        + ` | ${formatEasternTime(download.capturedAt)}`
+      `[live ${formatCaptureLabel(capture)}] stream transition ${event.from} -> ${event.to}` +
+        ` | seq ${event.fromLastSequence} -> ${event.toFirstSequence}` +
+        ` | ${formatEasternTime(download.capturedAt)}`
     );
   }
 

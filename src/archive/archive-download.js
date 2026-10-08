@@ -34,8 +34,12 @@ export async function downloadArchive(pageUrl, videoId, videoPath, archiveDir, p
       continue;
     }
     const append = response.status === 206 && startByte > 0;
-    const total = Number(response.headers.get('content-range')?.split('/')[1] || response.headers.get('content-length') || 0) || null;
-    console.log(`${append ? 'Resuming' : 'Downloading'} archive (${total ? `${(total / 1e9).toFixed(2)} GB` : 'size unknown'})${append ? ` from ${(startByte / 1e9).toFixed(2)} GB` : ''}...`);
+    const total =
+      Number(response.headers.get('content-range')?.split('/')[1] || response.headers.get('content-length') || 0) ||
+      null;
+    console.log(
+      `${append ? 'Resuming' : 'Downloading'} archive (${total ? `${(total / 1e9).toFixed(2)} GB` : 'size unknown'})${append ? ` from ${(startByte / 1e9).toFixed(2)} GB` : ''}...`
+    );
     try {
       await streamToFile(response, partialPath, append, append ? startByte : 0, total);
       break;
@@ -47,7 +51,12 @@ export async function downloadArchive(pageUrl, videoId, videoPath, archiveDir, p
     }
   }
   fs.renameSync(partialPath, videoPath);
-  await writeJson(path.join(archiveDir, 'download.json'), { pageUrl, videoId, downloadedAt: new Date().toISOString(), bytes: fs.statSync(videoPath).size });
+  await writeJson(path.join(archiveDir, 'download.json'), {
+    pageUrl,
+    videoId,
+    downloadedAt: new Date().toISOString(),
+    bytes: fs.statSync(videoPath).size
+  });
 }
 
 export async function streamToFile(response, filePath, append, startByte, total) {
@@ -67,7 +76,9 @@ export async function streamToFile(response, filePath, append, startByte, total)
       written += value.length;
       if (Date.now() - lastReport >= 5000) {
         lastReport = Date.now();
-        console.log(`  ${(written / 1e9).toFixed(2)} GB${total ? ` of ${(total / 1e9).toFixed(2)} GB (${((written / total) * 100).toFixed(1)}%)` : ''}`);
+        console.log(
+          `  ${(written / 1e9).toFixed(2)} GB${total ? ` of ${(total / 1e9).toFixed(2)} GB (${((written / total) * 100).toFixed(1)}%)` : ''}`
+        );
       }
     }
     await endStream(writer);
@@ -81,6 +92,14 @@ export async function streamToFile(response, filePath, append, startByte, total)
 }
 
 export async function probeDuration(filePath) {
-  const output = await runCommand(TOOLS.ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath]);
+  const output = await runCommand(TOOLS.ffprobe, [
+    '-v',
+    'error',
+    '-show_entries',
+    'format=duration',
+    '-of',
+    'default=noprint_wrappers=1:nokey=1',
+    filePath
+  ]);
   return Number.parseFloat(output.trim());
 }

@@ -6,15 +6,26 @@ import { formatPosition } from '../transcription/transcript.js';
 // Contact sheet (index.html) for a session's slides/ folder, written by extract-slides and
 // rebuilt by split-session.
 export function renderContactSheet(slides, sessionDir) {
-  const clock = (iso) => (iso
-    ? new Intl.DateTimeFormat('en-US', { timeZone: LOCALE.timeZone, hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date(iso))
-    : '');
-  const cards = slides.map((slide) => {
-    const times = slide.showings
-      .map((showing) => `${formatPosition(showing.startSeconds)}${showing.clockTime ? ` (~${clock(showing.clockTime)})` : ''}, ${Math.round(showing.durationSeconds)}s`)
-      .join('<br>');
-    return `<figure><a href="${escapeHtml(slide.fileName)}"><img src="${escapeHtml(slide.fileName)}" alt="Slide ${slide.number}" loading="lazy"></a><figcaption><strong>Slide ${slide.number}</strong><br>${times}</figcaption></figure>`;
-  }).join('\n');
+  const clock = (iso) =>
+    iso
+      ? new Intl.DateTimeFormat('en-US', {
+          timeZone: LOCALE.timeZone,
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit'
+        }).format(new Date(iso))
+      : '';
+  const cards = slides
+    .map((slide) => {
+      const times = slide.showings
+        .map(
+          (showing) =>
+            `${formatPosition(showing.startSeconds)}${showing.clockTime ? ` (~${clock(showing.clockTime)})` : ''}, ${Math.round(showing.durationSeconds)}s`
+        )
+        .join('<br>');
+      return `<figure><a href="${escapeHtml(slide.fileName)}"><img src="${escapeHtml(slide.fileName)}" alt="Slide ${slide.number}" loading="lazy"></a><figcaption><strong>Slide ${slide.number}</strong><br>${times}</figcaption></figure>`;
+    })
+    .join('\n');
   return `<!doctype html>
 <html lang="en">
 <head>

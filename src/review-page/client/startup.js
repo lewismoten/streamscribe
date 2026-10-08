@@ -4,14 +4,25 @@ let queryTimer = null;
 let restoring = true;
 function scheduleQueryUpdate() {
   if (restoring || queryTimer) return;
-  queryTimer = setTimeout(() => {
-    queryTimer = null;
-    const params = new URLSearchParams(location.search);
-    params.set('t', fmtPrecise(position));
-    if (start !== null) params.set('from', fmtPrecise(start)); else params.delete('from');
-    if (end !== null) params.set('to', fmtPrecise(end)); else params.delete('to');
-    try { history.replaceState(null, '', location.pathname + '?' + params.toString().replace(/%3A/gi, ':') + location.hash); } catch {}
-  }, video.paused ? 250 : 1000);
+  queryTimer = setTimeout(
+    () => {
+      queryTimer = null;
+      const params = new URLSearchParams(location.search);
+      params.set('t', fmtPrecise(position));
+      if (start !== null) params.set('from', fmtPrecise(start));
+      else params.delete('from');
+      if (end !== null) params.set('to', fmtPrecise(end));
+      else params.delete('to');
+      try {
+        history.replaceState(
+          null,
+          '',
+          location.pathname + '?' + params.toString().replace(/%3A/gi, ':') + location.hash
+        );
+      } catch {}
+    },
+    video.paused ? 250 : 1000
+  );
 }
 video.addEventListener('pause', scheduleQueryUpdate);
 
@@ -29,7 +40,10 @@ function updateLiveEdge() {
 }
 async function reloadPlayer() {
   const wasPlaying = !video.paused;
-  if (hls) { hls.destroy(); hls = null; }
+  if (hls) {
+    hls.destroy();
+    hls = null;
+  }
   video.removeAttribute('src');
   video.load();
   playerReady = false;
@@ -38,12 +52,15 @@ async function reloadPlayer() {
   if (wasPlaying) await video.play().catch(() => {});
 }
 async function refreshLive() {
-  const data = await fetch('live.json', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
+  const data = await fetch('live.json', { cache: 'no-store' })
+    .then((response) => (response.ok ? response.json() : null))
+    .catch(() => null);
   if (data && Array.isArray(data.segments)) {
     // Segments filled in mid-session (a recovered gap) shift the player's timeline, so the player reloads; new
     // segments at the end just extend it.
-    const appended = data.segments.length >= segments.length
-      && segments.every((item, index) => data.segments[index][0] === item[0] && data.segments[index][1] === item[1]);
+    const appended =
+      data.segments.length >= segments.length &&
+      segments.every((item, index) => data.segments[index][0] === item[0] && data.segments[index][1] === item[1]);
     const segmentsChanged = !appended || data.segments.length !== segments.length;
     const shownBefore = gridCount();
     const scenesChanged = JSON.stringify(data.scenes) !== JSON.stringify(page.scenes);
@@ -51,7 +68,11 @@ async function refreshLive() {
     thumbs.splice(0, thumbs.length, ...data.thumbs);
     page.clocks = data.clocks || page.clocks;
     last = thumbs[thumbs.length - 1];
-    endSeconds = segments.length ? segments[segments.length - 1][1] + segments[segments.length - 1][2] : (last ? last.s : 0);
+    endSeconds = segments.length
+      ? segments[segments.length - 1][1] + segments[segments.length - 1][2]
+      : last
+        ? last.s
+        : 0;
     if (segmentsChanged) {
       sliderRangeKey = '';
       updateSliderRange();
@@ -80,7 +101,9 @@ updateLiveEdge();
 if (page.live && location.protocol !== 'file:') setTimeout(refreshLive, 2000);
 
 $('density').addEventListener('change', renderGrid);
-try { if (localStorage.getItem('thumbnails.playBoosts') === '1') $('play-boosts').checked = true; } catch {}
+try {
+  if (localStorage.getItem('thumbnails.playBoosts') === '1') $('play-boosts').checked = true;
+} catch {}
 renderGrid();
 renderPeople();
 pageReady = true;

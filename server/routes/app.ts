@@ -9,7 +9,11 @@ const webDist = path.join(REPO_ROOT, 'web', 'dist');
 
 export function handleApp(request: http.IncomingMessage, response: http.ServerResponse, url: URL) {
   if (!fs.existsSync(webDist)) {
-    return sendText(response, 404, 'The web app is not built yet: run `npm run build`, or `npm run dev` while working on it.');
+    return sendText(
+      response,
+      404,
+      'The web app is not built yet: run `npm run build`, or `npm run dev` while working on it.'
+    );
   }
   const candidate = path.resolve(webDist, '.' + decodeURIComponent(url.pathname));
   if (candidate.startsWith(webDist + path.sep) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {

@@ -22,8 +22,14 @@ function inlineEdit(element, current, save) {
   };
   input.addEventListener('keydown', (event) => {
     event.stopPropagation();
-    if (event.key === 'Enter') { event.preventDefault(); finish(true); }
-    if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      finish(true);
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      finish(false);
+    }
   });
   input.addEventListener('click', (event) => event.stopPropagation());
   input.addEventListener('blur', () => finish(true));
@@ -47,10 +53,14 @@ let meetingInfo = {};
 async function saveMeetingName(name) {
   try {
     if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
-    const response = await fetch('../meeting-info.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...meetingInfo, name, updatedAt: new Date().toISOString() }, null, 2) });
+    const response = await fetch('../meeting-info.json', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...meetingInfo, name, updatedAt: new Date().toISOString() }, null, 2)
+    });
     meetingInfo = { ...meetingInfo, name };
-    if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
+    if (!response.ok)
+      throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
     showMeetingName(name);
     $('snapshot-status').textContent = 'Saved the meeting name';
     return true;
@@ -68,9 +78,13 @@ $('title-overlay').addEventListener('click', (event) => {
 });
 function setShowName(visible) {
   $('show-name').checked = visible;
-  try { localStorage.setItem('thumbnails.showName', visible ? '1' : '0'); } catch {}
+  try {
+    localStorage.setItem('thumbnails.showName', visible ? '1' : '0');
+  } catch {}
   showMeetingName(meetingName);
 }
 $('show-name').addEventListener('change', () => setShowName($('show-name').checked));
-try { if (localStorage.getItem('thumbnails.showName') === '1') $('show-name').checked = true; } catch {}
+try {
+  if (localStorage.getItem('thumbnails.showName') === '1') $('show-name').checked = true;
+} catch {}
 showMeetingName(meetingName);

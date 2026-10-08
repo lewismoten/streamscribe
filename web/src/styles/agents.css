@@ -1,0 +1,70 @@
+/* Agents and their work: status, progress, jobs, and adding an agent. */
+.agents {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.agent .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--muted);
+  vertical-align: middle;
+}
+.agent.online .dot {
+  background: var(--pass);
+}
+.agent code {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.progress {
+  display: grid;
+  gap: 3px;
+  min-width: 160px;
+}
+.progress-bar {
+  height: 8px;
+  background: var(--code);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.5s;
+}
+table.jobs td {
+  font-size: 0.9rem;
+}
+.add-agent label {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+.add-agent input {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--fg);
+}
+pre.command {
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+}
+.capabilities {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}

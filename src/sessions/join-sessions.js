@@ -11,13 +11,27 @@ import { assertCaptureStopped, forgetCaptureState } from './capture-guard.js';
 // Without --apply the plan is printed. The later sessions must not have marks or transcripts yet (their times would
 // need moving); transcribe and mark the joined session instead. Run extract-thumbnails on it afterward.
 
-const MARKS = ['speakers.json', 'agenda.json', 'votes.json', 'views.json', 'audio-boosts.json', 'meeting-info.json', 'transcripts', 'slides', 'retranscribe', 'clips'];
+const MARKS = [
+  'speakers.json',
+  'agenda.json',
+  'votes.json',
+  'views.json',
+  'audio-boosts.json',
+  'meeting-info.json',
+  'transcripts',
+  'slides',
+  'retranscribe',
+  'clips'
+];
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const sessions = options.sessions.map((item) => path.resolve(item)).sort((left, right) => path.basename(left).localeCompare(path.basename(right)));
+  const sessions = options.sessions
+    .map((item) => path.resolve(item))
+    .sort((left, right) => path.basename(left).localeCompare(path.basename(right)));
   if (sessions.length < 2) throw new Error('Expected at least two --session folders');
-  if (new Set(sessions.map((item) => path.dirname(item))).size !== 1) throw new Error('The sessions must be captures of the same stream (in the same folder)');
+  if (new Set(sessions.map((item) => path.dirname(item))).size !== 1)
+    throw new Error('The sessions must be captures of the same stream (in the same folder)');
   const [target, ...later] = sessions;
   const lists = [];
   for (const sessionDir of sessions) {
@@ -27,19 +41,28 @@ async function main() {
   }
   for (const sessionDir of later) {
     const marked = MARKS.filter((name) => fs.existsSync(path.join(sessionDir, name)));
-    if (marked.length) throw new Error(`${path.basename(sessionDir)} already has ${marked.join(', ')}; joining would put them at the wrong times`);
+    if (marked.length)
+      throw new Error(
+        `${path.basename(sessionDir)} already has ${marked.join(', ')}; joining would put them at the wrong times`
+      );
   }
   for (let index = 1; index < lists.length; index += 1) {
     if (lists[index][0].sequence <= lists[index - 1].at(-1).sequence) {
-      throw new Error(`${path.basename(sessions[index])} overlaps ${path.basename(sessions[index - 1])}; are these one meeting in order?`);
+      throw new Error(
+        `${path.basename(sessions[index])} overlaps ${path.basename(sessions[index - 1])}; are these one meeting in order?`
+      );
     }
   }
 
-  console.log(`Join into ${path.basename(target)} (${lists[0].length} segments, ${lists[0][0].sequence}-${lists[0].at(-1).sequence}):`);
+  console.log(
+    `Join into ${path.basename(target)} (${lists[0].length} segments, ${lists[0][0].sequence}-${lists[0].at(-1).sequence}):`
+  );
   later.forEach((sessionDir, index) => {
     const list = lists[index + 1];
     const gap = list[0].sequence - lists[index].at(-1).sequence - 1;
-    console.log(`  + ${path.basename(sessionDir)} (${list.length} segments, ${list[0].sequence}-${list.at(-1).sequence}${gap ? `; ${gap} sequence number${gap === 1 ? '' : 's'} between` : ''})`);
+    console.log(
+      `  + ${path.basename(sessionDir)} (${list.length} segments, ${list[0].sequence}-${list.at(-1).sequence}${gap ? `; ${gap} sequence number${gap === 1 ? '' : 's'} between` : ''})`
+    );
   });
   if (!options.apply) {
     console.log('Dry run; pass --apply to join.');
@@ -52,14 +75,15 @@ async function main() {
   const silence = [];
   const events = [];
   for (const sessionDir of sessions) {
-    discarded.push(...await readSessionLines(sessionDir, 'discarded-segments.jsonl'));
+    discarded.push(...(await readSessionLines(sessionDir, 'discarded-segments.jsonl')));
     silence.push(...((await loadJson(path.join(sessionDir, 'silence-boundaries.json'), null))?.periods || []));
     events.push(...((await loadJson(path.join(sessionDir, 'stream-identity-transitions.json'), null))?.events || []));
   }
   // Move the segment files first; nothing else changes if one is in the way.
   for (const sessionDir of later) {
     for (const name of fs.readdirSync(path.join(sessionDir, 'segments'))) {
-      if (fs.existsSync(path.join(target, 'segments', name))) throw new Error(`${name} exists in both ${path.basename(target)} and ${path.basename(sessionDir)}`);
+      if (fs.existsSync(path.join(target, 'segments', name)))
+        throw new Error(`${name} exists in both ${path.basename(target)} and ${path.basename(sessionDir)}`);
     }
   }
   for (const sessionDir of later) {
@@ -67,12 +91,18 @@ async function main() {
       fs.renameSync(path.join(sessionDir, 'segments', name), path.join(target, 'segments', name));
     }
   }
-  const writeLines = (fileName, entries) => fs.writeFileSync(path.join(target, fileName), entries.map((entry) => `${JSON.stringify(entry)}\n`).join(''));
+  const writeLines = (fileName, entries) =>
+    fs.writeFileSync(path.join(target, fileName), entries.map((entry) => `${JSON.stringify(entry)}\n`).join(''));
   writeLines('segments.jsonl', allSegments);
-  if (discarded.length) writeLines('discarded-segments.jsonl', discarded.sort((left, right) => Number(left.sequence) - Number(right.sequence)));
+  if (discarded.length)
+    writeLines(
+      'discarded-segments.jsonl',
+      discarded.sort((left, right) => Number(left.sequence) - Number(right.sequence))
+    );
 
   const silenceLog = await loadJson(path.join(target, 'silence-boundaries.json'), null);
-  if (silenceLog) await writeJsonAtomically(path.join(target, 'silence-boundaries.json'), { ...silenceLog, periods: silence });
+  if (silenceLog)
+    await writeJsonAtomically(path.join(target, 'silence-boundaries.json'), { ...silenceLog, periods: silence });
 
   // The identifier changes between the joined sessions become events of the one session.
   const identity = await loadJson(path.join(target, 'stream-identity-transitions.json'), null);
@@ -84,8 +114,12 @@ async function main() {
       const after = await loadJson(path.join(sessions[index], 'stream-identity-transitions.json'), null);
       if (before?.current && after?.current && before.current.identifier !== after.current.identifier) {
         boundaries.push({
-          type: 'stream-identity-change', from: before.current.identifier, fromLastSequence: lists[index - 1].at(-1).sequence,
-          to: after.current.identifier, toFirstSequence: lists[index][0].sequence, toFirstCapturedAt: lists[index][0].capturedAt,
+          type: 'stream-identity-change',
+          from: before.current.identifier,
+          fromLastSequence: lists[index - 1].at(-1).sequence,
+          to: after.current.identifier,
+          toFirstSequence: lists[index][0].sequence,
+          toFirstCapturedAt: lists[index][0].capturedAt,
           note: 'Recorded as separate sessions, then joined by join-sessions.'
         });
       }
@@ -93,7 +127,9 @@ async function main() {
     await writeJsonAtomically(path.join(target, 'stream-identity-transitions.json'), {
       ...identity,
       current: lastIdentity?.current || identity.current,
-      events: [...events, ...boundaries].sort((left, right) => Number(left.toFirstSequence) - Number(right.toFirstSequence))
+      events: [...events, ...boundaries].sort(
+        (left, right) => Number(left.toFirstSequence) - Number(right.toFirstSequence)
+      )
     });
   }
 
@@ -116,7 +152,8 @@ async function main() {
   // The later folders now hold only what's rebuilt from the segments (playlists, thumbnails, the page).
   for (const sessionDir of later) {
     await forgetCaptureState(sessionDir);
-    if (fs.readdirSync(path.join(sessionDir, 'segments')).length) throw new Error(`${sessionDir}/segments is not empty; left in place`);
+    if (fs.readdirSync(path.join(sessionDir, 'segments')).length)
+      throw new Error(`${sessionDir}/segments is not empty; left in place`);
     fs.rmSync(sessionDir, { recursive: true, force: true });
   }
   fs.rmSync(path.join(target, 'thumbnails', 'live.json'), { force: true });
@@ -135,7 +172,8 @@ function parseArgs(argv) {
 }
 
 // Started by bin/join-sessions.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

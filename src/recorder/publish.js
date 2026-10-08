@@ -12,7 +12,11 @@ import { uploadMedia } from './hub-api.js';
 // failure: finished steps are remembered, uploads already on the hub are skipped, and records have fixed ids.
 
 const readJson = (file) => {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
 };
 
 function runCommand(command, args) {
@@ -60,18 +64,42 @@ export async function publishRecording(recording, source, client, log) {
       for (const line of lines) {
         const group = Math.floor(Number(line.startSeconds) / 300);
         if (!groups.has(group)) groups.set(group, []);
-        groups.get(group).push({ start: line.startSeconds, end: line.endSeconds, text: line.text, clockTime: line.clockTime || '', ...(line.words ? { words: line.words } : {}) });
+        groups.get(group).push({
+          start: line.startSeconds,
+          end: line.endSeconds,
+          text: line.text,
+          clockTime: line.clockTime || '',
+          ...(line.words ? { words: line.words } : {})
+        });
       }
       for (const [group, chunk] of groups) {
         await client.put('transcript_chunks', chunkId(recording.id, 'final', `${part.index}-${group}`), {
-          recordingId: recording.id, kind: 'final', part: part.name, partIndex: part.index, from: group * 300, to: (group + 1) * 300, lines: chunk
+          recordingId: recording.id,
+          kind: 'final',
+          part: part.name,
+          partIndex: part.index,
+          from: group * 300,
+          to: (group + 1) * 300,
+          lines: chunk
         });
       }
       recording.final.transcriptSent.push(part.name);
     }
     // Stills: thumbnails spread evenly across the part (its share of recorder.maxStills).
-    const thumbs = (readJson(path.join(sessionDir, 'thumbnails', 'thumbnails.json'))?.thumbnails || []).sort((a, b) => a.positionSeconds - b.positionSeconds);
-    const share = Math.max(1, Math.round(RECORDER.maxStills * (part.seconds / Math.max(1, parts.reduce((total, item) => total + item.seconds, 0)))));
+    const thumbs = (readJson(path.join(sessionDir, 'thumbnails', 'thumbnails.json'))?.thumbnails || []).sort(
+      (a, b) => a.positionSeconds - b.positionSeconds
+    );
+    const share = Math.max(
+      1,
+      Math.round(
+        RECORDER.maxStills *
+          (part.seconds /
+            Math.max(
+              1,
+              parts.reduce((total, item) => total + item.seconds, 0)
+            ))
+      )
+    );
     const step = Math.max(1, thumbs.length / share);
     for (let position = 0, seq = 0; position < thumbs.length; position += step, seq += 1) {
       const thumb = thumbs[Math.floor(position)];
@@ -81,7 +109,13 @@ export async function publishRecording(recording, source, client, log) {
       if (!fs.existsSync(file)) continue;
       const media = await uploadMedia(file);
       await client.put('stills', stillId(recording.id, `${part.index}-${seq}`), {
-        recordingId: recording.id, part: part.name, partIndex: part.index, position: thumb.positionSeconds, clockTime: thumb.clockTime || '', path: media.path, sha256: media.sha256
+        recordingId: recording.id,
+        part: part.name,
+        partIndex: part.index,
+        position: thumb.positionSeconds,
+        clockTime: thumb.clockTime || '',
+        path: media.path,
+        sha256: media.sha256
       });
       recording.final.stills.push(key);
     }

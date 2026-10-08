@@ -6,14 +6,21 @@ import path from 'path';
 
 const listDirs = (root) => {
   try {
-    return fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name));
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name));
   } catch {
     return [];
   }
 };
 export const readLines = (file) => {
   try {
-    return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+    return fs
+      .readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
   } catch {
     return [];
   }
@@ -24,7 +31,9 @@ export function sessionsSince(source, sinceMs) {
   const found = [];
   for (const streamDir of listDirs(source.liveStorageDir)) {
     for (const sessionDir of listDirs(streamDir)) {
-      const kept = readLines(path.join(sessionDir, 'segments.jsonl')).filter((item) => Date.parse(item.capturedAt) >= sinceMs);
+      const kept = readLines(path.join(sessionDir, 'segments.jsonl')).filter(
+        (item) => Date.parse(item.capturedAt) >= sinceMs
+      );
       if (kept.length) found.push({ dir: sessionDir, first: Date.parse(kept[0].capturedAt), kept });
     }
   }

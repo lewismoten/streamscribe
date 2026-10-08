@@ -18,21 +18,36 @@ export async function buildTranscript(meetingDir, pieces, archivePath, archiveDi
   // Clock times come from the meeting's own timing, so every line agrees with the page (a session transcript's
   // stored times reflect its timing when it was transcribed).
   const segments = await loadSessionSegments(meetingDir);
-  const clockFor = (position) => (segments.clockAt(position) === null ? '' : new Date(segments.clockAt(position) * 1000).toISOString());
+  const clockFor = (position) =>
+    segments.clockAt(position) === null ? '' : new Date(segments.clockAt(position) * 1000).toISOString();
   for (const piece of pieces.filter((item) => item.kind === 'live')) {
     if (!rawBySession.has(piece.session)) {
-      rawBySession.set(piece.session, (await loadJson(path.join(piece.session, 'transcripts', 'raw.json'), null))?.lines || []);
+      rawBySession.set(
+        piece.session,
+        (await loadJson(path.join(piece.session, 'transcripts', 'raw.json'), null))?.lines || []
+      );
     }
     for (const line of rawBySession.get(piece.session)) {
       if (line.startSeconds >= piece.liveStart - 0.5 && line.startSeconds < piece.liveEnd) {
         const startSeconds = liveToMeeting(pieces, piece.session, line.startSeconds);
-        const endSeconds = Math.min(piece.meetingStart + piece.duration, liveToMeeting(pieces, piece.session, line.endSeconds) ?? startSeconds);
-        lines.push({ ...line, startSeconds, endSeconds: Number(endSeconds.toFixed(3)), clockTime: clockFor(startSeconds) });
+        const endSeconds = Math.min(
+          piece.meetingStart + piece.duration,
+          liveToMeeting(pieces, piece.session, line.endSeconds) ?? startSeconds
+        );
+        lines.push({
+          ...line,
+          startSeconds,
+          endSeconds: Number(endSeconds.toFixed(3)),
+          clockTime: clockFor(startSeconds)
+        });
       }
     }
   }
 
-  const archiveTranscripts = await findArchiveTranscripts(archivePath, [path.join(archiveDir, 'transcripts'), path.join(meetingDir, 'transcripts', 'pieces')]);
+  const archiveTranscripts = await findArchiveTranscripts(archivePath, [
+    path.join(archiveDir, 'transcripts'),
+    path.join(meetingDir, 'transcripts', 'pieces')
+  ]);
   const pending = [];
   for (const piece of pieces.filter((item) => item.kind === 'archive')) {
     // Walk the piece, taking each stretch from the best transcript that covers it.
@@ -45,8 +60,16 @@ export async function buildTranscript(meetingDir, pieces, archivePath, archiveDi
         for (const line of transcript.lines) {
           if (line.startSeconds >= start && line.startSeconds < end) {
             const startSeconds = archiveToMeeting(pieces, line.startSeconds);
-            const endSeconds = Math.min(piece.meetingStart + piece.duration, archiveToMeeting(pieces, line.endSeconds) ?? startSeconds);
-            lines.push({ text: line.text, startSeconds, endSeconds: Number(endSeconds.toFixed(3)), clockTime: clockFor(startSeconds) });
+            const endSeconds = Math.min(
+              piece.meetingStart + piece.duration,
+              archiveToMeeting(pieces, line.endSeconds) ?? startSeconds
+            );
+            lines.push({
+              text: line.text,
+              startSeconds,
+              endSeconds: Number(endSeconds.toFixed(3)),
+              clockTime: clockFor(startSeconds)
+            });
           }
         }
       }
@@ -60,7 +83,8 @@ export async function buildTranscript(meetingDir, pieces, archivePath, archiveDi
   await writeJson(path.join(meetingDir, 'transcripts', 'raw.json'), {
     sessionDir: meetingDir,
     createdAt: new Date().toISOString(),
-    timeNote: 'startSeconds/endSeconds are positions in the meeting; live lines come from the sessions, archive lines from transcribe-media.',
+    timeNote:
+      'startSeconds/endSeconds are positions in the meeting; live lines come from the sessions, archive lines from transcribe-media.',
     sources: {
       sessions: [...rawBySession.keys()].map((dir) => path.basename(dir)),
       archiveTranscripts: archiveTranscripts.map((item) => path.basename(item.file))
@@ -69,7 +93,9 @@ export async function buildTranscript(meetingDir, pieces, archivePath, archiveDi
     lines
   });
   const result = await renderFinalTranscript(meetingDir);
-  console.log(`Transcript: ${result?.lines.length ?? 0} lines${pending.length ? ` (${pending.length} archive stretch${pending.length === 1 ? '' : 'es'} not transcribed yet)` : ''}`);
+  console.log(
+    `Transcript: ${result?.lines.length ?? 0} lines${pending.length ? ` (${pending.length} archive stretch${pending.length === 1 ? '' : 'es'} not transcribed yet)` : ''}`
+  );
   return pending;
 }
 

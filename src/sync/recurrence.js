@@ -21,16 +21,26 @@ const DAY_MS = 86400000;
 // ---- Local calendar arithmetic (civil dates as UTC midnights, so no time zone interferes) ----
 
 const civil = (year, month, day) => Date.UTC(year, month - 1, day);
-const parts = (ms) => { const d = new Date(ms); return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() }; };
+const parts = (ms) => {
+  const d = new Date(ms);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+};
 const weekdayIndex = (ms) => (new Date(ms).getUTCDay() + 6) % 7; // Monday 0 … Sunday 6
 const daysInMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
 const pad = (value) => String(value).padStart(2, '0');
-const localKey = (dateMs, hour, minute) => { const p = parts(dateMs); return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(hour)}:${pad(minute)}`; };
+const localKey = (dateMs, hour, minute) => {
+  const p = parts(dateMs);
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(hour)}:${pad(minute)}`;
+};
 
 export function parseLocal(text) {
   const match = String(text || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
   if (!match) throw new Error(`Expected a local date and time like 2026-10-06T13:00, got "${text}"`);
-  return { date: civil(Number(match[1]), Number(match[2]), Number(match[3])), hour: Number(match[4] || 0), minute: Number(match[5] || 0) };
+  return {
+    date: civil(Number(match[1]), Number(match[2]), Number(match[3])),
+    hour: Number(match[4] || 0),
+    minute: Number(match[5] || 0)
+  };
 }
 
 // ---- Time zones ----
@@ -38,10 +48,34 @@ export function parseLocal(text) {
 const formatters = new Map();
 function zoneParts(ms, timeZone) {
   if (!formatters.has(timeZone)) {
-    formatters.set(timeZone, new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }));
+    formatters.set(
+      timeZone,
+      new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric'
+      })
+    );
   }
-  const values = Object.fromEntries(formatters.get(timeZone).formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
-  return { year: Number(values.year), month: Number(values.month), day: Number(values.day), hour: Number(values.hour) % 24, minute: Number(values.minute), second: Number(values.second) };
+  const values = Object.fromEntries(
+    formatters
+      .get(timeZone)
+      .formatToParts(new Date(ms))
+      .map((part) => [part.type, part.value])
+  );
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour) % 24,
+    minute: Number(values.minute),
+    second: Number(values.second)
+  };
 }
 // Minutes the zone is ahead of UTC at a moment.
 function zoneOffset(ms, timeZone) {
@@ -53,10 +87,13 @@ export function zonedTime(dateMs, hour, minute, timeZone) {
   const wall = dateMs + (hour * 60 + minute) * 60000;
   const before = zoneOffset(wall - DAY_MS / 2, timeZone);
   const after = zoneOffset(wall + DAY_MS / 2, timeZone);
-  const matches = [...new Set([before, after])].map((offset) => wall - offset * 60000).filter((ms) => {
-    const p = zoneParts(ms, timeZone);
-    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) === wall;
-  }).sort((a, b) => a - b);
+  const matches = [...new Set([before, after])]
+    .map((offset) => wall - offset * 60000)
+    .filter((ms) => {
+      const p = zoneParts(ms, timeZone);
+      return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) === wall;
+    })
+    .sort((a, b) => a - b);
   // A time that doesn't exist reads with the offset from before the change, which lands just after it.
   return matches.length ? matches[0] : wall - before * 60000;
 }
@@ -75,27 +112,40 @@ export function zonedTime(dateMs, hour, minute, timeZone) {
 export function parseRule(text) {
   /** @type {Rule} */
   const rule = { freq: '', interval: 1, byDay: [], byMonthDay: [], until: null, count: null };
-  for (const part of String(text || '').split(';').map((item) => item.trim()).filter(Boolean)) {
+  for (const part of String(text || '')
+    .split(';')
+    .map((item) => item.trim())
+    .filter(Boolean)) {
     const [name, value = ''] = part.split('=');
     const key = name.toUpperCase();
     if (key === 'FREQ') rule.freq = value.toUpperCase();
     else if (key === 'INTERVAL') rule.interval = Math.max(1, Number.parseInt(value, 10) || 1);
     else if (key === 'BYDAY') {
-      rule.byDay = value.toUpperCase().split(',').filter(Boolean).map((item) => {
-        const match = item.match(/^([+-]?\d{1,2})?(MO|TU|WE|TH|FR|SA|SU)$/);
-        if (!match) throw new Error(`Unknown BYDAY value "${item}"`);
-        return { position: match[1] ? Number(match[1]) : 0, weekday: WEEKDAYS.indexOf(match[2]) };
-      });
+      rule.byDay = value
+        .toUpperCase()
+        .split(',')
+        .filter(Boolean)
+        .map((item) => {
+          const match = item.match(/^([+-]?\d{1,2})?(MO|TU|WE|TH|FR|SA|SU)$/);
+          if (!match) throw new Error(`Unknown BYDAY value "${item}"`);
+          return { position: match[1] ? Number(match[1]) : 0, weekday: WEEKDAYS.indexOf(match[2]) };
+        });
     } else if (key === 'BYMONTHDAY') rule.byMonthDay = value.split(',').filter(Boolean).map(Number);
     else if (key === 'UNTIL') {
       const match = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?Z?)?$/);
       if (!match) throw new Error(`Unknown UNTIL value "${value}"`);
       // Inclusive; a date alone means the whole day (local).
-      rule.until = { date: civil(Number(match[1]), Number(match[2]), Number(match[3])), minutes: match[4] ? Number(match[4]) * 60 + Number(match[5]) : 24 * 60 };
+      rule.until = {
+        date: civil(Number(match[1]), Number(match[2]), Number(match[3])),
+        minutes: match[4] ? Number(match[4]) * 60 + Number(match[5]) : 24 * 60
+      };
     } else if (key === 'COUNT') rule.count = Math.max(1, Number.parseInt(value, 10) || 1);
-    else if (key === 'WKST') { /* weeks start on Monday */ } else throw new Error(`Unsupported rule part "${key}"`);
+    else if (key === 'WKST') {
+      /* weeks start on Monday */
+    } else throw new Error(`Unsupported rule part "${key}"`);
   }
-  if (rule.freq && !['DAILY', 'WEEKLY', 'MONTHLY'].includes(rule.freq)) throw new Error(`Unsupported FREQ "${rule.freq}" (DAILY, WEEKLY, or MONTHLY)`);
+  if (rule.freq && !['DAILY', 'WEEKLY', 'MONTHLY'].includes(rule.freq))
+    throw new Error(`Unsupported FREQ "${rule.freq}" (DAILY, WEEKLY, or MONTHLY)`);
   return rule;
 }
 
@@ -106,7 +156,9 @@ function* ruleDates(rule, startDate) {
     for (let date = startDate; ; date += rule.interval * DAY_MS) yield date;
   }
   if (rule.freq === 'WEEKLY') {
-    const days = rule.byDay.length ? [...new Set(rule.byDay.map((item) => item.weekday))].sort((a, b) => a - b) : [weekdayIndex(startDate)];
+    const days = rule.byDay.length
+      ? [...new Set(rule.byDay.map((item) => item.weekday))].sort((a, b) => a - b)
+      : [weekdayIndex(startDate)];
     for (let monday = startDate - weekdayIndex(startDate) * DAY_MS; ; monday += rule.interval * 7 * DAY_MS) {
       for (const day of days) {
         const date = monday + day * DAY_MS;
@@ -123,7 +175,8 @@ function* ruleDates(rule, startDate) {
       if (rule.byDay.length) {
         for (const { position, weekday } of rule.byDay) {
           const matching = [];
-          for (let day = 1; day <= length; day += 1) if (weekdayIndex(civil(year, month, day)) === weekday) matching.push(day);
+          for (let day = 1; day <= length; day += 1)
+            if (weekdayIndex(civil(year, month, day)) === weekday) matching.push(day);
           if (position === 0) matching.forEach((day) => dates.add(day));
           else {
             const day = position > 0 ? matching[position - 1] : matching[matching.length + position];
@@ -131,7 +184,7 @@ function* ruleDates(rule, startDate) {
           }
         }
       } else {
-        for (const day of (rule.byMonthDay.length ? rule.byMonthDay : [start.day])) {
+        for (const day of rule.byMonthDay.length ? rule.byMonthDay : [start.day]) {
           const actual = day < 0 ? length + day + 1 : day;
           if (actual >= 1 && actual <= length) dates.add(actual);
         }
@@ -165,7 +218,9 @@ export function occurrences(schedule, fromMs, toMs, { includeCancelled = false }
     const key = localKey(dateMs, first.hour, first.minute);
     const override = overrides[key] || {};
     const moved = override.start ? parseLocal(override.start) : null;
-    const start = moved ? zonedTime(moved.date, moved.hour, moved.minute, timeZone) : zonedTime(dateMs, first.hour, first.minute, timeZone);
+    const start = moved
+      ? zonedTime(moved.date, moved.hour, moved.minute, timeZone)
+      : zonedTime(dateMs, first.hour, first.minute, timeZone);
     const duration = Number(override.durationMinutes) || minutes;
     return {
       key: `${schedule.id}@${key}`,
@@ -176,7 +231,7 @@ export function occurrences(schedule, fromMs, toMs, { includeCancelled = false }
       title: override.title || schedule.title || '',
       sourceKey: schedule.sourceKey,
       leadMinutes: Number(schedule.leadMinutes ?? 10),
-      overrun: { ...(schedule.overrun || {}), ...(override.overrun || {}) },
+      overrun: { ...schedule.overrun, ...override.overrun },
       moved: Boolean(moved),
       cancelled: exdates.has(key) || Boolean(override.cancelled),
       schedule
@@ -191,7 +246,11 @@ export function occurrences(schedule, fromMs, toMs, { includeCancelled = false }
   // A moved occurrence can land up to a few weeks from its original date, so look a little past the window.
   const lastDate = toMs + 45 * DAY_MS;
   for (const date of ruleDates(rule, first.date)) {
-    if (rule.until && (date > rule.until.date || (date === rule.until.date && first.hour * 60 + first.minute > rule.until.minutes))) break;
+    if (
+      rule.until &&
+      (date > rule.until.date || (date === rule.until.date && first.hour * 60 + first.minute > rule.until.minutes))
+    )
+      break;
     if (rule.count !== null && count >= rule.count) break;
     count += 1;
     const occurrence = make(date);
@@ -210,7 +269,9 @@ export function occurrences(schedule, fromMs, toMs, { includeCancelled = false }
  * @param {{ includeCancelled?: boolean }} [options] @returns {Occurrence[]}
  */
 export function upcoming(schedules, fromMs, toMs, options) {
-  return schedules.flatMap((schedule) => occurrences(schedule, fromMs, toMs, options)).sort((a, b) => a.start - b.start);
+  return schedules
+    .flatMap((schedule) => occurrences(schedule, fromMs, toMs, options))
+    .sort((a, b) => a.start - b.start);
 }
 
 // Plain words for a rule ("The first Tuesday of each month"), for lists and previews.
@@ -218,19 +279,32 @@ export function describeRule(text) {
   if (!text) return 'Once';
   const rule = parseRule(text);
   const names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const ordinal = (value) => (value === -1 ? 'last' : value === -2 ? 'second to last' : ['', 'first', 'second', 'third', 'fourth', 'fifth'][value] || `${value}th`);
+  const ordinal = (value) =>
+    value === -1
+      ? 'last'
+      : value === -2
+        ? 'second to last'
+        : ['', 'first', 'second', 'third', 'fourth', 'fifth'][value] || `${value}th`;
   const list = (items) => (items.length <= 1 ? items.join('') : items.slice(0, -1).join(', ') + ' and ' + items.at(-1));
   const every = rule.interval === 1 ? 'Every' : `Every ${rule.interval === 2 ? 'other' : rule.interval}`;
   let text_ = '';
   if (rule.freq === 'DAILY') text_ = rule.interval === 1 ? 'Every day' : `Every ${rule.interval} days`;
-  if (rule.freq === 'WEEKLY') text_ = `${every} ${rule.interval > 2 ? 'weeks on ' : ''}${list(rule.byDay.map((item) => names[item.weekday])) || 'week'}`;
+  if (rule.freq === 'WEEKLY')
+    text_ = `${every} ${rule.interval > 2 ? 'weeks on ' : ''}${list(rule.byDay.map((item) => names[item.weekday])) || 'week'}`;
   if (rule.freq === 'MONTHLY') {
     const which = rule.byDay.length
-      ? list(rule.byDay.map((item) => (item.position ? `the ${ordinal(item.position)} ${names[item.weekday]}` : `every ${names[item.weekday]}`)))
+      ? list(
+          rule.byDay.map((item) =>
+            item.position ? `the ${ordinal(item.position)} ${names[item.weekday]}` : `every ${names[item.weekday]}`
+          )
+        )
       : `day ${list((rule.byMonthDay.length ? rule.byMonthDay : ['the same']).map(String))}`;
     text_ = `${which[0].toUpperCase()}${which.slice(1)} of ${rule.interval === 1 ? 'each month' : `every ${rule.interval === 2 ? 'other' : rule.interval} months`}`;
   }
   if (rule.count) text_ += `, ${rule.count} times`;
-  if (rule.until) { const p = parts(rule.until.date); text_ += `, until ${p.year}-${pad(p.month)}-${pad(p.day)}`; }
+  if (rule.until) {
+    const p = parts(rule.until.date);
+    text_ += `, until ${p.year}-${pad(p.month)}-${pad(p.day)}`;
+  }
   return text_;
 }

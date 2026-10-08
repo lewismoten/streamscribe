@@ -15,7 +15,8 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 export function itemKey(item) {
   if (!isObject(item)) return null;
   if (item.id !== undefined && item.id !== null && item.id !== '') return 'id:' + item.id;
-  if (item.transcript !== undefined && item.line !== undefined && item.index !== undefined) return `word:${item.transcript}:${item.line}:${item.index}`;
+  if (item.transcript !== undefined && item.line !== undefined && item.index !== undefined)
+    return `word:${item.transcript}:${item.line}:${item.index}`;
   if (typeof item.at === 'number') return 'at:' + item.at.toFixed(2);
   return null;
 }
@@ -30,7 +31,8 @@ function mergeValue(base, mine, theirs, path, conflicts) {
   if (same(mine, theirs)) return mine;
   if (same(mine, base)) return theirs;
   if (same(theirs, base)) return mine;
-  if (isObject(mine) && isObject(theirs)) return mergeObjects(isObject(base) ? base : {}, mine, theirs, path, conflicts);
+  if (isObject(mine) && isObject(theirs))
+    return mergeObjects(isObject(base) ? base : {}, mine, theirs, path, conflicts);
   if (Array.isArray(mine) && Array.isArray(theirs)) {
     const baseList = Array.isArray(base) ? base : [];
     const keyed = [...mine, ...theirs, ...baseList].every((item) => itemKey(item) !== null);
@@ -73,11 +75,13 @@ function mergeKeyedLists(base, mine, theirs, path, conflicts) {
     const inMine = mineMap.has(key);
     const inTheirs = theirMap.has(key);
     const inBase = baseMap.has(key);
-    if (inMine && inTheirs) result.push(mergeValue(baseMap.get(key), mineMap.get(key), theirMap.get(key), `${path}[${key}]`, conflicts));
+    if (inMine && inTheirs)
+      result.push(mergeValue(baseMap.get(key), mineMap.get(key), theirMap.get(key), `${path}[${key}]`, conflicts));
     else if (!inBase) result.push(item);
     else if (!same(item, baseMap.get(key))) result.push(item); // changed by one side, deleted by the other: kept
   }
-  if (result.length && result.every((item) => typeof item.at === 'number')) result.sort((left, right) => left.at - right.at);
+  if (result.length && result.every((item) => typeof item.at === 'number'))
+    result.sort((left, right) => left.at - right.at);
   return result;
 }
 

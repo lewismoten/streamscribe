@@ -17,7 +17,9 @@ function documentTarget(source: Source, relative: string): { recordingId: number
   if (relative === path.join('people', 'people.json')) return { recordingId: null, kind: 'people' };
   const kind = path.basename(relative, '.json');
   if (!(RECORDING_DOCUMENTS as readonly string[]).includes(kind) || !relative.endsWith('.json')) return null;
-  const row = db.prepare('SELECT id FROM recordings WHERE source_key = ? AND dir = ?').get(source.key, path.dirname(relative)) as { id: number } | undefined;
+  const row = db
+    .prepare('SELECT id FROM recordings WHERE source_key = ? AND dir = ?')
+    .get(source.key, path.dirname(relative)) as { id: number } | undefined;
   return row ? { recordingId: row.id, kind } : null;
 }
 
@@ -26,15 +28,20 @@ export async function handleFiles(request: http.IncomingMessage, response: http.
   const [, , slug, ...rest] = decodeURIComponent(url.pathname).split('/');
   const source = sourceBySlug(slug || '');
   if (!source) return sendText(response, 404, 'Not found');
-  const relative = path.normalize(rest.join('/')).replace(/^(\.\.(\/|$))+/, '').replace(/\/$/, '');
+  const relative = path
+    .normalize(rest.join('/'))
+    .replace(/^(\.\.(\/|$))+/, '')
+    .replace(/\/$/, '');
   const resolved = path.resolve(source.storageDir, relative);
-  if (resolved !== source.storageDir && !resolved.startsWith(source.storageDir + path.sep)) return sendText(response, 403, 'Forbidden');
+  if (resolved !== source.storageDir && !resolved.startsWith(source.storageDir + path.sep))
+    return sendText(response, 403, 'Forbidden');
   if (relative.split(path.sep).some((part) => part.startsWith('._'))) return sendText(response, 404, 'Not found');
 
   if (method === 'PUT') {
     const target = documentTarget(source, relative);
     const photo = /^people\/[a-z0-9][a-z0-9-]*\.png$/.test(relative);
-    if (!target && !photo) return sendText(response, 403, 'Only a recording\'s marks, the people list, and face photos can be saved');
+    if (!target && !photo)
+      return sendText(response, 403, "Only a recording's marks, the people list, and face photos can be saved");
     const body = await readBody(request, 8 * 1024 * 1024);
     if (!body) return sendText(response, 413, 'Too large');
     if (photo) {
@@ -50,10 +57,15 @@ export async function handleFiles(request: http.IncomingMessage, response: http.
     } catch {
       return sendText(response, 400, 'Not valid JSON');
     }
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return sendText(response, 400, 'Expected a JSON object');
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return sendText(response, 400, 'Expected a JSON object');
     await fs.promises.mkdir(path.dirname(resolved), { recursive: true });
     await saveDocument(db, source.key, target!.recordingId, target!.kind, value, resolved);
-    if (target!.kind === 'meeting-info') db.prepare('UPDATE recordings SET title = ? WHERE id = ?').run(String((value as { name?: string }).name || ''), target!.recordingId);
+    if (target!.kind === 'meeting-info')
+      db.prepare('UPDATE recordings SET title = ? WHERE id = ?').run(
+        String((value as { name?: string }).name || ''),
+        target!.recordingId
+      );
     // Corrected words go into the searchable transcript on the next scan.
     if (target!.kind === 'word-edits') {
       db.prepare('UPDATE recordings SET transcript_mtime = 0 WHERE id = ?').run(target!.recordingId);

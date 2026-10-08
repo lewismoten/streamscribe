@@ -1,7 +1,8 @@
 <?php
 // Loads an export (Settings → Export in the web app) into this hub: every collection, including what recorders made,
-// which an editor key can't write. Records the hub already has are left as they are. Pictures aren't in the export:
-// copy the old hub's media/ folder too (files are named by their hash, so they land where the records expect).
+// which an editor key can't write. Records the hub already has are left as they are. Files aren't in the export: copy
+// the old hub's media/ folder (published files) and its private folder (private_dir: meetings' pictures, audio, and
+// video) too, keeping their paths, so they land where the records expect.
 //   php tools/import.php export.json [path/to/config.php]
 require __DIR__ . '/../lib/db.php';
 require __DIR__ . '/../lib/collections.php';

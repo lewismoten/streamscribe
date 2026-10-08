@@ -5,15 +5,17 @@
 On the server, everything goes in one folder (`DEPLOY_PATH`):
 
 ```
-DEPLOY_PATH/            the web app: index.html, assets/       → https://example.com/meetings/
-DEPLOY_PATH/hub/        the hub: api.php, lib/, tools/         → https://example.com/meetings/hub/api.php
-DEPLOY_PATH/hub/config.php, data/, media/                      made on the server; never touched by deploys
+DEPLOY_PATH/              the web app: index.html, assets/         → https://example.com/meetings/
+DEPLOY_PATH/hub/          the hub: api.php, lib/, tools/           → https://example.com/meetings/hub/api.php
+DEPLOY_PATH/hub/agent/    the agents' code, for installing agents (downloadable only with a token or key)
+DEPLOY_PATH/hub/config.php, data/, media/                        made on the server; never touched by deploys
+<database folder>/private/  meetings' files (private_dir in config.php); outside the web folder
 ```
 
 The web app there is built to use the hub beside it, so visitors just open the site.
 
 - **Only changed files are sent:** rsync compares checksums.
-- **Old files are removed:** files gone from the repository are deleted on the server, except `config.php`, `data/` and `media/`.
+- **Old files are removed:** files gone from the repository are deleted on the server, except the hub's `config.php`, `data/` and `media/`, and the host's own files in the site folder (`.htaccess`, `.user.ini`, `php.ini`, `.well-known/`, `cgi-bin/`). The script adds its caching rules to the site's `.htaccess` in a marked block of its own.
 - **The database is updated:** after copying, the script runs `php hub/tools/migrate.php` on the server, which brings the database up to date.
 
 GitHub Pages can publish the same web app too. It keeps its data in each visitor's browser (IndexedDB) and, if you give it the hub's address, syncs with your server. See GitHub Pages below.
@@ -35,7 +37,8 @@ You need SSH access, PHP 8 with `pdo_sqlite` on the command line and the web ser
    In `config.php`:
    - **`database`:** put the database outside the web folder if you can, such as `'/home/you/streamscribe-data/hub.sqlite'`.
    - **`allowed_origins`:** add your GitHub Pages address (`https://YOUR-NAME.github.io`) if you'll use Pages. The site on this server needs nothing here.
-   - **`keys`:** add one per recorder: `php tools/new-key.php recorder "Office Mac"`.
+   - **`keys`:** only for recorders you set up by hand (`php tools/new-key.php recorder "Office Mac"`). Agents installed from the Agents page get their own keys.
+
 3. **Make your admin account:**
 
    ```bash
@@ -43,6 +46,7 @@ You need SSH access, PHP 8 with `pdo_sqlite` on the command line and the web ser
    ```
 
    It asks for a password. Run it again any time to reset the password.
+
 4. **Check the hub:** open `https://example.com/meetings/hub/api.php/info`. It should answer with the hub's name.
 
 ## On your machine
@@ -55,6 +59,7 @@ You need SSH access, PHP 8 with `pdo_sqlite` on the command line and the web ser
    ```
 
    If `ssh-copy-id` isn't available, add the `.pub` file's line to `~/.ssh/authorized_keys` on the server.
+
 2. **Check that it works:** `ssh -i ~/.ssh/streamscribe_deploy you@example.com 'php -v && rsync --version'`.
 3. **To deploy from your machine**, make `deploy.local.env` at the repository root. Git ignores it.
 
@@ -71,6 +76,7 @@ You need SSH access, PHP 8 with `pdo_sqlite` on the command line and the web ser
    Then:
    - `npm run deploy:hub -- --dry-run` lists what would change.
    - `npm run deploy:hub` deploys.
+   - `HUB_URL=…` builds the site for a hub somewhere else (default `hub/api.php`, beside it); `SKIP_BUILD=1` sends what was built last.
 
    To try the hub on your own machine first: copy `hub-php/config.example.php` to `hub-php/config.php` (Git ignores it), run `npm run hub:dev`, and use `http://127.0.0.1:8080/api.php` as the hub address.
 
@@ -80,9 +86,9 @@ Under the repository's **Settings → Environments**, make an environment named 
 
 **Secrets** (hidden):
 
-| Name | Value |
-| --- | --- |
-| `DEPLOY_SSH_KEY` | the private key: the whole of `~/.ssh/streamscribe_deploy`, including the BEGIN and END lines |
+| Name                 | Value                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `DEPLOY_SSH_KEY`     | the private key: the whole of `~/.ssh/streamscribe_deploy`, including the BEGIN and END lines         |
 | `DEPLOY_KNOWN_HOSTS` | the server's host keys, from `ssh-keyscan -p 22 example.com`, so the deploy can tell it's your server |
 
 ```bash
@@ -92,17 +98,17 @@ ssh-keyscan -p 22 example.com | gh secret set DEPLOY_KNOWN_HOSTS
 
 **Variables** (visible):
 
-| Name | Value | Needed |
-| --- | --- | --- |
-| `DEPLOY_HOST` | `example.com` | yes; the deploy is skipped until it's set |
-| `DEPLOY_USER` | your SSH user | yes |
-| `DEPLOY_PATH` | `public_html/meetings` (relative to your home folder, or absolute) | yes |
-| `DEPLOY_PORT` | SSH port | if it isn't 22 |
-| `SITE_BASE` | the site's path in the browser, such as `/meetings/` | if it isn't `/` |
-| `SITE_URL` | the site's full address, such as `https://streamscribe.lewismoten.com` | for the preview picture when links are shared |
-| `REMOTE_PHP` | the PHP command on the server, such as `php8.3` or `/usr/local/bin/php` | if plain `php` isn't PHP 8 |
-| `PAGES_HUB_URL` | `https://example.com/meetings/hub/api.php` | for GitHub Pages, to sync with your hub |
-| `PAGES_ON_PUSH` | `true` | to publish GitHub Pages on every push (otherwise run it by hand) |
+| Name            | Value                                                                   | Needed                                                           |
+| --------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `DEPLOY_HOST`   | `example.com`                                                           | yes; the deploy is skipped until it's set                        |
+| `DEPLOY_USER`   | your SSH user                                                           | yes                                                              |
+| `DEPLOY_PATH`   | `public_html/meetings` (relative to your home folder, or absolute)      | yes                                                              |
+| `DEPLOY_PORT`   | SSH port                                                                | if it isn't 22                                                   |
+| `SITE_BASE`     | the site's path in the browser, such as `/meetings/`                    | if it isn't `/`                                                  |
+| `SITE_URL`      | the site's full address, such as `https://streamscribe.lewismoten.com`  | for the preview picture when links are shared                    |
+| `REMOTE_PHP`    | the PHP command on the server, such as `php8.3` or `/usr/local/bin/php` | if plain `php` isn't PHP 8                                       |
+| `PAGES_HUB_URL` | `https://example.com/meetings/hub/api.php`                              | for GitHub Pages, to sync with your hub                          |
+| `PAGES_ON_PUSH` | `true`                                                                  | to publish GitHub Pages on every push (otherwise run it by hand) |
 
 ```bash
 gh variable set DEPLOY_HOST --body example.com
@@ -124,9 +130,11 @@ Meetings a recorder records reach the hub by themselves. For ones already in you
    ```js
    recorder: { hubUrl: 'https://example.com/hub/api.php', key: 'ss_…' }
    ```
+
 3. **Send:** `npm run publish-library -- --dry-run` lists what would go, and `npm run publish-library` sends it.
 
 Run it again after transcribing or marking more. Only what changed is sent, and pictures already on the hub aren't uploaded again.
+
 - `--recording <id>` sends one recording, by its id in the library database.
 - `--all` also sends captures already joined into a full meeting.
 

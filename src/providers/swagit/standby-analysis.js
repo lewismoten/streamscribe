@@ -41,23 +41,27 @@ export async function analyzeWorkItems(workItems, report, concurrency) {
     const remainingSeconds = rate > 0 ? (workItems.length - classified) / rate : 0;
     const dropped = report.findings.filter((finding) => finding?.candidate).length;
     writeProgress(
-      `[scan] ${classified.toLocaleString('en-US')}/${workItems.length.toLocaleString('en-US')}`
-        + ` | drop ${dropped.toLocaleString('en-US')}`
-        + ` | checked ${report.inspectedSegmentCount.toLocaleString('en-US')}`
-        + ` | ETA ${Math.ceil(remainingSeconds / 60)}m`,
+      `[scan] ${classified.toLocaleString('en-US')}/${workItems.length.toLocaleString('en-US')}` +
+        ` | drop ${dropped.toLocaleString('en-US')}` +
+        ` | checked ${report.inspectedSegmentCount.toLocaleString('en-US')}` +
+        ` | ETA ${Math.ceil(remainingSeconds / 60)}m`,
       final
     );
   };
-  writeProgress(`[scan] ${workItems.length.toLocaleString('en-US')} segments | ${concurrency} workers | blocks of ${inferenceBlockSize}`);
+  writeProgress(
+    `[scan] ${workItems.length.toLocaleString('en-US')} segments | ${concurrency} workers | blocks of ${inferenceBlockSize}`
+  );
   const interval = setInterval(progress, progressIntervalMs);
   try {
-    await Promise.all(Array.from({ length: Math.min(concurrency, blocks.length) }, async () => {
-      while (nextBlockIndex < blocks.length) {
-        const block = blocks[nextBlockIndex];
-        nextBlockIndex += 1;
-        await classifyInferenceBlock(block, report);
-      }
-    }));
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, blocks.length) }, async () => {
+        while (nextBlockIndex < blocks.length) {
+          const block = blocks[nextBlockIndex];
+          nextBlockIndex += 1;
+          await classifyInferenceBlock(block, report);
+        }
+      })
+    );
   } finally {
     clearInterval(interval);
     progress(true);
@@ -166,9 +170,11 @@ export async function analyzeSegment(segmentPath, entry) {
 
 export async function readMaxVolumeDb(filePath) {
   try {
-    const { stderr } = await execFileAsync(TOOLS.ffmpeg, [
-      '-hide_banner', '-nostats', '-i', filePath, '-map', '0:a:0', '-af', 'volumedetect', '-f', 'null', '-'
-    ], { maxBuffer: 1024 * 1024 });
+    const { stderr } = await execFileAsync(
+      TOOLS.ffmpeg,
+      ['-hide_banner', '-nostats', '-i', filePath, '-map', '0:a:0', '-af', 'volumedetect', '-f', 'null', '-'],
+      { maxBuffer: 1024 * 1024 }
+    );
     const match = String(stderr || '').match(/max_volume:\s*(-?(?:\d+(?:\.\d+)?)|inf)\s*dB/i);
     if (!match) return null;
     return /^-?inf$/i.test(match[1]) ? -Infinity : Number(match[1]);
@@ -182,10 +188,23 @@ export async function analyzeSlideSignature(filePath, durationSeconds) {
   // Rail points avoid the clock, weather and seal; the outer points establish that
   // the seal is inside the black rail rather than merely beside one.
   const railPoints = [
-    [0.02, 0.02], [0.20, 0.02], [0.02, 0.98], [0.20, 0.98]
+    [0.02, 0.02],
+    [0.2, 0.02],
+    [0.02, 0.98],
+    [0.2, 0.98]
   ];
-  const outsideSealPoints = [[0.015, 0.50], [0.215, 0.50], [0.12, 0.30], [0.12, 0.70]];
-  const insideSealPoints = [[0.12, 0.45], [0.12, 0.55], [0.075, 0.50], [0.165, 0.50]];
+  const outsideSealPoints = [
+    [0.015, 0.5],
+    [0.215, 0.5],
+    [0.12, 0.3],
+    [0.12, 0.7]
+  ];
+  const insideSealPoints = [
+    [0.12, 0.45],
+    [0.12, 0.55],
+    [0.075, 0.5],
+    [0.165, 0.5]
+  ];
   const blackThreshold = 60;
   const sealThreshold = 65;
   const width = 320;
@@ -193,17 +212,29 @@ export async function analyzeSlideSignature(filePath, durationSeconds) {
   const frameSize = width * height * 3;
   try {
     const duration = Math.max(1, Number(durationSeconds || 10));
-    const { stdout } = await execFileAsync(TOOLS.ffmpeg, [
-      '-hide_banner', '-loglevel', 'error', '-i', filePath,
-      '-vf', `fps=3/${duration},scale=${width}:${height}:flags=area,format=rgb24`, '-f', 'rawvideo', '-'
-    ], { encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 });
+    const { stdout } = await execFileAsync(
+      TOOLS.ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-i',
+        filePath,
+        '-vf',
+        `fps=3/${duration},scale=${width}:${height}:flags=area,format=rgb24`,
+        '-f',
+        'rawvideo',
+        '-'
+      ],
+      { encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 }
+    );
     const data = Buffer.from(stdout || '');
     const samples = [];
     for (let offset = 0; offset + frameSize <= data.length && samples.length < 3; offset += frameSize) {
       const luminance = ([xRatio, yRatio]) => {
         const x = Math.min(width - 1, Math.max(0, Math.round(xRatio * (width - 1))));
         const y = Math.min(height - 1, Math.max(0, Math.round(yRatio * (height - 1))));
-        const pixel = offset + ((y * width + x) * 3);
+        const pixel = offset + (y * width + x) * 3;
         return Math.round((data[pixel] + data[pixel + 1] + data[pixel + 2]) / 3);
       };
       const blackValues = [...railPoints, ...outsideSealPoints].map(luminance);
@@ -214,7 +245,8 @@ export async function analyzeSlideSignature(filePath, durationSeconds) {
         sealPointValues: sealValues,
         blackPointCount: blackValues.filter((value) => value < blackThreshold).length,
         nonBlackSealPointCount: sealValues.filter((value) => value >= sealThreshold).length,
-        matches: blackValues.every((value) => value < blackThreshold) && sealValues.every((value) => value >= sealThreshold)
+        matches:
+          blackValues.every((value) => value < blackThreshold) && sealValues.every((value) => value >= sealThreshold)
       });
     }
     return { samples, allSamplesMatch: samples.length === 3 && samples.every((sample) => sample.matches) };

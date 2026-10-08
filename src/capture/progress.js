@@ -8,10 +8,10 @@ import { initializeSlideShow } from './segments.js';
 export function initializeCaptureMetrics(capture) {
   capture.capturedDurationSeconds = Number(capture.capturedDurationSeconds || 0);
   capture.lostDurationSeconds = Number(capture.lostDurationSeconds || 0);
-  capture.videoPositionSeconds = Number(capture.videoPositionSeconds || (capture.capturedDurationSeconds + capture.lostDurationSeconds));
-  capture.lastSegmentSequence = Number.isFinite(capture.lastSegmentSequence)
-    ? capture.lastSegmentSequence
-    : null;
+  capture.videoPositionSeconds = Number(
+    capture.videoPositionSeconds || capture.capturedDurationSeconds + capture.lostDurationSeconds
+  );
+  capture.lastSegmentSequence = Number.isFinite(capture.lastSegmentSequence) ? capture.lastSegmentSequence : null;
   capture.lastObservedSegmentSequence = Number.isFinite(capture.lastObservedSegmentSequence)
     ? capture.lastObservedSegmentSequence
     : capture.lastSegmentSequence;
@@ -28,8 +28,8 @@ export function initializeCaptureMetrics(capture) {
     capture.currentStream.capturedDurationSeconds = Number(capture.currentStream.capturedDurationSeconds || 0);
     capture.currentStream.lostDurationSeconds = Number(capture.currentStream.lostDurationSeconds || 0);
     capture.currentStream.videoPositionSeconds = Number(
-      capture.currentStream.videoPositionSeconds
-      || (capture.currentStream.capturedDurationSeconds + capture.currentStream.lostDurationSeconds)
+      capture.currentStream.videoPositionSeconds ||
+        capture.currentStream.capturedDurationSeconds + capture.currentStream.lostDurationSeconds
     );
     capture.currentStream.lastSegmentSequence = Number.isFinite(capture.currentStream.lastSegmentSequence)
       ? capture.currentStream.lastSegmentSequence
@@ -48,14 +48,16 @@ export function reportCaptureProgress(capture, status) {
   const prefix = `[live ${formatCaptureLabel(capture)}]`;
   const stream = capture.currentStream || capture;
   if (status && status !== 'capturing') {
-    console.log(`${prefix} ${status} | pos ${formatDuration(stream.videoPositionSeconds)} | ${formatEasternTime(stream.lastSegmentAt)}`);
+    console.log(
+      `${prefix} ${status} | pos ${formatDuration(stream.videoPositionSeconds)} | ${formatEasternTime(stream.lastSegmentAt)}`
+    );
     return;
   }
   console.log(
-    `${prefix} cap ${formatDuration(stream.capturedDurationSeconds)}`
-      + ` | miss ${formatDuration(stream.lostDurationSeconds)}`
-      + ` | pos ${formatDuration(stream.videoPositionSeconds)}`
-      + ` | ${formatEasternTime(stream.lastSegmentAt)}`
+    `${prefix} cap ${formatDuration(stream.capturedDurationSeconds)}` +
+      ` | miss ${formatDuration(stream.lostDurationSeconds)}` +
+      ` | pos ${formatDuration(stream.videoPositionSeconds)}` +
+      ` | ${formatEasternTime(stream.lastSegmentAt)}`
   );
 }
 
@@ -79,7 +81,9 @@ export function reportCaptureError(capture) {
 }
 
 export function isCaptureStale(capture, staleMs) {
-  const reference = String(capture.lastObservedAt || capture.lastSegmentAt || capture.lastSeenLiveAt || capture.firstSeenAt || '').trim();
+  const reference = String(
+    capture.lastObservedAt || capture.lastSegmentAt || capture.lastSeenLiveAt || capture.firstSeenAt || ''
+  ).trim();
   if (!reference) {
     return false;
   }

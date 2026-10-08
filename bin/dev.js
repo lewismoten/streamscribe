@@ -7,7 +7,10 @@ import { fileURLToPath } from 'url';
 //   npm run dev
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const children = [
-  spawn(process.execPath, ['--watch-path=server', '--watch-path=src', 'server/index.ts'], { cwd: repoRoot, stdio: 'inherit' }),
+  spawn(process.execPath, ['--watch-path=server', '--watch-path=src', 'server/index.ts'], {
+    cwd: repoRoot,
+    stdio: 'inherit'
+  }),
   spawn(path.join(repoRoot, 'node_modules', '.bin', 'vite'), [], { cwd: repoRoot, stdio: 'inherit' })
 ];
 const stop = () => {
@@ -16,4 +19,7 @@ const stop = () => {
 };
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
-for (const child of children) child.on('exit', (code) => { if (code) stop(); });
+for (const child of children)
+  child.on('exit', (code) => {
+    if (code) stop();
+  });

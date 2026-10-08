@@ -17,7 +17,9 @@ export async function carrySpeakers(meetingDir, pieces, previousPieces, timeline
   const editedOnMeetingPage = existing && existing.updatedAt !== existing.importedAt;
   if (existing && editedOnMeetingPage && !reimport) {
     if (timelineChanged && previousPieces) {
-      const turns = existing.turns.map((turn) => ({ ...turn, at: remap(previousPieces, pieces, turn.at) })).filter((turn) => turn.at !== null);
+      const turns = existing.turns
+        .map((turn) => ({ ...turn, at: remap(previousPieces, pieces, turn.at) }))
+        .filter((turn) => turn.at !== null);
       await writeJson(target, { ...existing, updatedAt: new Date().toISOString(), turns });
     }
     const newer = liveSessions.filter((dir) => {
@@ -25,7 +27,9 @@ export async function carrySpeakers(meetingDir, pieces, previousPieces, timeline
       return fs.existsSync(file) && fs.statSync(file).mtimeMs > Date.parse(existing.importedAt || 0);
     });
     if (newer.length > 0) {
-      console.log(`Speaker marks changed in ${newer.map((dir) => path.basename(dir)).join(', ')} after they were brought into the meeting; the meeting keeps its own. Use --reimport-speakers to replace the meeting's marks with the sessions'.`);
+      console.log(
+        `Speaker marks changed in ${newer.map((dir) => path.basename(dir)).join(', ')} after they were brought into the meeting; the meeting keeps its own. Use --reimport-speakers to replace the meeting's marks with the sessions'.`
+      );
     }
     console.log(`Speaker marks: kept the meeting's ${existing.turns.length}`);
     return;
@@ -45,7 +49,9 @@ export async function carrySpeakers(meetingDir, pieces, previousPieces, timeline
     }
   }
   turns.sort((left, right) => left.at - right.at);
-  const deduped = turns.filter((turn, index) => turn.speakers.join(',') !== (index ? turns[index - 1].speakers.join(',') : ''));
+  const deduped = turns.filter(
+    (turn, index) => turn.speakers.join(',') !== (index ? turns[index - 1].speakers.join(',') : '')
+  );
   const now = new Date().toISOString();
   await writeJson(target, {
     updatedAt: now,
@@ -62,7 +68,9 @@ export async function carryEdits(meetingDir, pieces, previousPieces, timelineCha
   const existing = await loadJson(target, null);
   if (existing) {
     if (timelineChanged && previousPieces) {
-      const moved = Object.entries(existing).map(([key, text]) => [remap(previousPieces, pieces, Number(key)), text]).filter(([key]) => key !== null);
+      const moved = Object.entries(existing)
+        .map(([key, text]) => [remap(previousPieces, pieces, Number(key)), text])
+        .filter(([key]) => key !== null);
       await writeJson(target, Object.fromEntries(moved.map(([key, text]) => [String(key), text])));
     }
     return;
@@ -87,12 +95,16 @@ export async function carryRetranscriptions(meetingDir, pieces, previousPieces, 
   const existing = await loadJson(target, null);
   if (!existing?.portions?.length || !timelineChanged || !previousPieces) return;
   const move = (position) => remap(previousPieces, pieces, position);
-  const portions = existing.portions.map((portion) => ({
-    ...portion,
-    from: move(portion.from),
-    to: move(portion.to),
-    lines: portion.lines.map((line) => ({ ...line, startSeconds: move(line.startSeconds), endSeconds: move(line.endSeconds) })).filter((line) => line.startSeconds !== null)
-  })).filter((portion) => portion.from !== null && portion.to !== null);
+  const portions = existing.portions
+    .map((portion) => ({
+      ...portion,
+      from: move(portion.from),
+      to: move(portion.to),
+      lines: portion.lines
+        .map((line) => ({ ...line, startSeconds: move(line.startSeconds), endSeconds: move(line.endSeconds) }))
+        .filter((line) => line.startSeconds !== null)
+    }))
+    .filter((portion) => portion.from !== null && portion.to !== null);
   await writeJson(target, { ...existing, portions });
 }
 
@@ -101,7 +113,12 @@ export async function carryBoosts(meetingDir, pieces, previousPieces, timelineCh
   const target = path.join(meetingDir, 'audio-boosts.json');
   const existing = await loadJson(target, null);
   if (!existing?.boosts?.length || !timelineChanged || !previousPieces) return;
-  const boosts = existing.boosts.map((item) => ({ ...item, from: remap(previousPieces, pieces, item.from), to: remap(previousPieces, pieces, item.to) }))
+  const boosts = existing.boosts
+    .map((item) => ({
+      ...item,
+      from: remap(previousPieces, pieces, item.from),
+      to: remap(previousPieces, pieces, item.to)
+    }))
     .filter((item) => item.from !== null && item.to !== null && item.to > item.from);
   await writeJson(target, { ...existing, boosts });
 }
@@ -113,7 +130,11 @@ export async function carryName(meetingDir, sessionDirs) {
   for (const sessionDir of sessionDirs) {
     const info = await loadJson(path.join(sessionDir, 'meeting-info.json'), null);
     if (info?.name) {
-      await writeJson(target, { name: info.name, updatedAt: new Date().toISOString(), from: path.basename(sessionDir) });
+      await writeJson(target, {
+        name: info.name,
+        updatedAt: new Date().toISOString(),
+        from: path.basename(sessionDir)
+      });
       return;
     }
   }
@@ -126,7 +147,9 @@ export async function carryAgenda(meetingDir, pieces, previousPieces, timelineCh
   const existing = await loadJson(target, null);
   if (existing && !existing.importedFrom) {
     if (timelineChanged && previousPieces) {
-      const items = existing.items.map((item) => ({ ...item, at: remap(previousPieces, pieces, item.at) })).filter((item) => item.at !== null);
+      const items = existing.items
+        .map((item) => ({ ...item, at: remap(previousPieces, pieces, item.at) }))
+        .filter((item) => item.at !== null);
       await writeJson(target, { ...existing, items });
     }
     return;
@@ -140,18 +163,29 @@ export async function carryAgenda(meetingDir, pieces, previousPieces, timelineCh
     }
   }
   if (items.length > 0) {
-    await writeJson(target, { updatedAt: new Date().toISOString(), importedFrom: sessionDirs.map((dir) => path.basename(dir)), items: items.sort((left, right) => left.at - right.at) });
+    await writeJson(target, {
+      updatedAt: new Date().toISOString(),
+      importedFrom: sessionDirs.map((dir) => path.basename(dir)),
+      items: items.sort((left, right) => left.at - right.at)
+    });
     console.log(`Agenda: brought ${items.length} item${items.length === 1 ? '' : 's'} in from the sessions`);
   }
 }
 
 // A vote with every time in it moved: when it opened, each roll-call change, and the motion and second.
 export function moveVote(vote, move) {
-  const movePerson = (entry) => (entry ? { ...entry, at: entry.at === null || entry.at === undefined ? null : move(entry.at) } : entry);
+  const movePerson = (entry) =>
+    entry ? { ...entry, at: entry.at === null || entry.at === undefined ? null : move(entry.at) } : entry;
   return {
     ...vote,
     at: move(vote.at),
-    ...(Array.isArray(vote.changes) ? { changes: vote.changes.map((change) => ({ ...change, at: move(change.at) })).filter((change) => change.at !== null) } : {}),
+    ...(Array.isArray(vote.changes)
+      ? {
+          changes: vote.changes
+            .map((change) => ({ ...change, at: move(change.at) }))
+            .filter((change) => change.at !== null)
+        }
+      : {}),
     movedBy: movePerson(vote.movedBy),
     secondedBy: movePerson(vote.secondedBy)
   };
@@ -162,11 +196,12 @@ export function moveVote(vote, move) {
 export async function carryVotes(meetingDir, pieces, previousPieces, timelineChanged) {
   const target = path.join(meetingDir, 'votes.json');
   const existing = await loadJson(target, null);
-  const moveMembers = (members, move) => members.map((member) => ({
-    ...member,
-    leftAt: member.leftAt === null || member.leftAt === undefined ? null : move(member.leftAt),
-    arrivedAt: member.arrivedAt === null || member.arrivedAt === undefined ? null : move(member.arrivedAt)
-  }));
+  const moveMembers = (members, move) =>
+    members.map((member) => ({
+      ...member,
+      leftAt: member.leftAt === null || member.leftAt === undefined ? null : move(member.leftAt),
+      arrivedAt: member.arrivedAt === null || member.arrivedAt === undefined ? null : move(member.arrivedAt)
+    }));
   if (existing && !existing.importedFrom) {
     if (timelineChanged && previousPieces) {
       const move = (position) => remap(previousPieces, pieces, position);
@@ -186,7 +221,12 @@ export async function carryVotes(meetingDir, pieces, previousPieces, timelineCha
     for (const member of moveMembers(data.members || [], move)) {
       const known = members.get(member.id);
       // Across sessions: the latest departure and earliest arrival win.
-      members.set(member.id, known ? { ...known, leftAt: member.leftAt ?? known.leftAt, arrivedAt: known.arrivedAt ?? member.arrivedAt } : member);
+      members.set(
+        member.id,
+        known
+          ? { ...known, leftAt: member.leftAt ?? known.leftAt, arrivedAt: known.arrivedAt ?? member.arrivedAt }
+          : member
+      );
     }
     for (const vote of data.votes || []) {
       const moved = moveVote(vote, move);
@@ -196,7 +236,15 @@ export async function carryVotes(meetingDir, pieces, previousPieces, timelineCha
     rule.needed = rule.needed ?? data.needed ?? null;
   }
   if (members.size > 0 || votes.length > 0) {
-    await writeJson(target, { updatedAt: new Date().toISOString(), importedFrom: sessionDirs.map((dir) => path.basename(dir)), ...rule, members: [...members.values()], votes: votes.sort((left, right) => left.at - right.at) });
-    console.log(`Votes: brought ${votes.length} vote${votes.length === 1 ? '' : 's'} and ${members.size} voting member${members.size === 1 ? '' : 's'} in from the sessions`);
+    await writeJson(target, {
+      updatedAt: new Date().toISOString(),
+      importedFrom: sessionDirs.map((dir) => path.basename(dir)),
+      ...rule,
+      members: [...members.values()],
+      votes: votes.sort((left, right) => left.at - right.at)
+    });
+    console.log(
+      `Votes: brought ${votes.length} vote${votes.length === 1 ? '' : 's'} and ${members.size} voting member${members.size === 1 ? '' : 's'} in from the sessions`
+    );
   }
 }

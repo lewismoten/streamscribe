@@ -5,7 +5,14 @@ import { mkdtemp, readFile, rm } from 'fs/promises';
 import { TOOLS, TRANSCRIPTION } from '../config/runtime-config.js';
 import { runCommand } from '../util/process.js';
 import { applyCorrections, formatPosition, loadCorrections, writeTranscriptFiles } from './transcript.js';
-import { assertWhisperModels, buildVocabularyPrompt, collapseRepeats, longestRepeat, maxRepeatedLines, runWhisper } from './whisper.js';
+import {
+  assertWhisperModels,
+  buildVocabularyPrompt,
+  collapseRepeats,
+  longestRepeat,
+  maxRepeatedLines,
+  runWhisper
+} from './whisper.js';
 
 // Transcribes any video or audio file (or a time range of it) locally with whisper.cpp, such as an archived
 // meeting MP4 or the pieces cut by backfill-from-archive.
@@ -28,13 +35,27 @@ async function main() {
   await assertWhisperModels(options);
   options.prompt = buildVocabularyPrompt();
 
-  const mediaDuration = Number.parseFloat(await runCommand(TOOLS.ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', inputPath]));
+  const mediaDuration = Number.parseFloat(
+    await runCommand(TOOLS.ffprobe, [
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
+      inputPath
+    ])
+  );
   const from = Math.max(0, options.from ?? 0);
   const to = Math.min(mediaDuration, options.to ?? mediaDuration);
   if (!(to > from)) {
-    throw new Error(`Nothing to transcribe between ${formatPosition(from)} and ${formatPosition(to)} (the file is ${formatPosition(mediaDuration)} long)`);
+    throw new Error(
+      `Nothing to transcribe between ${formatPosition(from)} and ${formatPosition(to)} (the file is ${formatPosition(mediaDuration)} long)`
+    );
   }
-  console.log(`Transcribing ${path.basename(inputPath)} ${formatPosition(from)} to ${formatPosition(to)} (${formatPosition(to - from)}), ${options.quality} quality`);
+  console.log(
+    `Transcribing ${path.basename(inputPath)} ${formatPosition(from)} to ${formatPosition(to)} (${formatPosition(to - from)}), ${options.quality} quality`
+  );
 
   const started = Date.now();
   const lines = [];
@@ -46,9 +67,24 @@ async function main() {
       console.log(`chunk ${index} of ${total} (${formatPosition(chunkStart)}-${formatPosition(chunkEnd)})`);
       const wavPath = path.join(tempDir, `chunk-${index}.wav`);
       await runCommand(TOOLS.ffmpeg, [
-        '-hide_banner', '-loglevel', 'error', '-y',
-        '-ss', chunkStart.toFixed(3), '-to', chunkEnd.toFixed(3), '-i', inputPath,
-        '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wavPath
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-ss',
+        chunkStart.toFixed(3),
+        '-to',
+        chunkEnd.toFixed(3),
+        '-i',
+        inputPath,
+        '-vn',
+        '-ac',
+        '1',
+        '-ar',
+        '16000',
+        '-c:a',
+        'pcm_s16le',
+        wavPath
       ]);
       let chunkLines = [];
       for (const temperature of [0, 0.4]) {
@@ -66,7 +102,11 @@ async function main() {
         if (longestRepeat(chunkLines) < maxRepeatedLines) {
           break;
         }
-        console.log(temperature === 0 ? '  repeated lines detected; retrying at a higher temperature' : '  still repeating; collapsing repeated lines');
+        console.log(
+          temperature === 0
+            ? '  repeated lines detected; retrying at a higher temperature'
+            : '  still repeating; collapsing repeated lines'
+        );
         if (temperature > 0) {
           chunkLines = collapseRepeats(chunkLines);
         }
@@ -78,18 +118,30 @@ async function main() {
   }
 
   const corrected = applyCorrections(lines, await loadCorrections());
-  const outputDir = options.outputDir ? path.resolve(options.outputDir) : path.join(path.dirname(inputPath), 'transcripts');
-  const range = options.from !== null || options.to !== null ? `-${formatPosition(from).replace(/:/g, '-')}-to-${formatPosition(to).replace(/:/g, '-')}` : '';
+  const outputDir = options.outputDir
+    ? path.resolve(options.outputDir)
+    : path.join(path.dirname(inputPath), 'transcripts');
+  const range =
+    options.from !== null || options.to !== null
+      ? `-${formatPosition(from).replace(/:/g, '-')}-to-${formatPosition(to).replace(/:/g, '-')}`
+      : '';
   const name = `${path.basename(inputPath, path.extname(inputPath))}${range}-${options.quality}`;
-  const base = await writeTranscriptFiles(outputDir, corrected, {
-    input: inputPath,
-    range: { from, to },
-    quality: options.quality,
-    model: path.basename(options.model),
-    beamSize: options.beamSize,
-    createdAt: new Date().toISOString()
-  }, { keepHistory: false, baseName: name });
-  console.log(`Wrote ${corrected.length} lines to ${base}.{txt,srt,json} in ${((Date.now() - started) / 1000).toFixed(0)}s`);
+  const base = await writeTranscriptFiles(
+    outputDir,
+    corrected,
+    {
+      input: inputPath,
+      range: { from, to },
+      quality: options.quality,
+      model: path.basename(options.model),
+      beamSize: options.beamSize,
+      createdAt: new Date().toISOString()
+    },
+    { keepHistory: false, baseName: name }
+  );
+  console.log(
+    `Wrote ${corrected.length} lines to ${base}.{txt,srt,json} in ${((Date.now() - started) / 1000).toFixed(0)}s`
+  );
 }
 
 function parseArgs(argv) {
@@ -115,7 +167,9 @@ function parseArgs(argv) {
     else throw new Error(`Unknown option ${arg}`);
   }
   if (!options.input) {
-    throw new Error('Usage: npm run transcribe-media -- --input <file> [--from HH:MM:SS --to HH:MM:SS] [--quality quick|thorough]');
+    throw new Error(
+      'Usage: npm run transcribe-media -- --input <file> [--from HH:MM:SS --to HH:MM:SS] [--quality quick|thorough]'
+    );
   }
   if (!['quick', 'thorough'].includes(options.quality)) {
     throw new Error('--quality must be quick or thorough');
@@ -125,15 +179,18 @@ function parseArgs(argv) {
 }
 
 function parsePosition(value) {
-  const parts = String(value || '').split(':').map(Number);
+  const parts = String(value || '')
+    .split(':')
+    .map(Number);
   if (parts.some((part) => !Number.isFinite(part))) {
     throw new Error(`Invalid time "${value}" (use HH:MM:SS, MM:SS, or seconds)`);
   }
-  return parts.reduce((total, part) => (total * 60) + part, 0);
+  return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
 // Started by bin/transcribe-media.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

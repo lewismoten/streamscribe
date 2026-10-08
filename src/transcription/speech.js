@@ -21,7 +21,7 @@ export const silenceSeconds = 1.5;
 // the chunk, length], ...]. Speech is found by the same voice detection whisper.cpp uses (Silero, through
 // whisper-vad-speech-segments), or by loudness when that isn't available.
 export async function keepSpeechOnly(wavPath, tempDir, vadModel) {
-  const spoken = (vadModel && await detectSpeech(wavPath, vadModel)) || await speechByLoudness(wavPath);
+  const spoken = (vadModel && (await detectSpeech(wavPath, vadModel))) || (await speechByLoudness(wavPath));
   const duration = await audioDuration(wavPath);
   // Pad each stretch of speech, and join stretches that are close.
   const padded = [];
@@ -32,45 +32,93 @@ export async function keepSpeechOnly(wavPath, tempDir, vadModel) {
   }
   const pieces = [];
   let kept = 0;
-  for (const [from, to] of padded.filter(([from, to]) => to - from >= 0.2)) {
+  for (const [from, to] of padded.filter(([pieceFrom, pieceTo]) => pieceTo - pieceFrom >= 0.2)) {
     pieces.push([kept, from, to - from]);
     kept += to - from;
   }
   if (pieces.length === 0) return { pieces, wavPath: '' };
   const speechPath = path.join(tempDir, 'speech.wav');
-  const expression = pieces.map(([, from, length]) => `between(t,${from.toFixed(3)},${(from + length).toFixed(3)})`).join('+');
+  const expression = pieces
+    .map(([, from, length]) => `between(t,${from.toFixed(3)},${(from + length).toFixed(3)})`)
+    .join('+');
   const scriptPath = path.join(tempDir, 'speech-filter.txt');
   await writeFile(scriptPath, `aselect='${expression}',asetpts=N/SR/TB`);
-  await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', wavPath, '-/af', scriptPath, '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', speechPath]);
+  await runCommand(TOOLS.ffmpeg, [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    wavPath,
+    '-/af',
+    scriptPath,
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-c:a',
+    'pcm_s16le',
+    speechPath
+  ]);
   return { pieces, wavPath: speechPath };
 }
 
 // Stretches of speech, in seconds, from whisper.cpp's voice detection tool (it prints hundredths of a second), or
 // null if the tool can't run.
 export async function detectSpeech(wavPath, vadModel) {
-  const tool = TOOLS.whisperCpp.includes('/') ? path.join(path.dirname(TOOLS.whisperCpp), 'whisper-vad-speech-segments') : 'whisper-vad-speech-segments';
+  const tool = TOOLS.whisperCpp.includes('/')
+    ? path.join(path.dirname(TOOLS.whisperCpp), 'whisper-vad-speech-segments')
+    : 'whisper-vad-speech-segments';
   try {
     const output = await runCommand(tool, ['-vm', vadModel, '-f', wavPath, '-np']);
-    return [...output.matchAll(/start\s*=\s*([\d.]+),\s*end\s*=\s*([\d.]+)/g)].map((match) => [Number(match[1]) / 100, Number(match[2]) / 100]);
+    return [...output.matchAll(/start\s*=\s*([\d.]+),\s*end\s*=\s*([\d.]+)/g)].map((match) => [
+      Number(match[1]) / 100,
+      Number(match[2]) / 100
+    ]);
   } catch {
     return null;
   }
 }
 
 export async function audioDuration(wavPath) {
-  return Number.parseFloat(await runCommand(TOOLS.ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', wavPath])) || 0;
+  return (
+    Number.parseFloat(
+      await runCommand(TOOLS.ffprobe, [
+        '-v',
+        'error',
+        '-show_entries',
+        'format=duration',
+        '-of',
+        'default=noprint_wrappers=1:nokey=1',
+        wavPath
+      ])
+    ) || 0
+  );
 }
 
 export async function speechByLoudness(wavPath) {
   const silences = [];
   let start = null;
   let duration = 0;
-  const output = await runCommandWithStderr(TOOLS.ffmpeg, ['-hide_banner', '-nostats', '-i', wavPath, '-af', `silencedetect=noise=${speechFloorDb}dB:d=${silenceSeconds}`, '-f', 'null', '-']);
+  const output = await runCommandWithStderr(TOOLS.ffmpeg, [
+    '-hide_banner',
+    '-nostats',
+    '-i',
+    wavPath,
+    '-af',
+    `silencedetect=noise=${speechFloorDb}dB:d=${silenceSeconds}`,
+    '-f',
+    'null',
+    '-'
+  ]);
   for (const line of output.split('\n')) {
     const begin = line.match(/silence_start:\s*(-?[\d.]+)/);
     if (begin) start = Math.max(0, Number(begin[1]));
     const end = line.match(/silence_end:\s*([\d.]+)/);
-    if (end && start !== null) { silences.push([start, Number(end[1])]); start = null; }
+    if (end && start !== null) {
+      silences.push([start, Number(end[1])]);
+      start = null;
+    }
     const time = line.match(/time=(\d+):(\d+):([\d.]+)/);
     if (time) duration = Number(time[1]) * 3600 + Number(time[2]) * 60 + Number(time[3]);
   }
@@ -90,7 +138,10 @@ export async function speechByLoudness(wavPath) {
 export function restoreTimes(whisperJson, pieces) {
   const toChunk = (seconds) => {
     let piece = pieces[0];
-    for (const candidate of pieces) { if (candidate[0] <= seconds) piece = candidate; else break; }
+    for (const candidate of pieces) {
+      if (candidate[0] <= seconds) piece = candidate;
+      else break;
+    }
     return piece[1] + Math.min(piece[2], Math.max(0, seconds - piece[0]));
   };
   const ms = (value) => Math.round(toChunk(Number(value || 0) / 1000) * 1000);
@@ -108,8 +159,12 @@ export function runCommandWithStderr(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
     child.on('error', reject);
-    child.on('close', (code) => (code === 0 ? resolve(stderr) : reject(new Error(`${command} exited with code ${code}`))));
+    child.on('close', (code) =>
+      code === 0 ? resolve(stderr) : reject(new Error(`${command} exited with code ${code}`))
+    );
   });
 }

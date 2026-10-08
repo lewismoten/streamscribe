@@ -1,7 +1,14 @@
 import fs from 'fs';
 import { fetchWithDefaults, isRobotsDisallowedError } from '../net/fetch.js';
 import { endStream, isRedirectResponse, onceDrain } from '../net/http.js';
-import { hlsRequestTimeoutMs, hlsFetchRetries, hlsRetryDelayMs, pageRequestTimeoutMs, pageFetchRetries, maxRedirects } from './constants.js';
+import {
+  hlsRequestTimeoutMs,
+  hlsFetchRetries,
+  hlsRetryDelayMs,
+  pageRequestTimeoutMs,
+  pageFetchRetries,
+  maxRedirects
+} from './constants.js';
 import { sleep } from './files.js';
 
 // Requests made while capturing: playlist and page fetch settings, redirects (with their cookies), and streaming

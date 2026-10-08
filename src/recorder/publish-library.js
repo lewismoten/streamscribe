@@ -20,7 +20,11 @@ import { parseOfficialUrl, timelineFromAlignment } from '../sync/official.js';
 // next run.
 
 const readJson = (file) => {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
 };
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
@@ -41,7 +45,9 @@ function recorderFolders() {
       } finally {
         db.close();
       }
-    } catch { /* not readable now: nothing skipped */ }
+    } catch {
+      /* not readable now: nothing skipped */
+    }
   }
   return folders;
 }
@@ -50,15 +56,22 @@ export function libraryRecordings({ all = false, only = null } = {}) {
   const db = new DatabaseSync(path.join(DATA_ROOT, 'streamscribe.db'), { readOnly: true });
   const recorded = recorderFolders();
   try {
-    return db.prepare('SELECT * FROM recordings WHERE missing = 0 ORDER BY started_at').all().filter((row) => {
-      if (only !== null) return row.id === only;
-      if (recorded.has(`${row.source_key}:${row.dir}`)) return false;
-      if (row.kind === 'archive' || row.duration_seconds < 300) return false;
-      if (row.part_of_dir && !all) return false;
-      const source = SOURCES.find((item) => item.key === row.source_key);
-      const dir = source ? path.join(source.storageDir, row.dir) : '';
-      return Boolean(source && (fs.existsSync(path.join(dir, 'transcripts', 'latest.json')) || fs.existsSync(path.join(dir, 'thumbnails', 'thumbnails.json'))));
-    });
+    return db
+      .prepare('SELECT * FROM recordings WHERE missing = 0 ORDER BY started_at')
+      .all()
+      .filter((row) => {
+        if (only !== null) return row.id === only;
+        if (recorded.has(`${row.source_key}:${row.dir}`)) return false;
+        if (row.kind === 'archive' || row.duration_seconds < 300) return false;
+        if (row.part_of_dir && !all) return false;
+        const source = SOURCES.find((item) => item.key === row.source_key);
+        const dir = source ? path.join(source.storageDir, row.dir) : '';
+        return Boolean(
+          source &&
+          (fs.existsSync(path.join(dir, 'transcripts', 'latest.json')) ||
+            fs.existsSync(path.join(dir, 'thumbnails', 'thumbnails.json')))
+        );
+      });
   } finally {
     db.close();
   }
@@ -72,20 +85,27 @@ export function localRecordings(options = {}) {
     const dir = path.join(source.storageDir, row.dir);
     const id = 'l' + crypto.createHash('sha1').update(`${row.source_key}:${row.dir}`).digest('hex').slice(0, 16);
     const part = { index: 0, name: path.basename(row.dir), dir: row.dir, seconds: Math.round(row.duration_seconds) };
-    const title = row.title || readJson(path.join(dir, 'meeting-info.json'))?.name
-      || `${source.name}, ${new Date(row.started_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+    const title =
+      row.title ||
+      readJson(path.join(dir, 'meeting-info.json'))?.name ||
+      `${source.name}, ${new Date(row.started_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
     // The official recording, where known: a built meeting's archive page (meeting.json), the meeting a capture was
     // joined into, or a link set on the meeting page (meeting-info.json).
-    const officialUrl = readJson(path.join(dir, 'meeting.json'))?.url
-      || (row.part_of_dir ? readJson(path.join(source.storageDir, row.part_of_dir, 'meeting.json'))?.url : null)
-      || readJson(path.join(dir, 'meeting-info.json'))?.officialUrl || null;
+    const officialUrl =
+      readJson(path.join(dir, 'meeting.json'))?.url ||
+      (row.part_of_dir ? readJson(path.join(source.storageDir, row.part_of_dir, 'meeting.json'))?.url : null) ||
+      readJson(path.join(dir, 'meeting-info.json'))?.officialUrl ||
+      null;
     // Structured official sources (see sync/official.js), with how this meeting's positions line up with the official
     // video's time when build-meeting lined them up.
     let official = officialUrl ? { ...parseOfficialUrl(officialUrl) } : null;
     if (official?.swagit) {
-      const meetingDir = row.kind === 'meeting' ? dir : row.part_of_dir ? path.join(source.storageDir, row.part_of_dir) : null;
+      const meetingDir =
+        row.kind === 'meeting' ? dir : row.part_of_dir ? path.join(source.storageDir, row.part_of_dir) : null;
       const meeting = meetingDir ? readJson(path.join(meetingDir, 'meeting.json')) : null;
-      const alignment = meeting?.archive ? readJson(path.join(source.storageDir, path.dirname(meeting.archive), 'alignment.json')) : null;
+      const alignment = meeting?.archive
+        ? readJson(path.join(source.storageDir, path.dirname(meeting.archive), 'alignment.json'))
+        : null;
       if (row.kind === 'meeting' && meeting && alignment) {
         official.swagit.timeline = timelineFromAlignment(meeting, alignment);
         if (alignment.archiveDuration) official.swagit.duration = Math.round(alignment.archiveDuration * 10) / 10;
@@ -97,7 +117,8 @@ export function localRecordings(options = {}) {
 }
 
 export async function publishLibrary({ dryRun = false, all = false, only = null, log = console.log } = {}) {
-  if (!hubConfigured()) throw new Error('Set recorder.hubUrl and recorder.key in config.local.js first (docs/recorder/recorder.md)');
+  if (!hubConfigured())
+    throw new Error('Set recorder.hubUrl and recorder.key in config.local.js first (docs/recorder/recorder.md)');
   const store = new SqliteStore(path.join(STATE_ROOT, 'publish-library.sqlite'));
   const client = new SyncClient({ store, hubUrl: RECORDER.hubUrl, key: RECORDER.key });
   const counts = { recordings: 0, chunks: 0, stills: 0, marks: 0 };
@@ -122,24 +143,53 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
       for (const line of lines) {
         const group = Math.floor(Number(line.startSeconds) / 300);
         if (!groups.has(group)) groups.set(group, []);
-        groups.get(group).push({ start: line.startSeconds, end: line.endSeconds, text: line.text, clockTime: line.clockTime || '', ...(line.words ? { words: line.words } : {}) });
+        groups.get(group).push({
+          start: line.startSeconds,
+          end: line.endSeconds,
+          text: line.text,
+          clockTime: line.clockTime || '',
+          ...(line.words ? { words: line.words } : {})
+        });
       }
       for (const [group, chunk] of groups) {
-        await put('transcript_chunks', chunkId(id, 'final', `0-${group}`), { recordingId: id, kind: 'final', part: part.name, partIndex: 0, from: group * 300, to: (group + 1) * 300, lines: chunk }, 'chunks');
+        await put(
+          'transcript_chunks',
+          chunkId(id, 'final', `0-${group}`),
+          {
+            recordingId: id,
+            kind: 'final',
+            part: part.name,
+            partIndex: 0,
+            from: group * 300,
+            to: (group + 1) * 300,
+            lines: chunk
+          },
+          'chunks'
+        );
       }
 
       // Stills: thumbnails spread evenly, at most recorder.maxStills.
-      const thumbs = (readJson(path.join(dir, 'thumbnails', 'thumbnails.json'))?.thumbnails || []).sort((a, b) => a.positionSeconds - b.positionSeconds);
+      const thumbs = (readJson(path.join(dir, 'thumbnails', 'thumbnails.json'))?.thumbnails || []).sort(
+        (a, b) => a.positionSeconds - b.positionSeconds
+      );
       const step = Math.max(1, thumbs.length / Math.max(1, RECORDER.maxStills));
       for (let position = 0, seq = 0; position < thumbs.length; position += step, seq += 1) {
         const thumb = thumbs[Math.floor(position)];
         const file = path.join(dir, 'thumbnails', thumb.fileName);
         const stillKey = stillId(id, `0-${seq}`);
-        if (!fs.existsSync(file) || await client.get('stills', stillKey)) continue;
+        if (!fs.existsSync(file) || (await client.get('stills', stillKey))) continue;
         counts.stills += 1;
         if (dryRun) continue;
         const media = await uploadMedia(file);
-        await client.put('stills', stillKey, { recordingId: id, part: part.name, partIndex: 0, position: thumb.positionSeconds, clockTime: thumb.clockTime || '', path: media.path, sha256: media.sha256 });
+        await client.put('stills', stillKey, {
+          recordingId: id,
+          part: part.name,
+          partIndex: 0,
+          position: thumb.positionSeconds,
+          clockTime: thumb.clockTime || '',
+          path: media.path,
+          sha256: media.sha256
+        });
       }
 
       // Marks, as the review page saved them.
@@ -148,11 +198,31 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
         if (data) await put('marks', `${id}:${part.name}:${kind}`, data, 'marks');
       }
 
-      await put('recordings', id, {
-        occurrenceKey: '', scheduleId: '', title, sourceKey: source.key, sourceName: source.name, officialUrl, official, recorderId: RECORDER.id, status: 'done', imported: true,
-        kind: row.kind, scheduledStart: row.started_at, scheduledEnd: row.ended_at, startedAt: row.started_at, stoppedAt: row.ended_at,
-        stopReason: null, durationSeconds: Math.round(row.duration_seconds), parts: [part]
-      }, 'recordings');
+      await put(
+        'recordings',
+        id,
+        {
+          occurrenceKey: '',
+          scheduleId: '',
+          title,
+          sourceKey: source.key,
+          sourceName: source.name,
+          officialUrl,
+          official,
+          recorderId: RECORDER.id,
+          status: 'done',
+          imported: true,
+          kind: row.kind,
+          scheduledStart: row.started_at,
+          scheduledEnd: row.ended_at,
+          startedAt: row.started_at,
+          stoppedAt: row.ended_at,
+          stopReason: null,
+          durationSeconds: Math.round(row.duration_seconds),
+          parts: [part]
+        },
+        'recordings'
+      );
       // Send as we go, so a long upload that stops part way keeps what it sent.
       if (!dryRun) await client.sync();
     }
@@ -164,7 +234,9 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
       const { refused } = await client.sync();
       for (const item of refused) log(`The hub refused ${item.collection}/${item.id}: ${item.error}`);
     }
-    log(`${dryRun ? 'Would send' : 'Sent'}: ${counts.recordings} recordings, ${counts.chunks} transcript chunks, ${counts.stills} stills, ${counts.marks} marks`);
+    log(
+      `${dryRun ? 'Would send' : 'Sent'}: ${counts.recordings} recordings, ${counts.chunks} transcript chunks, ${counts.stills} stills, ${counts.marks} marks`
+    );
     return counts;
   } finally {
     store.close();

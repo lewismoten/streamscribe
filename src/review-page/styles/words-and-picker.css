@@ -1,0 +1,223 @@
+/* The download menu, playlist, words, the word picker, avatars, and title and agenda overlays. */
+.download-menu {
+  position: fixed;
+  z-index: 50;
+  width: auto;
+  max-width: min(420px, calc(100vw - 16px));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.download-menu[hidden] {
+  display: none;
+}
+.download-menu button {
+  text-align: left;
+}
+.download-menu .menu-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.playlist-paste textarea {
+  width: 100%;
+  font:
+    0.85rem/1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+#playlist-list li.current {
+  background: color-mix(in srgb, var(--start) 14%, transparent);
+}
+.picker-edit input {
+  flex: 1;
+  min-width: 0;
+}
+.w {
+  border-radius: 3px;
+}
+.w:hover {
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+}
+.w.now {
+  background: color-mix(in srgb, var(--start) 40%, transparent);
+}
+.w.change {
+  box-shadow: inset 2px 0 0 var(--end);
+  padding-left: 2px;
+}
+.who-person,
+.figure-speakers .avatar {
+  cursor: pointer;
+}
+.who-person:hover .avatar,
+.figure-speakers .avatar:hover {
+  outline: 2px solid var(--end);
+  outline-offset: 1px;
+}
+.word-picker {
+  position: fixed;
+  z-index: 50;
+  width: min(420px, calc(100vw - 16px));
+  max-height: 70vh;
+  overflow: auto;
+  padding: 8px 10px;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.word-picker[hidden] {
+  display: none;
+}
+.picker-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+.picker-head button {
+  margin-left: auto;
+}
+.picker-row > small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin: 4px 0 2px;
+}
+.picker-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.picker-faces button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 60px;
+  padding: 3px 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.picker-faces button:hover {
+  border-color: var(--line);
+}
+.picker-faces button.current {
+  border-color: var(--start);
+}
+.picker-faces button.picked {
+  background: color-mix(in srgb, var(--start) 25%, transparent);
+}
+.picker-faces small {
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+}
+.picker-faces .avatar {
+  width: 36px;
+  height: 36px;
+}
+.picker-more {
+  margin: 6px 0 2px;
+}
+.picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.picker-actions small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.avatar.icon {
+  background: color-mix(in srgb, var(--fg) 14%, #445);
+  font-size: 1.15em;
+  line-height: 1;
+}
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--start) 35%, #777);
+  color: #fff;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+.title-overlay,
+.agenda-overlay {
+  position: absolute;
+  left: 2.5%;
+  top: 3.5%;
+  max-width: 38%;
+  padding: 0.3em 0.7em;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border-radius: 4px;
+  font:
+    600 calc(clamp(9px, 2.1cqw, 20px) * var(--s, 1))/1.25 system-ui,
+    sans-serif;
+}
+.agenda-overlay {
+  font-weight: 400;
+  font-size: calc(clamp(8px, 1.8cqw, 17px) * var(--s, 1));
+}
+.title-overlay[hidden],
+.agenda-overlay[hidden] {
+  display: none;
+}
+.title-overlay.placeholder {
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.75;
+}
+/* Text on the video that can be edited in place: hinted on hover. */
+.editable-text {
+  cursor: text;
+}
+.editable-text:hover {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}
+.editable-text:hover::after {
+  content: ' ✎';
+  opacity: 0.8;
+}
+.inline-edit {
+  width: 100%;
+  min-width: 12em;
+  font: inherit;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid #fff;
+  border-radius: 3px;
+  padding: 0 0.2em;
+}

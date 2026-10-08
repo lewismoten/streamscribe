@@ -13,7 +13,7 @@ Fixes what Whisper mishears, and rebuilds final transcripts in seconds without r
 Transcripts are built in layers, so nothing you fix is lost when they are rebuilt:
 
 1. `transcripts/raw.json`: Whisper's output, untouched.
-2. Corrections: `{ "heard as": "should be" }` rules that apply to every transcript, stored in `transcription-corrections.local.json` next to `config.local.js` (git ignores it; see `transcription-corrections.example.json`).
+2. Corrections: `{ "heard as": "should be" }` rules that apply to every transcript, stored in `transcription-corrections.local.json` next to `config.local.js` (git ignores it). The file is a JSON object of `"heard as": "should be"` pairs; the `add` command writes it for you.
 3. `transcripts/edits.json`: one-off line edits for a single session.
 4. `transcripts/latest.txt`, `.srt`, `.json`: the final transcript, rebuilt from the layers above.
 

@@ -19,7 +19,9 @@ export async function loadCorrections() {
 }
 
 export async function saveCorrections(corrections) {
-  const sorted = Object.fromEntries(Object.entries(corrections).sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' })));
+  const sorted = Object.fromEntries(
+    Object.entries(corrections).sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
+  );
   await writeJson(TRANSCRIPTION.correctionsFile, {
     note: 'Transcript corrections: { "heard as": "should be" }, matched case-insensitively on whole words. Manage with npm run transcript-corrections.',
     corrections: sorted
@@ -35,7 +37,10 @@ export function applyCorrections(lines, corrections) {
   if (rules.length === 0) {
     return lines;
   }
-  return lines.map((line) => ({ ...line, text: rules.reduce((text, [pattern, fixed]) => text.replace(pattern, fixed), line.text) }));
+  return lines.map((line) => ({
+    ...line,
+    text: rules.reduce((text, [pattern, fixed]) => text.replace(pattern, fixed), line.text)
+  }));
 }
 
 // Replaces whole lines from transcripts/edits.json, keyed by start time in seconds (as written in raw.json).
@@ -52,7 +57,9 @@ export function applyEdits(lines, edits) {
 // Replaces the lines in each re-transcribed portion's range (later portions win where they overlap).
 export function applyRetranscriptions(lines, portions) {
   let result = lines;
-  for (const portion of [...(portions || [])].sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)))) {
+  for (const portion of [...(portions || [])].sort((left, right) =>
+    String(left.createdAt).localeCompare(String(right.createdAt))
+  )) {
     result = [
       ...result.filter((line) => line.startSeconds < portion.from || line.startSeconds >= portion.to),
       ...portion.lines.map((line) => ({ ...line, retranscribed: portion.id }))
@@ -71,14 +78,22 @@ export async function renderFinalTranscript(sessionDir) {
   const corrections = await loadCorrections();
   const edits = await loadJson(path.join(transcriptDir, 'edits.json'), {});
   const retranscribed = await loadJson(path.join(transcriptDir, 'retranscribed.json'), null);
-  const lines = applyEdits(applyCorrections(applyRetranscriptions(raw.lines, retranscribed?.portions), corrections), edits);
+  const lines = applyEdits(
+    applyCorrections(applyRetranscriptions(raw.lines, retranscribed?.portions), corrections),
+    edits
+  );
   const { lines: _rawLines, ...metadata } = raw;
-  const base = await writeTranscriptFiles(transcriptDir, lines, {
-    ...metadata,
-    correctionCount: Object.keys(corrections).length,
-    retranscribedCount: retranscribed?.portions?.length || 0,
-    editCount: Object.keys(edits).length
-  }, { keepHistory: false });
+  const base = await writeTranscriptFiles(
+    transcriptDir,
+    lines,
+    {
+      ...metadata,
+      correctionCount: Object.keys(corrections).length,
+      retranscribedCount: retranscribed?.portions?.length || 0,
+      editCount: Object.keys(edits).length
+    },
+    { keepHistory: false }
+  );
   return { base, lines };
 }
 
@@ -93,18 +108,35 @@ function escapeRegExp(value) {
 export async function writeTranscriptFiles(outputDir, lines, metadata, { keepHistory = true, baseName = '' } = {}) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const base = path.join(outputDir, baseName || (keepHistory ? `transcript-${stamp}` : 'latest'));
-  const clock = (iso) => (iso
-    ? new Intl.DateTimeFormat('en-US', { timeZone: LOCALE.timeZone, hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date(iso))
-    : '');
+  const clock = (iso) =>
+    iso
+      ? new Intl.DateTimeFormat('en-US', {
+          timeZone: LOCALE.timeZone,
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit'
+        }).format(new Date(iso))
+      : '';
 
-  const text = lines.map((line) => `[${formatPosition(line.startSeconds)}${line.clockTime ? ` ~${clock(line.clockTime)}` : ''}] ${line.text}`).join('\n');
-  const srt = lines.map((line, index) => `${index + 1}\n${formatSrtTime(line.startSeconds)} --> ${formatSrtTime(line.endSeconds)}\n${line.text}\n`).join('\n');
+  const text = lines
+    .map(
+      (line) =>
+        `[${formatPosition(line.startSeconds)}${line.clockTime ? ` ~${clock(line.clockTime)}` : ''}] ${line.text}`
+    )
+    .join('\n');
+  const srt = lines
+    .map(
+      (line, index) =>
+        `${index + 1}\n${formatSrtTime(line.startSeconds)} --> ${formatSrtTime(line.endSeconds)}\n${line.text}\n`
+    )
+    .join('\n');
 
   await fs.promises.mkdir(outputDir, { recursive: true });
   await writeJson(`${base}.json`, {
     ...metadata,
     createdAt: new Date().toISOString(),
-    timeNote: 'startSeconds/endSeconds are video positions (discarded and missed segments included); clockTime is approximate.',
+    timeNote:
+      'startSeconds/endSeconds are video positions (discarded and missed segments included); clockTime is approximate.',
     lines
   });
   await writeFile(`${base}.txt`, `${text}\n`);
@@ -119,7 +151,9 @@ export async function writeTranscriptFiles(outputDir, lines, metadata, { keepHis
 
 export function formatPosition(seconds) {
   const total = Math.max(0, Math.floor(seconds));
-  return [Math.floor(total / 3600), Math.floor((total % 3600) / 60), total % 60].map((part) => String(part).padStart(2, '0')).join(':');
+  return [Math.floor(total / 3600), Math.floor((total % 3600) / 60), total % 60]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':');
 }
 
 function formatSrtTime(seconds) {

@@ -22,6 +22,8 @@ export let syncState: SyncState = { syncing: false, lastSyncAt: '', error: '', p
 
 function announce(changes: { collection: string; id: string }[], fromOtherTab = false) {
   for (const listener of listeners) listener(changes);
+  // A BroadcastChannel only reaches this site's own tabs, and its postMessage takes no target origin.
+  // oxlint-disable-next-line unicorn/require-post-message-target-origin
   if (!fromOtherTab) channel?.postMessage({ changes });
 }
 channel?.addEventListener('message', (event) => announce(event.data.changes || [], true));
@@ -29,10 +31,15 @@ channel?.addEventListener('message', (event) => announce(event.data.changes || [
 let client: SyncClient | null = null;
 export function syncClient(): SyncClient {
   const { url, key, token } = hubSettings();
-  client ??= new SyncClient({ store: idbStore, hubUrl: url, key, onChange: (changes: { collection: string; id: string }[]) => {
-    announce(changes);
-    idbStore.listPending().then((pending) => setState({ pending: pending.length }));
-  } });
+  client ??= new SyncClient({
+    store: idbStore,
+    hubUrl: url,
+    key,
+    onChange: (changes: { collection: string; id: string }[]) => {
+      announce(changes);
+      idbStore.listPending().then((pending) => setState({ pending: pending.length }));
+    }
+  });
   client.hubUrl = url;
   // Signed in, the browser speaks as that person; otherwise with a key if one is set (for scripts), or only reads.
   client.token = token;
@@ -58,8 +65,14 @@ export async function syncNow() {
       const writer = Boolean(sync.token || sync.key);
       const result = writer ? await sync.sync() : { sent: 0, conflicts: [], refused: [] };
       if (!writer) await sync.pull();
-      setState({ lastSyncAt: new Date().toISOString(), error: '', conflicts: result.conflicts.length,
-        refused: result.refused.map((item: { collection: string; id: string; error: string }) => `${item.collection}/${item.id}: ${item.error}`) });
+      setState({
+        lastSyncAt: new Date().toISOString(),
+        error: '',
+        conflicts: result.conflicts.length,
+        refused: result.refused.map(
+          (item: { collection: string; id: string; error: string }) => `${item.collection}/${item.id}: ${item.error}`
+        )
+      });
     } catch (error) {
       if ((error as { status?: number }).status === 401 && sync.token) {
         sessionEnded();
@@ -75,12 +88,16 @@ export async function syncNow() {
 
 export function onRecordsChanged(listener: Listener) {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }
 export function onSyncState(listener: (state: SyncState) => void) {
   stateListeners.add(listener);
   listener(syncState);
-  return () => { stateListeners.delete(listener); };
+  return () => {
+    stateListeners.delete(listener);
+  };
 }
 
 // Syncs now and then while a page is open (more often when asked, such as on the live page).

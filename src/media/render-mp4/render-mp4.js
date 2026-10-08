@@ -6,7 +6,14 @@ import { fileExists, loadJson, writeJsonAtomically } from '../../util/fs-utils.j
 import { findCommandPath } from '../../util/process.js';
 import { defaultGapThresholdSeconds } from './clips.js';
 import { formatEasternTimestamp, execFileText } from './format.js';
-import { renderStreamIdentityGroup, loadSegmentEntries, loadDiscardedSegmentEntries, loadReportedDiscardCandidates, splitByStreamIdentity, loadTimeline } from './streams.js';
+import {
+  renderStreamIdentityGroup,
+  loadSegmentEntries,
+  loadDiscardedSegmentEntries,
+  loadReportedDiscardCandidates,
+  splitByStreamIdentity,
+  loadTimeline
+} from './streams.js';
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -18,7 +25,9 @@ async function main() {
   // Gap cards are drawn with the drawtext filter, which needs an ffmpeg built with libfreetype.
   const filters = await execFileText(ffmpegPath, ['-hide_banner', '-filters']).catch(() => ({ stdout: '' }));
   if (!/\bdrawtext\b/.test(String(filters.stdout ?? filters))) {
-    throw new Error(`${ffmpegPath} has no drawtext filter (needed for gap cards). Install one that does, for example \`brew install ffmpeg-full\`, and set tools.ffmpeg and tools.ffprobe in config.local.js to /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg and ffprobe.`);
+    throw new Error(
+      `${ffmpegPath} has no drawtext filter (needed for gap cards). Install one that does, for example \`brew install ffmpeg-full\`, and set tools.ffmpeg and tools.ffprobe in config.local.js to /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg and ffprobe.`
+    );
   }
 
   const sources = selectConfiguredSources(SOURCES, options.sources, 'sources');
@@ -31,10 +40,14 @@ async function main() {
       continue;
     }
 
-    console.log(`Rendering ${sessions.length.toLocaleString('en-US')} live capture session${sessions.length === 1 ? '' : 's'} for ${source.key}`);
+    console.log(
+      `Rendering ${sessions.length.toLocaleString('en-US')} live capture session${sessions.length === 1 ? '' : 's'} for ${source.key}`
+    );
     for (let index = 0; index < sessions.length; index += 1) {
       const session = sessions[index];
-      console.log(`[${index + 1} of ${sessions.length}] ${source.key} ${session.captureId} ${path.basename(session.sessionDir)}`);
+      console.log(
+        `[${index + 1} of ${sessions.length}] ${source.key} ${session.captureId} ${path.basename(session.sessionDir)}`
+      );
       const results = await renderSessionToMp4(session, {
         ffmpegPath,
         ffprobePath,
@@ -43,13 +56,17 @@ async function main() {
         force: options.force
       });
       for (const result of results) {
-        console.log(`  Wrote ${path.basename(result.outputPath)} | ${result.streamIdentifier} | ${result.segmentClipCount} clips | ${result.gapCount} gaps`);
+        console.log(
+          `  Wrote ${path.basename(result.outputPath)} | ${result.streamIdentifier} | ${result.segmentClipCount} clips | ${result.gapCount} gaps`
+        );
         renderedCount += 1;
       }
     }
   }
 
-  console.log(`Completed live MP4 rendering for ${renderedCount.toLocaleString('en-US')} stream-identity video${renderedCount === 1 ? '' : 's'}`);
+  console.log(
+    `Completed live MP4 rendering for ${renderedCount.toLocaleString('en-US')} stream-identity video${renderedCount === 1 ? '' : 's'}`
+  );
 }
 
 function parseArgs(args) {
@@ -174,7 +191,9 @@ async function listCaptureSessions(source, options) {
         sessionJsonPath,
         segmentsJsonlPath,
         firstSeenAt: String(sessionData.firstSeenAt || '').trim(),
-        lastSegmentAt: String(sessionData.lastSegmentAt || sessionData.lastSeenLiveAt || sessionData.completedAt || '').trim()
+        lastSegmentAt: String(
+          sessionData.lastSegmentAt || sessionData.lastSeenLiveAt || sessionData.completedAt || ''
+        ).trim()
       });
     }
   }
@@ -193,12 +212,17 @@ async function renderSessionToMp4(session, options) {
   const reportedDiscardedEntries = await loadReportedDiscardCandidates(session.sourceRoot, session.sessionDir);
   discardedEntries.push(...reportedDiscardedEntries);
   const intentionallyDiscardedKeys = new Set(discardedEntries.map((entry) => String(entry.key || '')).filter(Boolean));
-  const intentionallyDiscardedSequences = new Set(discardedEntries.map((entry) => Number(entry.sequence)).filter(Number.isFinite));
+  const intentionallyDiscardedSequences = new Set(
+    discardedEntries.map((entry) => Number(entry.sequence)).filter(Number.isFinite)
+  );
   const segmentEntries = [];
   const missingEntries = [];
   for (const entry of capturedEntries) {
     const segmentPath = path.join(session.sessionDir, 'segments', String(entry.fileName || ''));
-    if (intentionallyDiscardedKeys.has(String(entry.key || '')) || intentionallyDiscardedSequences.has(Number(entry.sequence))) {
+    if (
+      intentionallyDiscardedKeys.has(String(entry.key || '')) ||
+      intentionallyDiscardedSequences.has(Number(entry.sequence))
+    ) {
       continue;
     }
     if (!(await fileExists(segmentPath))) {
@@ -208,7 +232,9 @@ async function renderSessionToMp4(session, options) {
     segmentEntries.push(entry);
   }
   if (missingEntries.length > 0) {
-    console.warn(`  Skipping ${missingEntries.length.toLocaleString('en-US')} missing segments | ${formatSegmentRanges(missingEntries)}`);
+    console.warn(
+      `  Skipping ${missingEntries.length.toLocaleString('en-US')} missing segments | ${formatSegmentRanges(missingEntries)}`
+    );
   }
   if (segmentEntries.length === 0) {
     throw new Error(`No captured segments were found in ${session.segmentsJsonlPath}`);
@@ -218,24 +244,24 @@ async function renderSessionToMp4(session, options) {
   // and the time it aired, which download times can't: backfilled segments arrive minutes after they aired.
   const timeline = await loadTimeline(session.sessionDir);
   const streamGroups = splitByStreamIdentity(segmentEntries);
-  const selectedGroups = options.latestStreamOnly && streamGroups.length > 1
-    ? [streamGroups.at(-1)]
-    : streamGroups;
+  const selectedGroups = options.latestStreamOnly && streamGroups.length > 1 ? [streamGroups.at(-1)] : streamGroups;
   const results = [];
   for (let index = 0; index < selectedGroups.length; index += 1) {
     const group = selectedGroups[index];
     console.log(
-      `  Stream ${index + 1} of ${selectedGroups.length}`
-        + ` | ${group.outputStem}`
-        + ` | ${formatEasternTimestamp(group.firstCapturedAt)}`
-        + ` to ${formatEasternTimestamp(group.lastCapturedAt)}`
-        + ` | ${group.segmentEntries.length.toLocaleString('en-US')} segment${group.segmentEntries.length === 1 ? '' : 's'}`
+      `  Stream ${index + 1} of ${selectedGroups.length}` +
+        ` | ${group.outputStem}` +
+        ` | ${formatEasternTimestamp(group.firstCapturedAt)}` +
+        ` to ${formatEasternTimestamp(group.lastCapturedAt)}` +
+        ` | ${group.segmentEntries.length.toLocaleString('en-US')} segment${group.segmentEntries.length === 1 ? '' : 's'}`
     );
-    results.push(await renderStreamIdentityGroup(session, sessionData, group, {
-      ...options,
-      intentionallyDiscardedSequences,
-      timeline
-    }));
+    results.push(
+      await renderStreamIdentityGroup(session, sessionData, group, {
+        ...options,
+        intentionallyDiscardedSequences,
+        timeline
+      })
+    );
   }
   await writeJsonAtomically(path.join(session.sessionDir, 'rendered-streams.json'), {
     sourceKey: session.sourceKey,
@@ -275,11 +301,16 @@ function formatSegmentRanges(entries) {
       });
     }
   }
-  return ranges.slice(0, 4).map((range) => (
-    range.firstSequence === range.lastSequence
-      ? range.firstFileName
-      : `${String(range.firstFileName).replace(/\.ts$/i, '')}-${range.lastFileName}`
-  )).join(', ') + (ranges.length > 4 ? `, +${ranges.length - 4} more` : '');
+  return (
+    ranges
+      .slice(0, 4)
+      .map((range) =>
+        range.firstSequence === range.lastSequence
+          ? range.firstFileName
+          : `${String(range.firstFileName).replace(/\.ts$/i, '')}-${range.lastFileName}`
+      )
+      .join(', ') + (ranges.length > 4 ? `, +${ranges.length - 4} more` : '')
+  );
 }
 
 function compareSessionsByActivityDesc(left, right) {
@@ -302,7 +333,8 @@ function sessionActivityMs(session) {
 }
 
 // Started by bin/render-mp4.js.
-export const run = () => main().catch((error) => {
-  console.error(error?.stack || error?.message || String(error));
-  process.exitCode = 1;
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error?.stack || error?.message || String(error));
+    process.exitCode = 1;
+  });

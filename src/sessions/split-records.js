@@ -78,7 +78,12 @@ export async function splitSessionRecords(sessionDir, newDir, splitSequence, bef
     previousSessionDir: sessionDir,
     splitFrom: split,
     discardedSegmentKeys: discardedAfter.map((entry) => entry.key).filter(Boolean),
-    recentSegments: after.slice(-5).map(({ sequence, durationSeconds, fileName, capturedAt }) => ({ sequence, durationSeconds, fileName, capturedAt }))
+    recentSegments: after.slice(-5).map(({ sequence, durationSeconds, fileName, capturedAt }) => ({
+      sequence,
+      durationSeconds,
+      fileName,
+      capturedAt
+    }))
   };
   delete newSession.nextSessionDir;
   await writeJsonAtomically(path.join(newDir, 'session.json'), newSession);
@@ -91,7 +96,14 @@ export async function splitSessionRecords(sessionDir, newDir, splitSequence, bef
     completionReason: `Split at sequence ${splitSequence}`,
     nextSessionDir: newDir,
     splitInto: split,
-    discardedSegmentKeys: (session.discardedSegmentKeys || []).filter((key) => Number(String(key).split('|')[0]) < splitSequence),
-    recentSegments: before.slice(-5).map(({ sequence, durationSeconds, fileName, capturedAt }) => ({ sequence, durationSeconds, fileName, capturedAt }))
+    discardedSegmentKeys: (session.discardedSegmentKeys || []).filter(
+      (key) => Number(String(key).split('|')[0]) < splitSequence
+    ),
+    recentSegments: before.slice(-5).map(({ sequence, durationSeconds, fileName, capturedAt }) => ({
+      sequence,
+      durationSeconds,
+      fileName,
+      capturedAt
+    }))
   });
 }

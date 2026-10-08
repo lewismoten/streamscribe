@@ -43,9 +43,13 @@ async function main() {
 
   const parts = buildParts(session.retained);
   const pending = parts.filter((part) => !run.progress.scannedParts[part.key]);
-  await run.log(`run started: ${parts.length} parts, ${parts.length - pending.length} already scanned, ${run.slides.length} slides already saved`);
+  await run.log(
+    `run started: ${parts.length} parts, ${parts.length - pending.length} already scanned, ${run.slides.length} slides already saved`
+  );
   console.log(`Session ${sessionDir}`);
-  console.log(`  ${pending.length} of ${parts.length} parts to scan (about 10 minutes each); ${run.slides.length} slides already saved`);
+  console.log(
+    `  ${pending.length} of ${parts.length} parts to scan (about 10 minutes each); ${run.slides.length} slides already saved`
+  );
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'streamscribe-slides-'));
   try {
@@ -57,19 +61,29 @@ async function main() {
   await run.save();
   const showings = run.slides.reduce((total, slide) => total + slide.showings.length, 0);
   await run.log(`run finished: ${run.slides.length} slides, ${showings} showings`);
-  console.log(`Saved ${run.slides.length} slide${run.slides.length === 1 ? '' : 's'} (${showings} showings) to ${outputDir}`);
+  console.log(
+    `Saved ${run.slides.length} slide${run.slides.length === 1 ? '' : 's'} (${showings} showings) to ${outputDir}`
+  );
 }
 
 // Parts of about 10 minutes, keyed by their first and last segment sequence so a re-run recognizes them. When a
 // recording keeps growing, its last part's key changes and that part is scanned again.
 function buildParts(retained) {
-  return splitIntoBatches(retained, partSegmentCount)
-    .map((segments) => ({ key: `${segments[0].sequence}-${segments.at(-1).sequence}`, segments }));
+  return splitIntoBatches(retained, partSegmentCount).map((segments) => ({
+    key: `${segments[0].sequence}-${segments.at(-1).sequence}`,
+    segments
+  }));
 }
 
 // Loads saved slides and progress, and returns helpers that log, record slides, and save as work completes.
 async function openRun(sessionDir, outputDir, session, options) {
-  const settings = { minSeconds: options.minSeconds, noiseDb: options.noiseDb, matchDistance: options.matchDistance, centerMatchDistance: options.centerMatchDistance, border: options.border };
+  const settings = {
+    minSeconds: options.minSeconds,
+    noiseDb: options.noiseDb,
+    matchDistance: options.matchDistance,
+    centerMatchDistance: options.centerMatchDistance,
+    border: options.border
+  };
   const progressPath = path.join(outputDir, 'progress.json');
   const indexPath = path.join(outputDir, 'slides.json');
   const logPath = path.join(outputDir, 'slides.log');
@@ -79,7 +93,9 @@ async function openRun(sessionDir, outputDir, session, options) {
   if (!progress || JSON.stringify(progress.settings) !== JSON.stringify(settings)) {
     progress = { settings, scannedParts: {} };
   }
-  const slides = (saved?.slides || []).filter((slide) => slide.fingerprint?.whole && fs.existsSync(path.join(outputDir, slide.fileName)));
+  const slides = (saved?.slides || []).filter(
+    (slide) => slide.fingerprint?.whole && fs.existsSync(path.join(outputDir, slide.fileName))
+  );
 
   let lock = Promise.resolve();
   const run = {
@@ -93,13 +109,19 @@ async function openRun(sessionDir, outputDir, session, options) {
       return result;
     },
     save: async () => {
-      const ordered = [...slides].sort((left, right) => left.showings[0].startSeconds - right.showings[0].startSeconds)
-        .map((slide, index) => ({ ...slide, number: index + 1, showings: [...slide.showings].sort((left, right) => left.startSeconds - right.startSeconds) }));
+      const ordered = [...slides]
+        .sort((left, right) => left.showings[0].startSeconds - right.showings[0].startSeconds)
+        .map((slide, index) => ({
+          ...slide,
+          number: index + 1,
+          showings: [...slide.showings].sort((left, right) => left.startSeconds - right.startSeconds)
+        }));
       await writeJson(indexPath, {
         sessionDir,
         updatedAt: new Date().toISOString(),
         settings,
-        timeNote: 'startSeconds/endSeconds are video positions matching the session transcript; clockTime is approximate.',
+        timeNote:
+          'startSeconds/endSeconds are video positions matching the session transcript; clockTime is approximate.',
         slides: ordered
       });
       await writeFile(path.join(outputDir, 'index.html'), renderContactSheet(ordered, sessionDir));
@@ -115,12 +137,17 @@ async function openRun(sessionDir, outputDir, session, options) {
 async function scanPart(part, sessionDir, session, tempDir, options, run) {
   const listPath = path.join(tempDir, `part-${part.key}.txt`);
   const quote = (value) => `'${value.replace(/'/g, `'\\''`)}'`;
-  await writeFile(listPath, part.segments.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n'));
+  await writeFile(
+    listPath,
+    part.segments.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n')
+  );
   const offset = part.segments[0].audioStart;
   const length = part.segments.reduce((total, item) => total + item.durationSeconds, 0);
   const handled = [];
   await detectFreezes(listPath, options, length, (freeze) => {
-    handled.push(processFreeze({ start: freeze.start + offset, end: freeze.end + offset }, sessionDir, session, options, run));
+    handled.push(
+      processFreeze({ start: freeze.start + offset, end: freeze.end + offset }, sessionDir, session, options, run)
+    );
   });
   await Promise.all(handled);
   run.progress.scannedParts[part.key] = { scannedAt: new Date().toISOString(), stills: handled.length };
@@ -135,7 +162,7 @@ async function processFreeze(freeze, sessionDir, session, options, run) {
   const label = `${formatPosition(showing.startSeconds)}${showing.clockTime ? ` (${showing.clockTime})` : ''}, ${Math.round(showing.durationSeconds)}s`;
   await run.log(`detected still at ${label}`);
   // Read the frame from the one segment file that contains it; seeking into a joined list is slow.
-  const frame = locateFrame(sessionDir, session.retained, freeze.start + ((freeze.end - freeze.start) / 2));
+  const frame = locateFrame(sessionDir, session.retained, freeze.start + (freeze.end - freeze.start) / 2);
   const fingerprint = await fingerprintFrame(frame, options.border);
 
   await run.exclusive(async () => {
@@ -161,7 +188,10 @@ function addShowing(slide, showing) {
     if (Math.abs(existing.startSeconds - showing.startSeconds) <= 1) {
       return;
     }
-    if (Math.abs(showing.startSeconds - existing.endSeconds) <= 1.5 || Math.abs(existing.startSeconds - showing.endSeconds) <= 1.5) {
+    if (
+      Math.abs(showing.startSeconds - existing.endSeconds) <= 1.5 ||
+      Math.abs(existing.startSeconds - showing.endSeconds) <= 1.5
+    ) {
       existing.startSeconds = Math.min(existing.startSeconds, showing.startSeconds);
       existing.endSeconds = Math.max(existing.endSeconds, showing.endSeconds);
       existing.durationSeconds = Number((existing.endSeconds - existing.startSeconds).toFixed(2));
@@ -173,26 +203,44 @@ function addShowing(slide, showing) {
 
 async function runPool(items, concurrency, worker) {
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (next < items.length) {
-      const item = items[next];
-      next += 1;
-      await worker(item);
-    }
-  }));
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (next < items.length) {
+        const item = items[next];
+        next += 1;
+        await worker(item);
+      }
+    })
+  );
 }
 
 // Runs freezedetect on a part's keyframes at low resolution, calling onFreeze({ start, end }) (seconds within the
 // part) as each still stretch ends. Stretches shorter than minSeconds are ignored.
 function detectFreezes(listPath, options, totalSeconds, onFreeze) {
   return new Promise((resolve, reject) => {
-    const child = spawn(TOOLS.ffmpeg, [
-      '-hide_banner', '-nostats',
-      // Decode only keyframes (about one a second) instead of every frame: roughly 30x less work.
-      '-skip_frame', 'nokey', '-f', 'concat', '-safe', '0', '-i', listPath,
-      '-an', '-vf', `scale=320:-2,freezedetect=n=${options.noiseDb}dB:d=${options.minSeconds}`,
-      '-f', 'null', '-'
-    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(
+      TOOLS.ffmpeg,
+      [
+        '-hide_banner',
+        '-nostats',
+        // Decode only keyframes (about one a second) instead of every frame: roughly 30x less work.
+        '-skip_frame',
+        'nokey',
+        '-f',
+        'concat',
+        '-safe',
+        '0',
+        '-i',
+        listPath,
+        '-an',
+        '-vf',
+        `scale=320:-2,freezedetect=n=${options.noiseDb}dB:d=${options.minSeconds}`,
+        '-f',
+        'null',
+        '-'
+      ],
+      { stdio: ['ignore', 'ignore', 'pipe'] }
+    );
     let pendingStart = null;
     let buffer = '';
     child.stderr.on('data', (chunk) => {
@@ -226,7 +274,15 @@ function detectFreezes(listPath, options, totalSeconds, onFreeze) {
 }
 
 function parseArgs(argv) {
-  const options = { sources: [], session: '', minSeconds: 4, noiseDb: -60, matchDistance: 16, centerMatchDistance: 36, border: 0.2 };
+  const options = {
+    sources: [],
+    session: '',
+    minSeconds: 4,
+    noiseDb: -60,
+    matchDistance: 16,
+    centerMatchDistance: 36,
+    border: 0.2
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => argv[++index];
@@ -268,7 +324,10 @@ async function findLatestSession(sourceKeys) {
 
 function listDirs(root) {
   try {
-    return fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name));
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name));
   } catch {
     return [];
   }
@@ -297,12 +356,14 @@ function toMeetingTime(freeze, session) {
     endSeconds: Number(end.position.toFixed(2)),
     durationSeconds: Number((freeze.end - freeze.start).toFixed(2)),
     sequence: start.sequence,
-    clockTime: session.clockAt(start.position) === null ? '' : new Date(session.clockAt(start.position) * 1000).toISOString()
+    clockTime:
+      session.clockAt(start.position) === null ? '' : new Date(session.clockAt(start.position) * 1000).toISOString()
   };
 }
 
 // Started by bin/extract-slides.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

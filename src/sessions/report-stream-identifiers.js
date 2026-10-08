@@ -208,14 +208,16 @@ function printReport(report) {
       console.log(`  ${session.captureId} ${path.basename(session.sessionDir)}`);
       for (const identifier of session.streamIdentifiers) {
         console.log(
-          `    ${identifier.streamFilePrefix} | ${formatTime(identifier.firstCapturedAt)} to ${formatTime(identifier.lastCapturedAt)}`
-            + ` | seq ${identifier.firstSequence}-${identifier.lastSequence} | ${identifier.segmentCount} segments`
-            + formatQueryValues(identifier.queryTValues)
+          `    ${identifier.streamFilePrefix} | ${formatTime(identifier.firstCapturedAt)} to ${formatTime(identifier.lastCapturedAt)}` +
+            ` | seq ${identifier.firstSequence}-${identifier.lastSequence} | ${identifier.segmentCount} segments` +
+            formatQueryValues(identifier.queryTValues)
         );
       }
       for (const run of session.runs) {
         if (session.runs.length > 1) {
-          console.log(`      run ${run.streamFilePrefix} | ${formatTime(run.firstCapturedAt)} to ${formatTime(run.lastCapturedAt)} | seq ${run.firstSequence}-${run.lastSequence}`);
+          console.log(
+            `      run ${run.streamFilePrefix} | ${formatTime(run.firstCapturedAt)} to ${formatTime(run.lastCapturedAt)} | seq ${run.firstSequence}-${run.lastSequence}`
+          );
         }
       }
     }
@@ -244,7 +246,8 @@ function formatTime(value) {
 }
 
 // Started by bin/report-stream-identifiers.js.
-export const run = () => main().catch((error) => {
-  console.error(error?.stack || error);
-  process.exitCode = 1;
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error?.stack || error);
+    process.exitCode = 1;
+  });

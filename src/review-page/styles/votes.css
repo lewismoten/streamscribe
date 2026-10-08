@@ -1,0 +1,320 @@
+/* The vote overlay, its members and badges, and the vote dialog. */
+.vote-overlay {
+  position: absolute;
+  right: 2.5%;
+  top: 3.5%;
+  max-width: 56%;
+  transition: opacity 1s ease;
+  padding: 0.4em 0.6em;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  border-radius: 6px;
+  font:
+    calc(clamp(8px, 1.6cqw, 16px) * var(--s, 1))/1.2 system-ui,
+    sans-serif;
+  z-index: 2;
+}
+.vote-overlay[hidden] {
+  display: none;
+}
+.vote-overlay.fading {
+  opacity: 0;
+}
+.vote-overlay .vote-member,
+.vote-overlay .credits > span {
+  cursor: pointer;
+}
+.vote-overlay .vote-member:hover .avatar,
+.vote-overlay .credits > span:hover .avatar {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+.vote-modes {
+  display: none;
+  flex-wrap: wrap;
+  gap: 0.3em;
+  align-items: center;
+  margin-bottom: 0.35em;
+  font-size: 0.7em;
+  width: 0;
+  min-width: 100%;
+}
+.vote-overlay:hover .vote-modes,
+.vote-overlay.editing .vote-modes {
+  display: flex;
+}
+.vote-modes button {
+  padding: 0.1em 0.6em;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  font-size: 1em;
+}
+.vote-modes button.on {
+  color: #000;
+  background: #fff;
+}
+/* The row of members sets the panel's width; the motion and other text wrap within it instead of widening it. */
+.vote-overlay .motion {
+  font-weight: 600;
+  margin-bottom: 0.35em;
+  width: 0;
+  min-width: 100%;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.vote-overlay .motion.editing-inline {
+  display: block;
+  -webkit-line-clamp: none;
+}
+.vote-overlay .members {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.55em;
+}
+.vote-member {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3em;
+}
+.vote-member .face {
+  position: relative;
+  display: inline-flex;
+}
+.vote-member .avatar {
+  width: 2.3em;
+  height: 2.3em;
+  font-size: 0.85em;
+}
+.vote-member.absent {
+  opacity: 0.4;
+}
+.vote-member small {
+  white-space: nowrap;
+  font-size: 0.72em;
+  line-height: 1.15;
+}
+.vote-member small.district {
+  font-size: 0.62em;
+  opacity: 0.8;
+}
+.vote-badge {
+  position: absolute;
+  right: -0.45em;
+  bottom: -0.3em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: 50%;
+  border: 2px solid #000;
+  color: #fff;
+  font-size: 0.75em;
+  font-weight: 700;
+}
+.vote-badge.choice-for {
+  background: #2e9d5b;
+}
+.vote-badge.choice-against {
+  background: #d33b2f;
+}
+.vote-badge.choice-abstain {
+  background: #888;
+}
+.vote-overlay .outcome {
+  margin-top: 0.35em;
+  font-weight: 700;
+  width: 0;
+  min-width: 100%;
+}
+.vote-overlay .outcome.passed {
+  color: #7ee2a1;
+}
+.vote-overlay .outcome.failed {
+  color: #ff9c94;
+}
+.member-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.member-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+.member-list label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 16em;
+}
+.member-list button {
+  padding: 2px 8px;
+}
+.seat-order {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+.seat-order li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 88px;
+}
+.seat-order li small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.seat-order li div {
+  display: flex;
+  gap: 4px;
+}
+.seat-order button {
+  padding: 0 8px;
+}
+#members-panel[hidden] {
+  display: none;
+}
+#vote-members {
+  margin: 8px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vote-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 118px;
+  padding: 6px 4px;
+  position: relative;
+}
+.vote-toggle .avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 1rem;
+}
+.vote-toggle strong {
+  font-size: 0.85rem;
+}
+.vote-toggle small {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.vote-toggle.choice-for {
+  border-color: #2e9d5b;
+  background: color-mix(in srgb, #2e9d5b 18%, var(--card));
+}
+.vote-toggle.choice-against {
+  border-color: #d33b2f;
+  background: color-mix(in srgb, #d33b2f 18%, var(--card));
+}
+.vote-toggle.choice-abstain {
+  border-color: #888;
+  background: color-mix(in srgb, #888 18%, var(--card));
+}
+.vote-toggle.choice-absent {
+  opacity: 0.55;
+}
+.vote-member.pending {
+  opacity: 0.7;
+}
+.vote-overlay .outcome.pending {
+  color: #ffe08a;
+}
+.vote-member-undo {
+  padding: 0 6px;
+  font-size: 0.75rem;
+}
+.vote-member-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+.vote-member-row > span {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 14em;
+}
+.vote-member-row label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+#vote-dialog input[type='number'] {
+  width: 5em;
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px;
+}
+#vote-dialog input.time {
+  width: 7.5em;
+  min-width: 0;
+}
+#vote-motion {
+  width: 100%;
+}
+#vote-dialog {
+  position: fixed;
+  inset: auto 16px 16px auto;
+  margin: 0;
+  width: min(720px, calc(100vw - 32px));
+  max-height: 85vh;
+  overflow: auto;
+  z-index: 10;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+.vote-overlay .credits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 0.8em;
+  align-items: center;
+  margin-bottom: 0.4em;
+  font-size: 0.8em;
+  opacity: 0.95;
+  width: 0;
+  min-width: 100%;
+}
+.vote-overlay .credits span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+.vote-overlay .credits .avatar {
+  width: 1.6em;
+  height: 1.6em;
+  font-size: 0.75em;
+}
+.transcript-list time {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}

@@ -25,7 +25,10 @@ export async function pollCaptureSession(source, state, capture, context) {
     // segments have arrived, finalize it instead of retrying a dead URL forever.
     const staleMs = Number(context.options.captureStaleMs || defaultCaptureStaleMs);
     if (!context.isListedLive && isCaptureStale(capture, staleMs)) {
-      await completeCapture(capture, `Live listing disappeared and the stream stopped responding | ${capture.lastErrorMessage}`);
+      await completeCapture(
+        capture,
+        `Live listing disappeared and the stream stopped responding | ${capture.lastErrorMessage}`
+      );
       state.scanner.updatedAt = now;
       return;
     }
@@ -41,9 +44,11 @@ export async function pollCaptureSessionOnce(source, state, capture, context) {
   const staleMs = Number(context.options.captureStaleMs || defaultCaptureStaleMs);
   context.setCurrentLabel?.(`[${capture.id}] decide`);
 
-  const shouldRefreshVideoPage = !capture.lastVideoPageFetchAt
-    || now - Date.parse(capture.lastVideoPageFetchAt) >= Number(context.options.videoPageRefreshMs || defaultVideoPageRefreshMs)
-    || !capture.mediaPlaylistUrl;
+  const shouldRefreshVideoPage =
+    !capture.lastVideoPageFetchAt ||
+    now - Date.parse(capture.lastVideoPageFetchAt) >=
+      Number(context.options.videoPageRefreshMs || defaultVideoPageRefreshMs) ||
+    !capture.mediaPlaylistUrl;
   let videoPageHtml = '';
 
   if (shouldRefreshVideoPage && !capture.hlsUrl) {
@@ -124,10 +129,7 @@ export async function pollCaptureSessionOnce(source, state, capture, context) {
   if (capture.endListSeen) {
     await completeCapture(capture, 'Playlist ended');
   } else if (!context.isListedLive && isCaptureStale(capture, staleMs)) {
-    await completeCapture(
-      capture,
-      'Live listing disappeared and no new segments arrived'
-    );
+    await completeCapture(capture, 'Live listing disappeared and no new segments arrived');
   }
 
   await writeJsonAtomically(path.join(capture.sessionDir, 'session.json'), capture);

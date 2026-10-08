@@ -25,16 +25,29 @@ export function findSegment(retained, position) {
 // Returns false when the segment can't be read (for example, a missing file).
 export function extractThumbnail(segmentPath, offsetSeconds, outputPath, width, accurate = false) {
   return new Promise((resolve) => {
-    const child = spawn(TOOLS.ffmpeg, [
-      '-hide_banner', '-loglevel', 'error', '-y',
-      // Exact: decode the (10-second) segment from its start up to the moment; seeking ahead of decoding can find no
-      // frames near the end of a piece cut from the archive, which keeps its original timestamps.
-      ...(accurate
-        ? ['-i', segmentPath, '-ss', Math.max(0, offsetSeconds).toFixed(3)]
-        : ['-noaccurate_seek', '-ss', Math.max(0, offsetSeconds).toFixed(3), '-i', segmentPath]),
-      '-frames:v', '1', '-an', '-vf', `scale=${width}:-2:flags=fast_bilinear`, '-q:v', '5',
-      outputPath
-    ], { stdio: 'ignore' });
+    const child = spawn(
+      TOOLS.ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        // Exact: decode the (10-second) segment from its start up to the moment; seeking ahead of decoding can find no
+        // frames near the end of a piece cut from the archive, which keeps its original timestamps.
+        ...(accurate
+          ? ['-i', segmentPath, '-ss', Math.max(0, offsetSeconds).toFixed(3)]
+          : ['-noaccurate_seek', '-ss', Math.max(0, offsetSeconds).toFixed(3), '-i', segmentPath]),
+        '-frames:v',
+        '1',
+        '-an',
+        '-vf',
+        `scale=${width}:-2:flags=fast_bilinear`,
+        '-q:v',
+        '5',
+        outputPath
+      ],
+      { stdio: 'ignore' }
+    );
     child.on('error', () => resolve(false));
     child.on('close', (code) => resolve(code === 0 && fs.existsSync(outputPath)));
   });
@@ -43,7 +56,22 @@ export function extractThumbnail(segmentPath, offsetSeconds, outputPath, width, 
 // 16x16 difference hash of an image file.
 export async function imageFingerprint(imagePath) {
   const pixels = await new Promise((resolve, reject) => {
-    const child = spawn(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-i', imagePath, '-vf', 'scale=17:16:flags=area,format=gray', '-f', 'rawvideo', '-'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = spawn(
+      TOOLS.ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-i',
+        imagePath,
+        '-vf',
+        'scale=17:16:flags=area,format=gray',
+        '-f',
+        'rawvideo',
+        '-'
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'] }
+    );
     const chunks = [];
     child.stdout.on('data', (chunk) => chunks.push(chunk));
     child.on('error', reject);
@@ -52,7 +80,7 @@ export async function imageFingerprint(imagePath) {
   let bits = '';
   for (let row = 0; row < 16; row += 1) {
     for (let column = 0; column < 16; column += 1) {
-      bits += pixels[(row * 17) + column] > pixels[(row * 17) + column + 1] ? '1' : '0';
+      bits += pixels[row * 17 + column] > pixels[row * 17 + column + 1] ? '1' : '0';
     }
   }
   return bits;

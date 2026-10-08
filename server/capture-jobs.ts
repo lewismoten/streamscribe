@@ -24,21 +24,33 @@ export function refreshJobs(db: DatabaseSync): Job[] {
   const running = db.prepare("SELECT * FROM jobs WHERE status IN ('running', 'stopping')").all() as unknown as Job[];
   for (const job of running) {
     if (!alive(job.pid)) {
-      db.prepare("UPDATE jobs SET status = ?, ended_at = ? WHERE id = ?").run(job.status === 'stopping' ? 'stopped' : 'exited', new Date().toISOString(), job.id);
+      db.prepare('UPDATE jobs SET status = ?, ended_at = ? WHERE id = ?').run(
+        job.status === 'stopping' ? 'stopped' : 'exited',
+        new Date().toISOString(),
+        job.id
+      );
     }
   }
   return db.prepare('SELECT * FROM jobs ORDER BY id DESC LIMIT 50').all() as unknown as Job[];
 }
 
 export function runningJobs(db: DatabaseSync, sourceKey: string): Job[] {
-  return refreshJobs(db).filter((job) => job.source_key === sourceKey && (job.status === 'running' || job.status === 'stopping'));
+  return refreshJobs(db).filter(
+    (job) => job.source_key === sourceKey && (job.status === 'running' || job.status === 'stopping')
+  );
 }
 
 // Starts a script as its own process (see src/capture/jobs.js), recorded as a job.
 function startJob(db: DatabaseSync, sourceKey: string, kind: string, script: string, args: string[]): Job {
   const started = startDetached(script, args, { kind, sourceKey });
-  const id = Number(db.prepare("INSERT INTO jobs (source_key, kind, pid, args, log_path, started_at, status) VALUES (?, ?, ?, ?, ?, ?, 'running')")
-    .run(sourceKey, kind, started.pid, JSON.stringify([script, ...args]), started.logPath, started.startedAt).lastInsertRowid);
+  const id = Number(
+    db
+      .prepare(
+        "INSERT INTO jobs (source_key, kind, pid, args, log_path, started_at, status) VALUES (?, ?, ?, ?, ?, ?, 'running')"
+      )
+      .run(sourceKey, kind, started.pid, JSON.stringify([script, ...args]), started.logPath, started.startedAt)
+      .lastInsertRowid
+  );
   return db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as unknown as Job;
 }
 
@@ -49,10 +61,17 @@ export function startCapture(db: DatabaseSync, sourceKey: string): Job[] {
   }
   const external = externalCaptures(sourceKey, []);
   if (external.length) {
-    throw new Error(`A capture is already running outside the app (process ${external.map((item) => item.pid).join(', ')})`);
+    throw new Error(
+      `A capture is already running outside the app (process ${external.map((item) => item.pid).join(', ')})`
+    );
   }
   const capture = startJob(db, sourceKey, 'capture', 'capture.js', ['--source', sourceKey]);
-  const thumbnails = startJob(db, sourceKey, 'thumbnails', 'extract-thumbnails.js', ['--source', sourceKey, '--watch', '15']);
+  const thumbnails = startJob(db, sourceKey, 'thumbnails', 'extract-thumbnails.js', [
+    '--source',
+    sourceKey,
+    '--watch',
+    '15'
+  ]);
   return [capture, thumbnails];
 }
 

@@ -6,7 +6,10 @@ import { readFile } from 'fs/promises';
 export async function loadSessionSegments(sessionDir) {
   const readLines = async (fileName) => {
     try {
-      return (await readFile(path.join(sessionDir, fileName), 'utf8')).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+      return (await readFile(path.join(sessionDir, fileName), 'utf8'))
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
     } catch {
       return [];
     }
@@ -17,11 +20,18 @@ export async function loadSessionSegments(sessionDir) {
       bySequence.set(entry.sequence, { ...entry, durationSeconds: Number(entry.durationSeconds) || 0 });
     }
   }
-  const discarded = new Map((await readLines('discarded-segments.jsonl'))
-    .map((entry) => [Number(entry.sequence ?? String(entry.key || '').split('|')[0]), Number(entry.durationSeconds) || 0]));
+  const discarded = new Map(
+    (await readLines('discarded-segments.jsonl')).map((entry) => [
+      Number(entry.sequence ?? String(entry.key || '').split('|')[0]),
+      Number(entry.durationSeconds) || 0
+    ])
+  );
 
   const retainedSorted = [...bySequence.values()].sort((left, right) => left.sequence - right.sequence);
-  const durations = retainedSorted.map((item) => item.durationSeconds).filter((value) => value > 0).sort((a, b) => a - b);
+  const durations = retainedSorted
+    .map((item) => item.durationSeconds)
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b);
   const typicalDuration = durations[Math.floor(durations.length / 2)] || 10;
   const firstSequence = retainedSorted[0]?.sequence ?? 0;
   const lastSequence = retainedSorted.at(-1)?.sequence ?? -1;
@@ -83,7 +93,10 @@ export function splitIntoBatches(segments, maxCount) {
 // Reads a JSON-lines file from a session folder ([] when missing).
 export async function readSessionLines(sessionDir, fileName) {
   try {
-    return (await readFile(path.join(sessionDir, fileName), 'utf8')).split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    return (await readFile(path.join(sessionDir, fileName), 'utf8'))
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
   } catch {
     return [];
   }

@@ -1,0 +1,9 @@
+# Data, builds, and what Prettier doesn't format (PHP has `npm run lint:php`).
+data/
+notes/
+node_modules/
+web/dist*/
+hub-php/
+package-lock.json
+*.local.js
+*.local.json

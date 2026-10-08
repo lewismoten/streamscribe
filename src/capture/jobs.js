@@ -22,9 +22,16 @@ export function isAlive(pid) {
 export function startDetached(command, args, { kind = command, sourceKey = '' } = {}) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
   const startedAt = new Date().toISOString();
-  const logPath = path.join(LOG_DIR, `${startedAt.replace(/[:.]/g, '-')}-${kind}${sourceKey ? `-${sourceKey}` : ''}.log`);
+  const logPath = path.join(
+    LOG_DIR,
+    `${startedAt.replace(/[:.]/g, '-')}-${kind}${sourceKey ? `-${sourceKey}` : ''}.log`
+  );
   const log = fs.openSync(logPath, 'a');
-  const child = spawn(process.execPath, [binPath(command), ...args], { cwd: REPO_ROOT, detached: true, stdio: ['ignore', log, log] });
+  const child = spawn(process.execPath, [binPath(command), ...args], {
+    cwd: REPO_ROOT,
+    detached: true,
+    stdio: ['ignore', log, log]
+  });
   child.unref();
   fs.closeSync(log);
   return { pid: child.pid ?? null, logPath, startedAt };
@@ -38,11 +45,17 @@ export function stopDetached(pid, graceMs = 15000) {
     try {
       process.kill(-Number(pid), name);
     } catch {
-      try { process.kill(Number(pid), name); } catch { /* already gone */ }
+      try {
+        process.kill(Number(pid), name);
+      } catch {
+        /* already gone */
+      }
     }
   };
   signal('SIGINT');
-  setTimeout(() => { if (isAlive(pid)) signal('SIGTERM'); }, graceMs).unref();
+  setTimeout(() => {
+    if (isAlive(pid)) signal('SIGTERM');
+  }, graceMs).unref();
 }
 
 // Capture processes running on this machine besides knownPids (started from a terminal, for example), so a second
@@ -54,11 +67,24 @@ export function externalCaptures(sourceKey, knownPids = []) {
   } catch {
     return [];
   }
-  return output.split('\n').map((line) => line.trim().match(/^(\d+)\s+(.*)$/)).filter(Boolean)
-    .map((match) => ({ pid: Number(match[1]), command: match[2] }))
-    // Node itself running a capture script (not a shell whose command line mentions one).
-    .filter((item) => /^(\S*\/)?node\s+(\S+\s+)*\S*(bin\/capture\.js|scripts\/capture\.js|capture-live\.js)/.test(item.command) && !knownPids.includes(item.pid))
-    .filter((item) => !/--source\s/.test(item.command) || new RegExp(`--source\\s+${sourceKey.replace(/[^a-z0-9-]/gi, '')}(\\s|$)`).test(item.command));
+  return (
+    output
+      .split('\n')
+      .map((line) => line.trim().match(/^(\d+)\s+(.*)$/))
+      .filter(Boolean)
+      .map((match) => ({ pid: Number(match[1]), command: match[2] }))
+      // Node itself running a capture script (not a shell whose command line mentions one).
+      .filter(
+        (item) =>
+          /^(\S*\/)?node\s+(\S+\s+)*\S*(bin\/capture\.js|scripts\/capture\.js|capture-live\.js)/.test(item.command) &&
+          !knownPids.includes(item.pid)
+      )
+      .filter(
+        (item) =>
+          !/--source\s/.test(item.command) ||
+          new RegExp(`--source\\s+${sourceKey.replace(/[^a-z0-9-]/gi, '')}(\\s|$)`).test(item.command)
+      )
+  );
 }
 
 export function tailLog(logPath, lines = 40) {

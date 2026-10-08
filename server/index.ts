@@ -9,14 +9,17 @@ import { handleApp } from './routes/app.ts';
 // and the review pages, whose saves go to the database), and the web app (web/dist, built with `npm run build`).
 //   npm start [-- --port 4873] [--host 127.0.0.1]
 const args = process.argv.slice(2);
-const option = (name: string, fallback: string) => (args.includes(name) ? String(args[args.indexOf(name) + 1]) : fallback);
+const option = (name: string, fallback: string) =>
+  args.includes(name) ? String(args[args.indexOf(name) + 1]) : fallback;
 const host = option('--host', '127.0.0.1');
 const port = Number(option('--port', '4873'));
 
 const server = http.createServer((request, response) => {
   const url = new URL(request.url || '/', 'http://localhost');
-  const handler = url.pathname.startsWith('/api/') ? handleApi(request, response, url)
-    : url.pathname.startsWith('/files/') ? handleFiles(request, response, url)
+  const handler = url.pathname.startsWith('/api/')
+    ? handleApi(request, response, url)
+    : url.pathname.startsWith('/files/')
+      ? handleFiles(request, response, url)
       : Promise.resolve(handleApp(request, response, url));
   handler.catch((error) => {
     console.error(error);

@@ -22,7 +22,14 @@ export class SyncClient {
    * @param {{ store: any, hubUrl?: string, key?: string, token?: string, fetchImpl?: typeof fetch,
    *   onChange?: (changes: Change[]) => void }} options
    */
-  constructor({ store, hubUrl = '', key = '', token = '', fetchImpl = (...args) => globalThis.fetch(...args), onChange = () => {} }) {
+  constructor({
+    store,
+    hubUrl = '',
+    key = '',
+    token = '',
+    fetchImpl = (...args) => globalThis.fetch(...args),
+    onChange = () => {}
+  }) {
     this.store = store;
     this.hubUrl = hubUrl.replace(/\/+$/, '');
     this.key = key;
@@ -41,7 +48,11 @@ export class SyncClient {
   }
 
   async list(collection) {
-    const records = new Map((await this.store.listRecords(collection)).filter((record) => !record.deleted).map((record) => [record.id, record]));
+    const records = new Map(
+      (await this.store.listRecords(collection))
+        .filter((record) => !record.deleted)
+        .map((record) => [record.id, record])
+    );
     for (const change of await this.store.listPending()) {
       if (change.collection !== collection) continue;
       if (change.deleted) records.delete(change.id);
@@ -61,7 +72,7 @@ export class SyncClient {
       id: recordId,
       data: deleted ? null : data,
       deleted,
-      base_rev: earlier ? earlier.base_rev : synced?.rev ?? 0,
+      base_rev: earlier ? earlier.base_rev : (synced?.rev ?? 0),
       base_data: earlier ? earlier.base_data : synced && !synced.deleted ? synced.data : null,
       changed_at: new Date().toISOString()
     });
@@ -78,13 +89,20 @@ export class SyncClient {
   async request(method, path, body) {
     const response = await this.fetch(this.hubUrl + path, {
       method,
-      headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(this.key ? { 'x-streamscribe-key': this.key } : {}),
-        ...(this.token ? { 'x-streamscribe-token': this.token } : {}) },
+      headers: {
+        ...(body ? { 'content-type': 'application/json' } : {}),
+        ...(this.key ? { 'x-streamscribe-key': this.key } : {}),
+        ...(this.token ? { 'x-streamscribe-token': this.token } : {})
+      },
       body: body ? JSON.stringify(body) : undefined
     });
     const text = await response.text();
     let value = null;
-    try { value = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
+    try {
+      value = text ? JSON.parse(text) : null;
+    } catch {
+      /* not JSON */
+    }
     if (!response.ok && response.status !== 409) {
       const error = new Error(value?.error || `${method} ${path}: ${response.status} ${text.slice(0, 200)}`);
       error.status = response.status;
@@ -103,7 +121,11 @@ export class SyncClient {
       try {
         page = await this.request('GET', `/changes?since=${since}&limit=500`);
       } catch (error) {
-        if (error.status === 410) { since = 0; await this.store.setMeta('lastRev', 0); continue; } // start over
+        if (error.status === 410) {
+          since = 0;
+          await this.store.setMeta('lastRev', 0);
+          continue;
+        } // start over
         throw error;
       }
       for (const record of page.records) await this.store.putRecord(record);
@@ -128,7 +150,13 @@ export class SyncClient {
       const batch = pending.slice(0, 100);
       const reply = await this.request('POST', '/records', {
         op_id: newId(),
-        records: batch.map(({ collection, id, data, deleted, base_rev }) => ({ collection, id, data, deleted, base_rev }))
+        records: batch.map(({ collection, id, data, deleted, base_rev }) => ({
+          collection,
+          id,
+          data,
+          deleted,
+          base_rev
+        }))
       });
       let retry = false;
       for (const result of reply.results) {
@@ -141,12 +169,18 @@ export class SyncClient {
         } else if (result.status === 'conflict') {
           // Someone else changed it: merge into their version and send again.
           const current = result.record;
-          const merged = change.deleted || current.deleted
-            ? { data: change.deleted ? null : change.data, conflicts: ['(deleted on one side)'] }
-            : merge(change.base_data, change.data, current.data);
+          const merged =
+            change.deleted || current.deleted
+              ? { data: change.deleted ? null : change.data, conflicts: ['(deleted on one side)'] }
+              : merge(change.base_data, change.data, current.data);
           conflicts.push({ collection: change.collection, id: change.id, paths: merged.conflicts });
           await this.store.putRecord(current);
-          await this.store.putPending({ ...change, data: merged.data, base_rev: current.rev, base_data: current.deleted ? null : current.data });
+          await this.store.putPending({
+            ...change,
+            data: merged.data,
+            base_rev: current.rev,
+            base_data: current.deleted ? null : current.data
+          });
           retry = true;
         } else {
           refused.push({ collection: change.collection, id: change.id, error: result.error || result.status });
@@ -156,7 +190,8 @@ export class SyncClient {
       }
       if (!retry && batch.length === pending.length) break;
     }
-    if (conflicts.length || refused.length) this.onChange([...conflicts, ...refused].map(({ collection, id }) => ({ collection, id })));
+    if (conflicts.length || refused.length)
+      this.onChange([...conflicts, ...refused].map(({ collection, id }) => ({ collection, id })));
     return { sent, conflicts, refused };
   }
 

@@ -12,7 +12,14 @@ export function providerFor(source) {
 // The folder name for an archived copy of a meeting: --id if given, else the provider's video id from its page address
 // (Swagit's /videos/<id>), else the file name of a video link or local file.
 export function archiveIdFor({ id = '', url = '', file = '' }, source) {
-  const fromName = (value) => String(value || '').split(/[\\/]/).pop().replace(/\?.*$/, '').replace(/\.[^.]+$/, '')
-    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const fromName = (value) =>
+    String(value || '')
+      .split(/[\\/]/)
+      .pop()
+      .replace(/\?.*$/, '')
+      .replace(/\.[^.]+$/, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   return String(id || '').trim() || (url && providerFor(source).archiveVideoId(url)) || fromName(file || url);
 }

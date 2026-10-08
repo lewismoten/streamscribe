@@ -8,21 +8,35 @@ import { RECORDER } from '../config/runtime-config.js';
 //   'private'  meetings' files, outside the web folder (records name them private/recordings/…)
 //   'public'   published files, in the hub's media/ (records name them media/published/…)
 
-export const sha256 = (file) => new Promise((resolve, reject) => {
-  const hash = crypto.createHash('sha256');
-  fs.createReadStream(file).on('data', (chunk) => hash.update(chunk)).on('end', () => resolve(hash.digest('hex'))).on('error', reject);
-});
-export const slug = (value) => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'part';
+export const sha256 = (file) =>
+  new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    fs.createReadStream(file)
+      .on('data', (chunk) => hash.update(chunk))
+      .on('end', () => resolve(hash.digest('hex')))
+      .on('error', reject);
+  });
+export const slug = (value) =>
+  String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'part';
 
 async function request(route, { json, body, signal } = {}) {
   const response = await fetch(`${RECORDER.hubUrl}/${route}`, {
     method: 'POST',
-    headers: { 'x-streamscribe-key': RECORDER.key, 'content-type': json ? 'application/json' : 'application/octet-stream' },
+    headers: {
+      'x-streamscribe-key': RECORDER.key,
+      'content-type': json ? 'application/json' : 'application/octet-stream'
+    },
     body: json ? JSON.stringify(json) : body,
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120000)]) : AbortSignal.timeout(120000)
   });
   const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(`hub ${route.split('?')[0]}: ${response.status} ${value.error || ''}`.trim()), { status: response.status });
+  if (!response.ok)
+    throw Object.assign(new Error(`hub ${route.split('?')[0]}: ${response.status} ${value.error || ''}`.trim()), {
+      status: response.status
+    });
   return value;
 }
 
@@ -53,7 +67,12 @@ async function upload(area, folder, local, name, { signal, onProgress = () => {}
       const piece = Buffer.alloc(Math.min(size, bytes - offset));
       await handle.read(piece, 0, piece.length, offset);
       const at = offset;
-      offset = (await retrying(() => request(`upload-chunk?sha256=${hash}&bytes=${bytes}&offset=${at}`, { body: piece, signal }), signal)).offset;
+      offset = (
+        await retrying(
+          () => request(`upload-chunk?sha256=${hash}&bytes=${bytes}&offset=${at}`, { body: piece, signal }),
+          signal
+        )
+      ).offset;
       onProgress(offset / bytes);
     }
   } finally {
@@ -73,13 +92,22 @@ export function hubFiles() {
       const paths = [];
       for (const file of files) {
         const bytes = fs.statSync(file.local).size;
-        paths.push(await upload(area, folder, file.local, file.name, { signal, onProgress: (share) => onProgress((done + share * bytes) / total) }));
+        paths.push(
+          await upload(area, folder, file.local, file.name, {
+            signal,
+            onProgress: (share) => onProgress((done + share * bytes) / total)
+          })
+        );
         done += bytes;
       }
-      if (!keepOthers) await retrying(() => request('files-prune', { json: { area, folder, keep: files.map((file) => file.name) }, signal }), signal);
+      if (!keepOthers)
+        await retrying(
+          () => request('files-prune', { json: { area, folder, keep: files.map((file) => file.name) }, signal }),
+          signal
+        );
       return paths;
     },
     // Removes a file the records name (private/recordings/… or media/published/…).
-    remove: (recordPath) => retrying(() => request('files-remove', { json: { path: recordPath } })),
+    remove: (recordPath) => retrying(() => request('files-remove', { json: { path: recordPath } }))
   };
 }

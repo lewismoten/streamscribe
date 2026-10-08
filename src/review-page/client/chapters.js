@@ -5,7 +5,9 @@ let agendaEditing = null;
 let agendaCurrent = -2;
 function agendaIndexAt(seconds) {
   let found = -1;
-  agendaItems.forEach((item, index) => { if (item.at <= seconds + 0.25) found = index; });
+  agendaItems.forEach((item, index) => {
+    if (item.at <= seconds + 0.25) found = index;
+  });
   return found;
 }
 function updateAgendaCurrent() {
@@ -17,7 +19,10 @@ function updateAgendaCurrent() {
   const current = $('agenda-list').children[index];
   if (current) {
     const list = $('agenda-list');
-    if (current.offsetTop < list.scrollTop || current.offsetTop + current.offsetHeight > list.scrollTop + list.clientHeight) {
+    if (
+      current.offsetTop < list.scrollTop ||
+      current.offsetTop + current.offsetHeight > list.scrollTop + list.clientHeight
+    ) {
       list.scrollTo({ top: Math.max(0, current.offsetTop - list.clientHeight / 3), behavior: 'smooth' });
     }
   }
@@ -34,20 +39,30 @@ $('agenda-overlay').addEventListener('click', (event) => {
   const item = agendaItems[agendaCurrent];
   if (!item) return;
   inlineEdit($('agenda-overlay'), item.title, async (title) => {
-    if (!title) { $('agenda-overlay').textContent = item.title; return; }
-    await changeAgenda(agendaItems.map((other) => (other.id === item.id ? { ...other, title } : other)), 'Saved');
+    if (!title) {
+      $('agenda-overlay').textContent = item.title;
+      return;
+    }
+    await changeAgenda(
+      agendaItems.map((other) => (other.id === item.id ? { ...other, title } : other)),
+      'Saved'
+    );
     agendaCurrent = -2;
     updateAgendaCurrent();
   });
 });
 function setShowAgenda(visible) {
   $('show-agenda').checked = visible;
-  try { localStorage.setItem('thumbnails.showAgenda', visible ? '1' : '0'); } catch {}
+  try {
+    localStorage.setItem('thumbnails.showAgenda', visible ? '1' : '0');
+  } catch {}
   agendaCurrent = -2;
   updateAgendaCurrent();
 }
 $('show-agenda').addEventListener('change', () => setShowAgenda($('show-agenda').checked));
-try { if (localStorage.getItem('thumbnails.showAgenda') === '1') $('show-agenda').checked = true; } catch {}
+try {
+  if (localStorage.getItem('thumbnails.showAgenda') === '1') $('show-agenda').checked = true;
+} catch {}
 function renderAgenda() {
   const list = $('agenda-list');
   list.textContent = '';
@@ -89,7 +104,10 @@ function renderAgenda() {
     remove.textContent = '✕';
     remove.addEventListener('click', async () => {
       if (!confirm('Remove the chapter "' + item.title + '"?')) return;
-      await changeAgenda(agendaItems.filter((other) => other.id !== item.id), 'Removed');
+      await changeAgenda(
+        agendaItems.filter((other) => other.id !== item.id),
+        'Removed'
+      );
     });
     row.append(go, save, edit, remove);
     list.appendChild(row);
@@ -106,9 +124,13 @@ async function changeAgenda(items, done) {
   agendaItems = [...items].sort((left, right) => left.at - right.at);
   try {
     if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
-    const response = await fetch('../agenda.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ updatedAt: new Date().toISOString(), items: agendaItems }, null, 2) });
-    if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
+    const response = await fetch('../agenda.json', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ updatedAt: new Date().toISOString(), items: agendaItems }, null, 2)
+    });
+    if (!response.ok)
+      throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
     $('agenda-status').textContent = done;
     renderAgenda();
     renderTranscript();
@@ -135,17 +157,27 @@ function resetAgendaForm() {
   $('agenda-save').textContent = 'Add';
   $('agenda-cancel').hidden = true;
 }
-$('agenda-now').addEventListener('click', () => { $('agenda-time').value = fmtPrecise(position); });
+$('agenda-now').addEventListener('click', () => {
+  $('agenda-time').value = fmtPrecise(position);
+});
 $('agenda-cancel').addEventListener('click', resetAgendaForm);
 $('agenda-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const title = $('agenda-title-input').value.trim();
   // An empty time means the current position.
   const at = $('agenda-time').value.trim() ? parse($('agenda-time').value) : position;
-  if (!title) { $('agenda-status').textContent = 'Enter a title'; return; }
-  if (at === null || at < 0 || at > endSeconds) { $('agenda-status').textContent = 'Enter a time between 00:00:00 and ' + fmt(endSeconds); return; }
+  if (!title) {
+    $('agenda-status').textContent = 'Enter a title';
+    return;
+  }
+  if (at === null || at < 0 || at > endSeconds) {
+    $('agenda-status').textContent = 'Enter a time between 00:00:00 and ' + fmt(endSeconds);
+    return;
+  }
   const item = { id: agendaEditing ? agendaEditing.id : Date.now().toString(36), at: Number(at.toFixed(3)), title };
-  const items = agendaEditing ? agendaItems.map((other) => (other.id === agendaEditing.id ? item : other)) : [...agendaItems, item];
+  const items = agendaEditing
+    ? agendaItems.map((other) => (other.id === agendaEditing.id ? item : other))
+    : [...agendaItems, item];
   if (await changeAgenda(items, (agendaEditing ? 'Saved ' : 'Added ') + fmt(item.at))) resetAgendaForm();
 });
 renderAgenda();
@@ -153,10 +185,16 @@ renderAgenda();
 function setChaptersShown(shown) {
   $('agenda-panel').hidden = !shown;
   $('chapters-toggle').setAttribute('aria-pressed', shown ? 'true' : 'false');
-  try { localStorage.setItem('thumbnails.chaptersShown', shown ? '1' : '0'); } catch {}
+  try {
+    localStorage.setItem('thumbnails.chaptersShown', shown ? '1' : '0');
+  } catch {}
 }
 $('chapters-toggle').addEventListener('click', () => setChaptersShown($('agenda-panel').hidden));
-try { setChaptersShown(localStorage.getItem('thumbnails.chaptersShown') !== '0'); } catch { setChaptersShown(true); }
+try {
+  setChaptersShown(localStorage.getItem('thumbnails.chaptersShown') !== '0');
+} catch {
+  setChaptersShown(true);
+}
 $('chapter-prev').addEventListener('click', () => {
   // To the start of this chapter, or the one before when already at its start.
   const previous = [...agendaItems].reverse().find((item) => item.at < position - 1.5);

@@ -1,0 +1,234 @@
+/* The top bar, the page frame, buttons, toolbars, and the grid of recording cards. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--fg);
+}
+.brand img {
+  width: 26px;
+  height: 26px;
+}
+.topbar nav {
+  display: flex;
+  gap: 4px;
+}
+.topbar nav a {
+  color: var(--fg);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.topbar nav a.active {
+  background: var(--code);
+  font-weight: 600;
+}
+.topsearch {
+  margin-left: auto;
+}
+.topsearch input {
+  width: min(320px, 40vw);
+}
+.page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 16px 48px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.button:hover {
+  text-decoration: none;
+  border-color: var(--muted);
+}
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.button.danger {
+  background: var(--fail);
+  border-color: var(--fail);
+  color: #fff;
+}
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.end {
+  margin-left: auto;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.toolbar .wide {
+  flex: 1;
+  min-width: 240px;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.segmented button {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 6px 12px;
+  border: 0;
+  background: var(--card);
+  color: var(--fg);
+  cursor: pointer;
+}
+.segmented button + button {
+  border-left: 1px solid var(--line);
+}
+.segmented button.selected {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.day {
+  margin-bottom: 22px;
+}
+.day > h2 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px;
+}
+.grid.compact {
+  grid-template-columns: 1fr;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.card.is-part {
+  opacity: 0.85;
+}
+.card-picture {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.card-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.no-picture {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: 2.4rem;
+  background: var(--code);
+}
+.badge {
+  position: absolute;
+  font-size: 0.78rem;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+}
+.badge.duration {
+  right: 8px;
+  bottom: 8px;
+}
+.badge.live {
+  left: 8px;
+  top: 8px;
+  background: var(--live);
+  font-weight: 700;
+}
+.card-body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.card-body h3 a {
+  color: var(--fg);
+}
+.card-kind {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.chips span {
+  background: var(--code);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  align-items: center;
+}
+.grid.compact .card {
+  flex-direction: row;
+}
+.grid.compact .card-picture {
+  width: 140px;
+  flex: none;
+}

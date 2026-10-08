@@ -23,7 +23,10 @@ const targetOf = (region) => region.target || magnifiedPlace(region, defaultGrow
 // camera cuts to them grows in at the start of the new shot.
 let manualFadeStart = 0;
 function magnifiedAt(seconds) {
-  if (manualZoom) return [{ region: manualZoom, progress: Math.min(1, (performance.now() - manualFadeStart) / (leadSeconds * 1000)) }];
+  if (manualZoom)
+    return [
+      { region: manualZoom, progress: Math.min(1, (performance.now() - manualFadeStart) / (leadSeconds * 1000)) }
+    ];
   if (!autoZoom) return [];
   const scene = sceneIndexAt(seconds);
   const view = scene >= 0 ? cachedViewFor(page.scenes[scene][1]) : null;
@@ -35,16 +38,22 @@ function magnifiedAt(seconds) {
     const stretches = speakingStretches(id);
     const speaking = stretches.find((item) => seconds >= item.from && seconds < item.to);
     if (speaking) {
-      shown.push({ region, progress: speaking.from < sceneStart ? Math.min(1, (seconds - sceneStart) / leadSeconds) : 1 });
+      shown.push({
+        region,
+        progress: speaking.from < sceneStart ? Math.min(1, (seconds - sceneStart) / leadSeconds) : 1
+      });
       return;
     }
     // Only a stretch that ended in this shot lingers, and only one starting in this shot grows in ahead of it.
     const ended = [...stretches].reverse().find((item) => item.to <= seconds && item.to > sceneStart);
     const since = ended ? seconds - ended.to : Infinity;
-    const next = stretches.find((item) => item.from > seconds && item.from - seconds <= leadSeconds && item.from < sceneEnd);
+    const next = stretches.find(
+      (item) => item.from > seconds && item.from - seconds <= leadSeconds && item.from < sceneEnd
+    );
     const lead = next ? Math.min(leadSeconds, next.from - sceneStart) : leadSeconds;
     const growing = next && lead > 0 ? Math.max(0, 1 - (next.from - seconds) / lead) : 0;
-    const leaving = since < holdSeconds ? 1 : (since < holdSeconds + fadeSeconds ? 1 - (since - holdSeconds) / fadeSeconds : 0);
+    const leaving =
+      since < holdSeconds ? 1 : since < holdSeconds + fadeSeconds ? 1 - (since - holdSeconds) / fadeSeconds : 0;
     const progress = Math.max(growing, leaving);
     if (progress > 0) shown.push({ region, progress });
   });
@@ -60,7 +69,8 @@ function magnifyLoop() {
   magnifyFrame = 0;
   const visible = drawMagnifier();
   // Keep animating while anything shows (and while playing, so fades follow the video).
-  if (visible || (playerReady && !video.paused && (autoZoom || manualZoom))) magnifyFrame = requestAnimationFrame(magnifyLoop);
+  if (visible || (playerReady && !video.paused && (autoZoom || manualZoom)))
+    magnifyFrame = requestAnimationFrame(magnifyLoop);
 }
 function currentSeconds() {
   return playerReady && !video.hidden ? toPosition(video.currentTime) : position;
@@ -91,7 +101,17 @@ function paintMagnified(context, source, width, height, items) {
     context.fillStyle = '#000';
     context.fillRect(x - border, y - border, w + border * 2, h + border * 2);
     context.shadowColor = 'transparent';
-    context.drawImage(source, region.x * sourceWidth, region.y * sourceHeight, region.w * sourceWidth, regionHeight(region) * sourceHeight, x, y, w, h);
+    context.drawImage(
+      source,
+      region.x * sourceWidth,
+      region.y * sourceHeight,
+      region.w * sourceWidth,
+      regionHeight(region) * sourceHeight,
+      x,
+      y,
+      w,
+      h
+    );
     context.restore();
   });
 }
@@ -113,7 +133,13 @@ function drawMagnifier() {
 }
 // Manual: 🔍, then drag a square on the video; 🔍 again removes it.
 $('zoom-toggle').addEventListener('click', () => {
-  if (manualZoom || zoomSelecting) { manualZoom = null; zoomSelecting = false; $('stage').classList.remove('selecting'); updateZoom(); return; }
+  if (manualZoom || zoomSelecting) {
+    manualZoom = null;
+    zoomSelecting = false;
+    $('stage').classList.remove('selecting');
+    updateZoom();
+    return;
+  }
   zoomSelecting = true;
   $('stage').classList.add('selecting');
   $('zoom-toggle').classList.add('on');
@@ -145,7 +171,11 @@ $('stage').addEventListener('pointerdown', (event) => {
     zoomSelecting = false;
     zoomSelectedAt = Date.now();
     $('stage').classList.remove('selecting');
-    if (size < 12) { $('snapshot-status').textContent = ''; updateZoom(); return; }
+    if (size < 12) {
+      $('snapshot-status').textContent = '';
+      updateZoom();
+      return;
+    }
     manualZoom = { x: left / rect.width, y: top / rect.height, w: size / rect.width, h: size / rect.height };
     manualFadeStart = performance.now();
     $('snapshot-status').textContent = 'Magnified (🔍 to remove it)';
@@ -156,4 +186,3 @@ $('stage').addEventListener('pointerdown', (event) => {
 });
 window.addEventListener('resize', drawMagnifier);
 video.addEventListener('seeked', drawMagnifier);
-

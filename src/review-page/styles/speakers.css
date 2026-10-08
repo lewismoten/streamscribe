@@ -1,0 +1,250 @@
+/* Speaker cards, the people panel, person chips, and the spoken-times dialog. */
+.speaker-cards {
+  position: absolute;
+  left: 2.5%;
+  bottom: 3.5%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4em;
+  font:
+    calc(clamp(9px, 2.1cqw, 20px) * var(--s, 1))/1.2 system-ui,
+    sans-serif;
+}
+.speaker-cards[hidden] {
+  display: none;
+}
+.speaker-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.3em 0.9em 0.3em 0.3em;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border-radius: 999px;
+}
+.speaker-card .avatar {
+  width: 2.4em;
+  height: 2.4em;
+  font-size: 1em;
+}
+.speaker-card strong {
+  display: block;
+}
+.speaker-card small {
+  display: block;
+  opacity: 0.8;
+  font-size: 0.75em;
+}
+.speakers-panel {
+  max-width: 960px;
+  margin: 8px 0;
+  padding: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.speakers-panel[hidden] {
+  display: none;
+}
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+.people-section {
+  padding: 6px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+.people-section.voting {
+  border: 2px solid var(--start);
+  background: color-mix(in srgb, var(--start) 8%, var(--card));
+}
+.people-section.drop {
+  border-style: solid;
+  border-color: var(--end);
+  background: color-mix(in srgb, var(--end) 8%, var(--card));
+}
+.people-section h3 {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.people-section h3 .group-name {
+  cursor: text;
+}
+.people-section h3 .group-name:hover {
+  text-decoration: underline dotted;
+}
+.people-section h3 button {
+  padding: 0 6px;
+  font-size: 0.75rem;
+}
+.people-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 36px;
+}
+.people-chips:empty::after {
+  content: 'Drag people here';
+  color: var(--muted);
+  font-size: 0.8rem;
+  align-self: center;
+}
+.person-chip {
+  display: inline-flex;
+  position: relative;
+  cursor: grab;
+}
+/* Icons: each group is a compact block (its name above its circles), side by side. */
+.people.icons-only {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.people.icons-only .people-section {
+  flex: 0 0 auto;
+  max-width: 100%;
+  padding: 4px 6px;
+}
+.people.icons-only .people-section h3 {
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.people.icons-only .people-chips {
+  gap: 4px;
+  min-height: 30px;
+  min-width: 60px;
+}
+.people.icons-only .people-chips:empty::after {
+  content: 'Drag here';
+}
+.people.icons-only .person .person-text {
+  display: none;
+}
+.people.icons-only .person {
+  padding: 3px;
+  border-radius: 50%;
+}
+.people.icons-only .person-chip .edit {
+  display: none;
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border-left: 1px solid var(--line);
+  font-size: 0.7rem;
+  z-index: 1;
+}
+.people.icons-only .person-chip:hover .edit {
+  display: inline-block;
+}
+.people-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.people-toolbar button.on {
+  border-color: var(--start);
+  color: var(--start);
+  font-weight: 600;
+}
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px 0 0 999px;
+  text-align: left;
+}
+.person small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.person[aria-pressed='true'] {
+  border-color: var(--start);
+  background: color-mix(in srgb, var(--start) 18%, var(--card));
+}
+.person-chip .edit {
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+  padding: 4px 10px;
+  color: var(--muted);
+}
+.person-chip .times {
+  border-left: 0;
+  border-radius: 0;
+  padding: 4px 8px;
+  color: var(--muted);
+}
+.people.icons-only .person-chip .times {
+  display: none;
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border-left: 1px solid var(--line);
+  font-size: 0.7rem;
+  z-index: 1;
+}
+.people.icons-only .person-chip:hover .times {
+  display: inline-block;
+}
+#spoke-dialog {
+  position: fixed;
+  inset: 72px 16px auto auto;
+  margin: 0;
+  width: min(560px, calc(100vw - 32px));
+  max-height: 80vh;
+  overflow: auto;
+  z-index: 20;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+.spoke-bar {
+  position: relative;
+  height: 18px;
+  margin: 8px 0;
+  background: color-mix(in srgb, var(--fg) 8%, var(--card));
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.spoke-bar span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  background: var(--start);
+}
+.spoke-bar span.now {
+  background: var(--end);
+}
+.spoke-bar i {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--fg);
+}
+#spoke-list li.current {
+  background: color-mix(in srgb, var(--end) 14%, transparent);
+}
+#spoke-list .spoke-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.85rem;
+}

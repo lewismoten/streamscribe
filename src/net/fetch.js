@@ -16,9 +16,7 @@ const hostNextAllowedAt = new Map();
 // - rateProfile: name of an `http.profiles` entry (defaults to the npm script name if configured, else 'default')
 // - quiet: skip the "Fetching ..." log line
 export async function fetchWithDefaults(input, init = {}) {
-  const rawOptions = init && typeof init === 'object'
-    ? { ...init }
-    : {};
+  const rawOptions = init && typeof init === 'object' ? { ...init } : {};
   const options = { ...rawOptions };
   const rateProfile = options.rateProfile;
   delete options.rateProfile;
@@ -55,13 +53,14 @@ function mergeDefaultHeaders(headers, requestUrl) {
 }
 
 function normalizeFetchUrl(input) {
-  const raw = typeof input === 'string'
-    ? input
-    : input instanceof URL
-      ? input.toString()
-      : input && typeof input === 'object' && 'url' in input
-        ? String(input.url || '')
-        : String(input || '');
+  const raw =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input && typeof input === 'object' && 'url' in input
+          ? String(input.url || '')
+          : String(input || '');
   if (!raw) {
     return '';
   }
@@ -204,7 +203,10 @@ function splitSetCookieHeader(value) {
 }
 
 function parseSetCookie(cookieString, requestUrl) {
-  const segments = String(cookieString || '').split(';').map((part) => part.trim()).filter(Boolean);
+  const segments = String(cookieString || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
   if (segments.length === 0) {
     return null;
   }
@@ -228,7 +230,9 @@ function parseSetCookie(cookieString, requestUrl) {
 
   for (const attribute of attributes) {
     const [rawKey, ...rawValueParts] = attribute.split('=');
-    const key = String(rawKey || '').trim().toLowerCase();
+    const key = String(rawKey || '')
+      .trim()
+      .toLowerCase();
     const attributeValue = rawValueParts.join('=').trim();
 
     if (key === 'domain' && attributeValue) {
@@ -253,7 +257,7 @@ function parseSetCookie(cookieString, requestUrl) {
     if (key === 'max-age' && attributeValue) {
       const seconds = Number.parseInt(attributeValue, 10);
       if (Number.isFinite(seconds)) {
-        record.expiresAt = Date.now() + (seconds * 1000);
+        record.expiresAt = Date.now() + seconds * 1000;
       }
     }
   }
@@ -304,7 +308,9 @@ export async function prepareRequest(requestUrl, { rateProfile } = {}) {
   const url = safeUrl(requestUrl);
   let crawlDelayMs = 0;
   if (url && shouldCheckRobots(url)) {
-    const verdict = await checkRobots(url, (robotsUrl, timeoutMs) => fetchRobotsFile(robotsUrl, timeoutMs, profileName));
+    const verdict = await checkRobots(url, (robotsUrl, timeoutMs) =>
+      fetchRobotsFile(robotsUrl, timeoutMs, profileName)
+    );
     if (!verdict.allowed) {
       throw new RobotsDisallowedError(url.toString(), verdict.robotsUrl, verdict.rule);
     }
@@ -334,7 +340,9 @@ function resolveRateProfileName(rateProfile) {
     return rateProfile;
   }
   if (rateProfile) {
-    throw new Error(`Unknown http rate profile "${rateProfile}". Configured profiles: ${Object.keys(HTTP.profiles).join(', ')}`);
+    throw new Error(
+      `Unknown http rate profile "${rateProfile}". Configured profiles: ${Object.keys(HTTP.profiles).join(', ')}`
+    );
   }
   const scriptName = String(process.env.npm_lifecycle_event || '');
   return HTTP.profiles[scriptName] ? scriptName : 'default';
@@ -356,7 +364,7 @@ async function takeRateToken(profileName) {
   const turn = bucket.queue.then(async () => {
     const refill = () => {
       const now = Date.now();
-      bucket.tokens = Math.min(profile.burst, bucket.tokens + ((now - bucket.updatedAt) / profile.cooldownMs));
+      bucket.tokens = Math.min(profile.burst, bucket.tokens + (now - bucket.updatedAt) / profile.cooldownMs);
       bucket.updatedAt = now;
     };
     refill();
@@ -379,7 +387,10 @@ async function waitForHostDelay(host, crawlDelayMs) {
     }
     return Date.now() + crawlDelayMs;
   });
-  hostNextAllowedAt.set(host, turn.catch(() => Date.now() + crawlDelayMs));
+  hostNextAllowedAt.set(
+    host,
+    turn.catch(() => Date.now() + crawlDelayMs)
+  );
   await turn;
 }
 

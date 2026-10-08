@@ -15,13 +15,18 @@ function setOverlay(mode) {
   overlayMode = ['clock', 'position', 'both'].includes(mode) ? mode : 'none';
   $('overlay-mode').value = overlayMode;
   $('overlay').hidden = overlayMode === 'none';
-  try { localStorage.setItem('thumbnails.overlay', overlayMode); } catch {}
+  try {
+    localStorage.setItem('thumbnails.overlay', overlayMode);
+  } catch {}
   updateOverlay();
 }
 $('overlay-mode').addEventListener('change', () => setOverlay($('overlay-mode').value));
 try {
   // Earlier pages had a single "Show clock" checkbox, which showed both.
-  setOverlay(localStorage.getItem('thumbnails.overlay') || (localStorage.getItem('thumbnails.showClock') === '1' ? 'both' : 'none'));
+  setOverlay(
+    localStorage.getItem('thumbnails.overlay') ||
+      (localStorage.getItem('thumbnails.showClock') === '1' ? 'both' : 'none')
+  );
 } catch {}
 
 // Saves the current frame as a full-resolution PNG (the browser already has it decoded, so no server work is
@@ -49,7 +54,8 @@ async function saveFrame() {
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) throw new Error('the browser could not encode the image');
     const fraction = Math.round((position % 1) * 1000);
-    const fileName = 'frame-' + fmt(position).replace(/:/g, '-') + (fraction ? '.' + String(fraction).padStart(3, '0') : '') + '.png';
+    const fileName =
+      'frame-' + fmt(position).replace(/:/g, '-') + (fraction ? '.' + String(fraction).padStart(3, '0') : '') + '.png';
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = fileName;
@@ -70,13 +76,27 @@ async function saveFrame() {
 // (common at segment gaps), steps forward to its start.
 function waitForFrame(timeoutMs) {
   return new Promise((resolve, reject) => {
-    if (video.readyState >= 2) { resolve(); return; }
+    if (video.readyState >= 2) {
+      resolve();
+      return;
+    }
     if (video.buffered.length && video.buffered.start(0) > video.currentTime) {
       video.currentTime = video.buffered.start(0) + 0.05;
     }
-    const done = (fn, value) => { clearTimeout(timer); video.removeEventListener('loadeddata', onReady); video.removeEventListener('seeked', onReady); video.removeEventListener('canplay', onReady); fn(value); };
-    const onReady = () => { if (video.readyState >= 2) done(resolve); };
-    const timer = setTimeout(() => done(reject, new Error('the frame did not load within ' + Math.round(timeoutMs / 1000) + ' seconds')), timeoutMs);
+    const done = (fn, value) => {
+      clearTimeout(timer);
+      video.removeEventListener('loadeddata', onReady);
+      video.removeEventListener('seeked', onReady);
+      video.removeEventListener('canplay', onReady);
+      fn(value);
+    };
+    const onReady = () => {
+      if (video.readyState >= 2) done(resolve);
+    };
+    const timer = setTimeout(
+      () => done(reject, new Error('the frame did not load within ' + Math.round(timeoutMs / 1000) + ' seconds')),
+      timeoutMs
+    );
     video.addEventListener('loadeddata', onReady);
     video.addEventListener('seeked', onReady);
     video.addEventListener('canplay', onReady);
@@ -91,8 +111,15 @@ const framesEachSide = 12;
 function seekTo(playerTime, timeoutMs = 6000) {
   const target = Math.max(0, playerTime);
   return new Promise((resolve) => {
-    if (Math.abs(video.currentTime - target) < frameSeconds / 4 && video.readyState >= 2) { resolve(); return; }
-    const done = () => { clearTimeout(timer); video.removeEventListener('seeked', done); resolve(); };
+    if (Math.abs(video.currentTime - target) < frameSeconds / 4 && video.readyState >= 2) {
+      resolve();
+      return;
+    }
+    const done = () => {
+      clearTimeout(timer);
+      video.removeEventListener('seeked', done);
+      resolve();
+    };
     const timer = setTimeout(done, timeoutMs);
     video.addEventListener('seeked', done);
     video.currentTime = target;
@@ -107,8 +134,14 @@ $('prev-frame').addEventListener('click', () => stepFrame(-1));
 $('next-frame').addEventListener('click', () => stepFrame(1));
 document.addEventListener('keydown', (event) => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
-  if (event.key === ',') { event.preventDefault(); stepFrame(-1); }
-  if (event.key === '.') { event.preventDefault(); stepFrame(1); }
+  if (event.key === ',') {
+    event.preventDefault();
+    stepFrame(-1);
+  }
+  if (event.key === '.') {
+    event.preventDefault();
+    stepFrame(1);
+  }
 });
 
 let buildingStrip = false;
@@ -137,7 +170,7 @@ async function buildFrameStrip() {
       await seekTo(time);
       const canvas = document.createElement('canvas');
       canvas.width = 320;
-      canvas.height = Math.round(320 * video.videoHeight / Math.max(1, video.videoWidth));
+      canvas.height = Math.round((320 * video.videoHeight) / Math.max(1, video.videoWidth));
       canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
       const button = document.createElement('button');
       button.type = 'button';
@@ -145,7 +178,12 @@ async function buildFrameStrip() {
       if (offset === 0) button.classList.add('current');
       const label = document.createElement('span');
       const framesAway = offset * spacing;
-      label.textContent = (offset === 0 ? 'current' : (framesAway > 0 ? '+' : '') + framesAway + ' fr') + ' · ' + fmt(toPosition(video.currentTime)) + '.' + String(Math.round((toPosition(video.currentTime) % 1) * 1000)).padStart(3, '0');
+      label.textContent =
+        (offset === 0 ? 'current' : (framesAway > 0 ? '+' : '') + framesAway + ' fr') +
+        ' · ' +
+        fmt(toPosition(video.currentTime)) +
+        '.' +
+        String(Math.round((toPosition(video.currentTime) % 1) * 1000)).padStart(3, '0');
       button.append(canvas, label);
       button.addEventListener('click', async () => {
         strip.querySelectorAll('button').forEach((item) => item.classList.toggle('current', item === button));
@@ -172,5 +210,11 @@ $('frames-toggle').addEventListener('click', () => {
 $('frames-refresh').addEventListener('click', buildFrameStrip);
 $('frame-spacing').addEventListener('change', buildFrameStrip);
 
-$('set-start').addEventListener('click', () => { start = position; update(); });
-$('set-end').addEventListener('click', () => { end = position; update(); });
+$('set-start').addEventListener('click', () => {
+  start = position;
+  update();
+});
+$('set-end').addEventListener('click', () => {
+  end = position;
+  update();
+});

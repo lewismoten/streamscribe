@@ -1,0 +1,185 @@
+/* Chapters: the agenda panel, its list, vote faces, and vote rows in the transcript. */
+.portions {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+.portions li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+.transcript-list h3.agenda-heading {
+  margin: 10px 10px 2px;
+  padding: 6px 10px;
+  font-size: 0.95rem;
+  background: color-mix(in srgb, var(--end) 12%, var(--card));
+  border-left: 4px solid var(--end);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.transcript-list h3.agenda-heading small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.agenda-panel[hidden] {
+  display: none;
+}
+.agenda-panel {
+  max-width: 960px;
+  margin: 8px 0;
+  padding: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.agenda-panel h2 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+.agenda-list {
+  position: relative;
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agenda-list li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.agenda-list li.current {
+  background: color-mix(in srgb, var(--end) 14%, transparent);
+}
+.agenda-list li > button.go {
+  flex: 1;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 4px 2px;
+}
+#vote-list li > button.go {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.agenda-list .vote-text {
+  flex: 1;
+  min-width: 0;
+}
+.vote-faces {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 2px dashed var(--line);
+  border-radius: 999px;
+}
+.vote-faces.passed {
+  border: 2px solid #2e9d5b;
+}
+.vote-faces.failed {
+  border: 2px dotted #d33b2f;
+}
+.vote-face {
+  position: relative;
+  display: inline-flex;
+}
+.vote-face .avatar {
+  width: 26px;
+  height: 26px;
+  font-size: 0.65rem;
+}
+.vote-face.absent {
+  opacity: 0.35;
+}
+.vote-face.pending {
+  opacity: 0.6;
+}
+.vote-face .vote-badge {
+  right: -4px;
+  bottom: -4px;
+  top: auto;
+  width: 13px;
+  height: 13px;
+  font-size: 8px;
+  border-width: 1px;
+}
+.vote-order {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border: 1px solid #000;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+.agenda-list li > button.go time {
+  display: inline-block;
+  min-width: 5.5em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.agenda-list li > button.small {
+  padding: 2px 8px;
+}
+#agenda-list {
+  max-height: 28vh;
+}
+#agenda-list li {
+  padding: 1px 6px;
+}
+#agenda-list li > button.go {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px;
+}
+#agenda-list .chapter-title {
+  flex: 1;
+  min-width: 0;
+}
+.chapter-length {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.agenda-panel form input[type='text'] {
+  flex: 1;
+  min-width: 12em;
+}
+.agenda-panel form input.time {
+  flex: 0 0 7.5em;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.transcript-list .vote-row {
+  margin: 6px 10px;
+  padding: 5px 10px;
+  font-size: 0.9rem;
+  border-left: 4px solid var(--start);
+  border-radius: 4px;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--start) 10%, var(--card));
+}

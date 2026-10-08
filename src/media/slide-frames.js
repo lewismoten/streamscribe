@@ -34,7 +34,7 @@ export function locateFrame(sessionDir, retained, seconds) {
 }
 
 export async function fingerprintFrame(frame, border) {
-  const keep = 1 - (2 * border);
+  const keep = 1 - 2 * border;
   return {
     whole: await differenceHash(frame, '', wholeGridSize),
     center: await differenceHash(frame, `crop=iw*${keep.toFixed(4)}:ih*${keep.toFixed(4)},`, centerGridSize)
@@ -44,14 +44,26 @@ export async function fingerprintFrame(frame, border) {
 export async function differenceHash(frame, cropFilter, size) {
   const width = size + 1;
   const pixels = await runCommandBuffer(TOOLS.ffmpeg, [
-    '-hide_banner', '-loglevel', 'error',
-    '-noaccurate_seek', '-ss', frame.offset.toFixed(3), '-i', frame.segmentPath,
-    '-frames:v', '1', '-vf', `${cropFilter}scale=${width}:${size}:flags=area,format=gray`, '-f', 'rawvideo', '-'
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-noaccurate_seek',
+    '-ss',
+    frame.offset.toFixed(3),
+    '-i',
+    frame.segmentPath,
+    '-frames:v',
+    '1',
+    '-vf',
+    `${cropFilter}scale=${width}:${size}:flags=area,format=gray`,
+    '-f',
+    'rawvideo',
+    '-'
   ]);
   let bits = '';
   for (let row = 0; row < size; row += 1) {
     for (let column = 0; column < size; column += 1) {
-      bits += pixels[(row * width) + column] > pixels[(row * width) + column + 1] ? '1' : '0';
+      bits += pixels[row * width + column] > pixels[row * width + column + 1] ? '1' : '0';
     }
   }
   return bits;
@@ -59,8 +71,10 @@ export async function differenceHash(frame, cropFilter, size) {
 
 // Same slide only when both the whole frame and the center match within their thresholds.
 export function sameSlide(left, right, options) {
-  return hammingDistance(left.whole, right.whole) <= options.matchDistance
-    && hammingDistance(left.center, right.center) <= options.centerMatchDistance;
+  return (
+    hammingDistance(left.whole, right.whole) <= options.matchDistance &&
+    hammingDistance(left.center, right.center) <= options.centerMatchDistance
+  );
 }
 
 export function hammingDistance(left, right) {
@@ -73,9 +87,18 @@ export function hammingDistance(left, right) {
 
 export async function extractFrame(frame, outputPath) {
   await runCommand(TOOLS.ffmpeg, [
-    '-hide_banner', '-loglevel', 'error', '-y',
-    '-noaccurate_seek', '-ss', frame.offset.toFixed(3), '-i', frame.segmentPath,
-    '-frames:v', '1', outputPath
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-noaccurate_seek',
+    '-ss',
+    frame.offset.toFixed(3),
+    '-i',
+    frame.segmentPath,
+    '-frames:v',
+    '1',
+    outputPath
   ]);
 }
 
@@ -89,6 +112,10 @@ export function runCommandBuffer(command, args) {
       stderr += chunk.toString();
     });
     child.on('error', reject);
-    child.on('close', (code) => (code === 0 ? resolve(Buffer.concat(chunks)) : reject(new Error(stderr.trim() || `${command} exited with code ${code}`))));
+    child.on('close', (code) =>
+      code === 0
+        ? resolve(Buffer.concat(chunks))
+        : reject(new Error(stderr.trim() || `${command} exited with code ${code}`))
+    );
   });
 }

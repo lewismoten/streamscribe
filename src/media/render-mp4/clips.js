@@ -38,24 +38,16 @@ export function buildGapOverlayText({
 }
 
 export async function normalizeSegmentClip(sourcePath, destinationPath, options) {
-  if (!options.force && await fileExists(destinationPath)) {
+  if (!options.force && (await fileExists(destinationPath))) {
     return;
   }
 
   const destinationPartialPath = `${destinationPath}.download`;
   await rm(destinationPartialPath, { force: true });
-  const args = [
-    '-hide_banner',
-    '-loglevel', 'error',
-    '-y',
-    '-i', sourcePath
-  ];
+  const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', sourcePath];
 
   if (!options.hasAudio) {
-    args.push(
-      '-f', 'lavfi',
-      '-i', `anullsrc=channel_layout=stereo:sample_rate=${options.audioSampleRate}`
-    );
+    args.push('-f', 'lavfi', '-i', `anullsrc=channel_layout=stereo:sample_rate=${options.audioSampleRate}`);
   }
 
   const videoFilters = [
@@ -68,32 +60,45 @@ export async function normalizeSegmentClip(sourcePath, destinationPath, options)
     // A ticking clock of when each frame aired: frame time (from 0) plus the segment's air time, in the
     // configured time zone (set through TZ for ffmpeg).
     videoFilters.push('setpts=PTS-STARTPTS');
-    videoFilters.push([
-      `drawtext=text='%{pts\\:localtime\\:${options.airStartEpoch.toFixed(3)}\\:%a %b %d %Y  %I\\\\\\:%M\\\\\\:%S %p %Z}'`,
-      'fontcolor=white',
-      'fontsize=24',
-      'x=w-text_w-24',
-      'y=h-text_h-22',
-      'box=1',
-      'boxcolor=black@0.65',
-      'boxborderw=8'
-    ].join(':'));
+    videoFilters.push(
+      [
+        `drawtext=text='%{pts\\:localtime\\:${options.airStartEpoch.toFixed(3)}\\:%a %b %d %Y  %I\\\\\\:%M\\\\\\:%S %p %Z}'`,
+        'fontcolor=white',
+        'fontsize=24',
+        'x=w-text_w-24',
+        'y=h-text_h-22',
+        'box=1',
+        'boxcolor=black@0.65',
+        'boxborderw=8'
+      ].join(':')
+    );
   }
 
   args.push(
-    '-map', '0:v:0',
+    '-map',
+    '0:v:0',
     ...(options.hasAudio ? ['-map', '0:a:0?'] : ['-map', '1:a:0']),
-    '-vf', videoFilters.join(','),
+    '-vf',
+    videoFilters.join(','),
     '-shortest',
-    '-c:v', 'libx264',
-    '-preset', 'veryfast',
-    '-crf', '18',
-    '-c:a', 'aac',
-    '-ar', String(options.audioSampleRate),
-    '-b:a', '128k',
-    '-ac', '2',
-    '-f', 'mp4',
-    '-movflags', '+faststart',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '18',
+    '-c:a',
+    'aac',
+    '-ar',
+    String(options.audioSampleRate),
+    '-b:a',
+    '128k',
+    '-ac',
+    '2',
+    '-f',
+    'mp4',
+    '-movflags',
+    '+faststart',
     destinationPartialPath
   );
 
@@ -102,7 +107,7 @@ export async function normalizeSegmentClip(sourcePath, destinationPath, options)
 }
 
 export async function renderGapClip(destinationPath, options) {
-  if (!options.force && await fileExists(destinationPath)) {
+  if (!options.force && (await fileExists(destinationPath))) {
     return;
   }
 
@@ -112,24 +117,40 @@ export async function renderGapClip(destinationPath, options) {
 
   await execFileText(options.ffmpegPath, [
     '-hide_banner',
-    '-loglevel', 'error',
+    '-loglevel',
+    'error',
     '-y',
-    '-f', 'lavfi',
-    '-i', `color=c=black:s=${options.width}x${options.height}:r=${options.frameRate}:d=${options.durationSeconds}`,
-    '-f', 'lavfi',
-    '-i', `anullsrc=channel_layout=stereo:sample_rate=${options.audioSampleRate}`,
-    '-vf', videoFilters.join(','),
+    '-f',
+    'lavfi',
+    '-i',
+    `color=c=black:s=${options.width}x${options.height}:r=${options.frameRate}:d=${options.durationSeconds}`,
+    '-f',
+    'lavfi',
+    '-i',
+    `anullsrc=channel_layout=stereo:sample_rate=${options.audioSampleRate}`,
+    '-vf',
+    videoFilters.join(','),
     '-shortest',
-    '-c:v', 'libx264',
-    '-preset', 'veryfast',
-    '-crf', '18',
-    '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac',
-    '-ar', String(options.audioSampleRate),
-    '-b:a', '128k',
-    '-ac', '2',
-    '-f', 'mp4',
-    '-movflags', '+faststart',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '18',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:a',
+    'aac',
+    '-ar',
+    String(options.audioSampleRate),
+    '-b:a',
+    '128k',
+    '-ac',
+    '2',
+    '-f',
+    'mp4',
+    '-movflags',
+    '+faststart',
     destinationPartialPath
   ]);
   await rename(destinationPartialPath, destinationPath);
@@ -142,13 +163,7 @@ export function buildGapVideoFilters(options) {
     gapDrawTextFilter(String(options.title || 'Live feed'), 'h*0.20', 34, false),
     gapDrawTextFilter('LIVE FEED NOT CAPTURED', 'h*0.29', 30, false, 'yellow'),
     gapDrawTextFilter(`Lost at ${options.lostWallClockEastern || 'unknown time'}`, 'h*0.38', 28, false),
-    gapDrawTextFilter(
-      `Elapsed since loss\\: ${buildDynamicClockText('t')}`,
-      'h*0.47',
-      30,
-      true,
-      'white'
-    ),
+    gapDrawTextFilter(`Elapsed since loss\\: ${buildDynamicClockText('t')}`, 'h*0.47', 30, true, 'white'),
     gapDrawTextFilter(
       `Remaining until live feed resumes\\: ${buildDynamicClockText(`max(0\\,${durationExpression}-t)`)}`,
       'h*0.56',
@@ -157,7 +172,13 @@ export function buildGapVideoFilters(options) {
       'white'
     ),
     gapDrawTextFilter(`Resume at ${options.resumeWallClockEastern || 'unknown time'}`, 'h*0.65', 28, false),
-    gapDrawTextFilter(`Jump to ${options.jumpToLabel || '00:00:00'} to continue live feed`, 'h*0.72', 24, false, 'white'),
+    gapDrawTextFilter(
+      `Jump to ${options.jumpToLabel || '00:00:00'} to continue live feed`,
+      'h*0.72',
+      24,
+      false,
+      'white'
+    ),
     'drawbox=x=iw*0.10:y=ih*0.83:w=iw*0.80:h=18:color=white@0.25:t=fill'
   ];
 
@@ -195,12 +216,7 @@ export function buildDynamicClockText(secondsExpression) {
 }
 
 export async function probeVideoFile(ffprobePath, filePath) {
-  const stdout = await execFileText(ffprobePath, [
-    '-v', 'error',
-    '-print_format', 'json',
-    '-show_streams',
-    filePath
-  ]);
+  const stdout = await execFileText(ffprobePath, ['-v', 'error', '-print_format', 'json', '-show_streams', filePath]);
   const payload = JSON.parse(stdout || '{}');
   const streams = Array.isArray(payload.streams) ? payload.streams : [];
   const videoStream = streams.find((stream) => String(stream.codec_type || '') === 'video') || {};

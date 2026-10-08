@@ -7,7 +7,12 @@ import { fileExists, loadJson, writeJsonAtomically } from '../util/fs-utils.js';
 import { downloadTrailingSegments } from './backfill.js';
 import { silenceThresholdDb, colorBarLookbackSegments, resumeRecentCaptureMs } from './constants.js';
 import { initializeCaptureMetrics, formatSnapshotTimestamp, formatDuration, formatEasternTime } from './progress.js';
-import { restoreCurrentStreamMetrics, parseStreamIdentity, restoreStreamIdentityLog, writeStreamIdentityLog } from './stream-identity.js';
+import {
+  restoreCurrentStreamMetrics,
+  parseStreamIdentity,
+  restoreStreamIdentityLog,
+  writeStreamIdentityLog
+} from './stream-identity.js';
 
 // Capture sessions: one folder per meeting with its segments, resumed after a restart, and handed over to a new
 // folder when a new meeting starts (or, if configured, at each stream identifier change).
@@ -26,13 +31,13 @@ export async function restoreRecentCaptureSessions(source, state, liveEntries) {
 
     state.captures[key] = recovered;
     console.log(
-      `[live ${entry.id}] resuming stream ${recovered.currentStream?.identifier || 'unknown'}`
-        + ` | cap ${formatDuration(recovered.currentStream?.capturedDurationSeconds)}`
-        + ` | miss ${formatDuration(recovered.currentStream?.lostDurationSeconds)}`
-        + ` | pos ${formatDuration(recovered.currentStream?.videoPositionSeconds)}`
-        + ` | first capture ${formatEasternTime(recovered.currentStream?.startedAt)}`
-        + ` | last capture ${formatEasternTime(recovered.currentStream?.lastSegmentAt)}`
-        + ` | now ${formatEasternTime(new Date().toISOString())}`
+      `[live ${entry.id}] resuming stream ${recovered.currentStream?.identifier || 'unknown'}` +
+        ` | cap ${formatDuration(recovered.currentStream?.capturedDurationSeconds)}` +
+        ` | miss ${formatDuration(recovered.currentStream?.lostDurationSeconds)}` +
+        ` | pos ${formatDuration(recovered.currentStream?.videoPositionSeconds)}` +
+        ` | first capture ${formatEasternTime(recovered.currentStream?.startedAt)}` +
+        ` | last capture ${formatEasternTime(recovered.currentStream?.lastSegmentAt)}` +
+        ` | now ${formatEasternTime(new Date().toISOString())}`
     );
   }
 }
@@ -130,7 +135,8 @@ export function sameLiveVideo(session, liveEntry) {
 export async function loadSegmentManifest(filePath) {
   try {
     const raw = await readFile(filePath, 'utf8');
-    return raw.split(/\r?\n/)
+    return raw
+      .split(/\r?\n/)
       .map((line) => {
         try {
           return JSON.parse(line);
@@ -205,15 +211,19 @@ export async function ensureCaptureSession(source, state, liveEntry, context) {
   }
 
   const sessionDir = await createSessionDir(source.liveStorageDir, liveEntry.id);
-  const capture = buildCaptureRecord({
-    id: liveEntry.id,
-    title: liveEntry.title || '',
-    duration: liveEntry.duration || '',
-    pageUrl: liveEntry.pageUrl,
-    livePageUrl: liveEntry.livePageUrl,
-    hlsUrl: liveEntry.hlsUrl || '',
-    sourceKey: source.key
-  }, sessionDir, now);
+  const capture = buildCaptureRecord(
+    {
+      id: liveEntry.id,
+      title: liveEntry.title || '',
+      duration: liveEntry.duration || '',
+      pageUrl: liveEntry.pageUrl,
+      livePageUrl: liveEntry.livePageUrl,
+      hlsUrl: liveEntry.hlsUrl || '',
+      sourceKey: source.key
+    },
+    sessionDir,
+    now
+  );
 
   state.captures[key] = capture;
   await writeJsonAtomically(path.join(sessionDir, 'session.json'), capture);
@@ -292,8 +302,12 @@ export function buildCaptureRecord(base, sessionDir, now) {
 export async function rotateSessionOnIdentityChange(segment, capture, context) {
   const incoming = parseStreamIdentity(segment.url, capture);
   const current = capture.streamIdentityLog?.current;
-  if (!incoming || !current?.identifier || incoming.identifier === current.identifier
-    || !(segment.sequence > Number(capture.lastObservedSegmentSequence))) {
+  if (
+    !incoming ||
+    !current?.identifier ||
+    incoming.identifier === current.identifier ||
+    !(segment.sequence > Number(capture.lastObservedSegmentSequence))
+  ) {
     return false;
   }
   const source = SOURCES.find((item) => item.key === capture.sourceKey);
@@ -310,7 +324,11 @@ export async function rotateSessionOnIdentityChange(segment, capture, context) {
     toFirstSequence: segment.sequence,
     detectedAt: new Date().toISOString()
   };
-  const sessionDir = await startNextSession(capture, `Stream identifier changed (${transition.from} -> ${transition.to})`, { transition });
+  const sessionDir = await startNextSession(
+    capture,
+    `Stream identifier changed (${transition.from} -> ${transition.to})`,
+    { transition }
+  );
   capture.lastObservedSegmentSequence = segment.sequence - 1;
   console.log(`[live ${capture.id}] new session for stream ${transition.to} | ${sessionDir}`);
   return true;
@@ -323,14 +341,25 @@ export async function rotateSessionOnIdentityChange(segment, capture, context) {
 export async function startSessionAfterStandby(segment, download, capture) {
   const slideShow = capture.slideShow;
   const source = SOURCES.find((item) => item.key === capture.sourceKey);
-  const minutes = slideShow?.active && slideShow.startedAt ? (Date.parse(download.capturedAt) - Date.parse(slideShow.startedAt)) / 60000 : 0;
+  const minutes =
+    slideShow?.active && slideShow.startedAt
+      ? (Date.parse(download.capturedAt) - Date.parse(slideShow.startedAt)) / 60000
+      : 0;
   if (!(capture.segmentCount > 0) || !(minutes >= Number(source?.newSessionAfterStandbyMinutes ?? 10))) {
     return null;
   }
   const oldPath = path.join(capture.sessionDir, 'segments', download.fileName);
-  const sessionDir = await startNextSession(capture, `Standby slide for ${Math.round(minutes)} minutes: the meeting ended`, {
-    standby: { startedAt: slideShow.startedAt, endedAt: download.capturedAt, discardedSegmentCount: slideShow.discardedSegmentCount }
-  });
+  const sessionDir = await startNextSession(
+    capture,
+    `Standby slide for ${Math.round(minutes)} minutes: the meeting ended`,
+    {
+      standby: {
+        startedAt: slideShow.startedAt,
+        endedAt: download.capturedAt,
+        discardedSegmentCount: slideShow.discardedSegmentCount
+      }
+    }
+  );
   capture.lastObservedSegmentSequence = segment.sequence - 1;
   const newPath = path.join(sessionDir, 'segments', download.fileName);
   await rename(oldPath, newPath);

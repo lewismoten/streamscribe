@@ -33,7 +33,7 @@ export async function runCommand(command, args) {
 // A command that already contains a path separator is checked as-is.
 export async function findCommandPath(command) {
   if (command.includes(path.sep)) {
-    return await fileExists(command) ? command : '';
+    return (await fileExists(command)) ? command : '';
   }
   const envPath = String(process.env.PATH || '');
   for (const dir of envPath.split(path.delimiter).filter(Boolean)) {

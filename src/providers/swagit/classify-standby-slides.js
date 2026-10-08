@@ -19,7 +19,8 @@ async function main() {
       blackRailLuminanceBelow: 60,
       sealLuminanceAtLeast: 65,
       slideSignatureFrames: ['start', 'middle', 'end'],
-      slideSignature: 'eight relative rail/outside-seal points are black and four relative inside-seal points are non-black',
+      slideSignature:
+        'eight relative rail/outside-seal points are black and four relative inside-seal points are non-black',
       inferenceBlockSize
     },
     candidates: [],
@@ -46,7 +47,9 @@ async function main() {
   }
   report.scannedSegmentCount = workItems.length;
   await analyzeWorkItems(workItems, report, options.concurrency);
-  report.findings = report.findings.filter(Boolean).sort((left, right) => String(left.capturedAt || '').localeCompare(String(right.capturedAt || '')));
+  report.findings = report.findings
+    .filter(Boolean)
+    .sort((left, right) => String(left.capturedAt || '').localeCompare(String(right.capturedAt || '')));
   report.candidates = report.findings.filter((finding) => finding.candidate);
   if (options.discard) {
     report.discarded = await discardCandidateFiles(report.candidates);
@@ -61,9 +64,9 @@ async function main() {
   }
 
   console.log(
-    `Classified ${report.scannedSegmentCount.toLocaleString('en-US')} segments; found ${report.candidates.length.toLocaleString('en-US')} discard candidates.`
-      + ` | inspected ${report.inspectedSegmentCount.toLocaleString('en-US')}, inferred ${report.inferredSegmentCount.toLocaleString('en-US')}`
-      + (options.discard ? ` | deleted ${report.discarded.deletedCount}` : '')
+    `Classified ${report.scannedSegmentCount.toLocaleString('en-US')} segments; found ${report.candidates.length.toLocaleString('en-US')} discard candidates.` +
+      ` | inspected ${report.inspectedSegmentCount.toLocaleString('en-US')}, inferred ${report.inferredSegmentCount.toLocaleString('en-US')}` +
+      (options.discard ? ` | deleted ${report.discarded.deletedCount}` : '')
   );
   printFindingRanges(report.findings);
 }
@@ -82,15 +85,18 @@ async function discardCandidateFiles(candidates) {
     const filePath = path.join(candidate.sessionDir, 'segments', String(candidate.fileName || ''));
     try {
       await fs.promises.unlink(filePath);
-      await fs.promises.appendFile(path.join(candidate.sessionDir, 'discarded-segments.jsonl'), `${JSON.stringify({
-        capturedAt: candidate.capturedAt,
-        sequence: candidate.sequence,
-        key: candidate.key || '',
-        fileName: candidate.fileName,
-        reason: candidate.reason || 'silent-persistent-slide-signature',
-        discardedAt: new Date().toISOString(),
-        discardedBy: 'classify-swagit-standby'
-      })}\n`);
+      await fs.promises.appendFile(
+        path.join(candidate.sessionDir, 'discarded-segments.jsonl'),
+        `${JSON.stringify({
+          capturedAt: candidate.capturedAt,
+          sequence: candidate.sequence,
+          key: candidate.key || '',
+          fileName: candidate.fileName,
+          reason: candidate.reason || 'silent-persistent-slide-signature',
+          discardedAt: new Date().toISOString(),
+          discardedBy: 'classify-swagit-standby'
+        })}\n`
+      );
       deletedCount += 1;
     } catch (error) {
       if (error?.code === 'ENOENT') {
@@ -104,7 +110,14 @@ async function discardCandidateFiles(candidates) {
 }
 
 function parseArgs(args) {
-  const options = { sources: [], fileNames: new Set(), outputPath: '', jsonOnly: false, discard: false, concurrency: defaultConcurrency };
+  const options = {
+    sources: [],
+    fileNames: new Set(),
+    outputPath: '',
+    jsonOnly: false,
+    discard: false,
+    concurrency: defaultConcurrency
+  };
   for (let index = 0; index < args.length; index += 1) {
     const arg = String(args[index] || '').trim();
     if (arg === '--source') {
@@ -144,10 +157,10 @@ function printFindingRanges(findings) {
     const current = groups.at(-1);
     const sequence = Number(finding.sequence);
     if (
-      !current
-      || current.candidate !== finding.candidate
-      || current.captureId !== finding.captureId
-      || sequence !== Number(current.lastSequence) + 1
+      !current ||
+      current.candidate !== finding.candidate ||
+      current.captureId !== finding.captureId ||
+      sequence !== Number(current.lastSequence) + 1
     ) {
       groups.push({
         candidate: finding.candidate,
@@ -166,12 +179,13 @@ function printFindingRanges(findings) {
     current.lastCapturedAt = finding.capturedAt;
   }
   for (const group of groups) {
-    const files = group.firstFileName === group.lastFileName
-      ? group.firstFileName
-      : `${group.firstFileName.replace(/\.ts$/i, '')}-${group.lastFileName}`;
+    const files =
+      group.firstFileName === group.lastFileName
+        ? group.firstFileName
+        : `${group.firstFileName.replace(/\.ts$/i, '')}-${group.lastFileName}`;
     console.log(
-      `${files} ${group.candidate ? 'drop' : 'keep'}`
-        + ` ${formatFindingTime(group.firstCapturedAt)}-${formatFindingTime(group.lastCapturedAt, true)}`
+      `${files} ${group.candidate ? 'drop' : 'keep'}` +
+        ` ${formatFindingTime(group.firstCapturedAt)}-${formatFindingTime(group.lastCapturedAt, true)}`
     );
   }
 }
@@ -183,7 +197,8 @@ function formatFindingTime(value, omitDate = false) {
 }
 
 // Started by bin/classify-swagit-standby.js.
-export const run = () => main().catch((error) => {
-  console.error(error?.stack || error);
-  process.exitCode = 1;
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error?.stack || error);
+    process.exitCode = 1;
+  });

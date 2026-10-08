@@ -11,7 +11,11 @@ function voteEnd(vote) {
   return last + (vote.showSeconds || 20);
 }
 function activeVote(seconds) {
-  return [...voteData.votes].filter((vote) => vote.at <= seconds + 0.05 && seconds < voteEnd(vote)).sort((a, b) => b.at - a.at)[0] || null;
+  return (
+    [...voteData.votes]
+      .filter((vote) => vote.at <= seconds + 0.05 && seconds < voteEnd(vote))
+      .sort((a, b) => b.at - a.at)[0] || null
+  );
 }
 // The vote on the video: the one being edited while the vote panel is open (shown the whole time, so the motion
 // and second can be found before the vote opens), otherwise the active one when "Show votes" is checked.
@@ -37,21 +41,32 @@ async function overlayClick(id) {
   const vote = overlayVote();
   if (!vote) return;
   if (voteClickMode === 'vote') {
-    if (vote.editing) { toggleVote(id); return; }
+    if (vote.editing) {
+      toggleVote(id);
+      return;
+    }
     const saved = voteData.votes.find((item) => item.id === vote.id);
     const before = saved.changes;
     saved.changes = toggledChanges(saved, voteChanges(saved), id, position);
     saved.results = {};
-    Object.entries(voteState(saved, Infinity).statuses).forEach(([member, status]) => { if (status !== 'pending') saved.results[member] = status; });
+    Object.entries(voteState(saved, Infinity).statuses).forEach(([member, status]) => {
+      if (status !== 'pending') saved.results[member] = status;
+    });
     const person = peopleMap.get(id) || { id, name: id };
-    if (!(await saveVotes(lastName(person) + ': ' + choiceNames[statusAt(saved, id, position)] + ' at ' + fmt(position)))) saved.changes = before;
+    if (
+      !(await saveVotes(lastName(person) + ': ' + choiceNames[statusAt(saved, id, position)] + ' at ' + fmt(position)))
+    )
+      saved.changes = before;
     return;
   }
   const role = voteClickMode;
   voteClickMode = 'vote';
   const current = vote[role + 'By'];
   // Clicking the same person again at the same moment clears it.
-  const entry = current?.id === id && current.at !== null && Math.abs(current.at - position) <= 2 ? null : { id, at: Number(position.toFixed(2)) };
+  const entry =
+    current?.id === id && current.at !== null && Math.abs(current.at - position) <= 2
+      ? null
+      : { id, at: Number(position.toFixed(2)) };
   if (vote.editing) {
     $('vote-' + role + '-by').value = entry ? entry.id : '';
     $('vote-' + role + '-at').value = entry ? fmtPrecise(entry.at) : '';
@@ -63,12 +78,24 @@ async function overlayClick(id) {
   const before = saved[role + 'By'];
   saved[role + 'By'] = entry;
   const person = peopleMap.get(id) || { id, name: id };
-  if (!(await saveVotes(entry ? (role === 'moved' ? 'Moved by ' : 'Seconded by ') + lastName(person) + ' at ' + fmt(position) : 'Cleared'))) saved[role + 'By'] = before;
+  if (
+    !(await saveVotes(
+      entry ? (role === 'moved' ? 'Moved by ' : 'Seconded by ') + lastName(person) + ' at ' + fmt(position) : 'Cleared'
+    ))
+  )
+    saved[role + 'By'] = before;
 }
 // Starts a new vote here and shows it, ready for members to be clicked as they vote.
 async function startVoteNow() {
-  const vote = { id: Date.now().toString(36), at: Number(position.toFixed(2)), motion: 'Motion',
-    changes: [], results: {}, outcome: 'auto', showSeconds: 20 };
+  const vote = {
+    id: Date.now().toString(36),
+    at: Number(position.toFixed(2)),
+    motion: 'Motion',
+    changes: [],
+    results: {},
+    outcome: 'auto',
+    showSeconds: 20
+  };
   voteData.votes = [...voteData.votes, vote];
   if (await saveVotes('Vote started at ' + fmt(vote.at) + ': click members on the video as they vote')) {
     if (!$('show-votes').checked) setShowVotes(true);
@@ -81,10 +108,16 @@ $('vote-start').addEventListener('click', startVoteNow);
 function setVotesShown(shown) {
   $('votes-panel').hidden = !shown;
   $('votes-toggle').setAttribute('aria-pressed', shown ? 'true' : 'false');
-  try { localStorage.setItem('thumbnails.votesShown', shown ? '1' : '0'); } catch {}
+  try {
+    localStorage.setItem('thumbnails.votesShown', shown ? '1' : '0');
+  } catch {}
 }
 $('votes-toggle').addEventListener('click', () => setVotesShown($('votes-panel').hidden));
-try { setVotesShown(localStorage.getItem('thumbnails.votesShown') !== '0'); } catch { setVotesShown(true); }
+try {
+  setVotesShown(localStorage.getItem('thumbnails.votesShown') !== '0');
+} catch {
+  setVotesShown(true);
+}
 $('vote-prev').addEventListener('click', () => {
   const previous = [...voteData.votes].sort((a, b) => b.at - a.at).find((vote) => vote.at < position - 1.5);
   if (previous) showPosition(previous.at);
@@ -95,7 +128,13 @@ $('vote-next').addEventListener('click', () => {
 });
 async function moveVoteStart(vote) {
   const at = Number(position.toFixed(2));
-  if (vote.editing) { $('vote-time').value = fmtPrecise(at); renderVoteMembers(); voteOverlayKey = null; updateVoteOverlay(); return; }
+  if (vote.editing) {
+    $('vote-time').value = fmtPrecise(at);
+    renderVoteMembers();
+    voteOverlayKey = null;
+    updateVoteOverlay();
+    return;
+  }
   const saved = voteData.votes.find((item) => item.id === vote.id);
   const before = saved.at;
   saved.at = at;
@@ -123,15 +162,30 @@ function updateVoteOverlay() {
   startButton.type = 'button';
   startButton.textContent = '⏱ Starts now';
   startButton.title = 'Move the start of this vote to ' + fmt(position);
-  startButton.addEventListener('click', (event) => { event.stopPropagation(); moveVoteStart(vote); });
+  startButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    moveVoteStart(vote);
+  });
   modes.appendChild(startButton);
-  [['vote', '🗳 Vote'], ['moved', '✋ Moved'], ['seconded', '✋ Seconded']].forEach(([mode, label]) => {
+  [
+    ['vote', '🗳 Vote'],
+    ['moved', '✋ Moved'],
+    ['seconded', '✋ Seconded']
+  ].forEach(([mode, label]) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = label;
-    button.title = mode === 'vote' ? "Click a photo to record that member's vote now" : 'Then click the member who ' + mode + ' the motion, at the moment they did';
+    button.title =
+      mode === 'vote'
+        ? "Click a photo to record that member's vote now"
+        : 'Then click the member who ' + mode + ' the motion, at the moment they did';
     if (mode === voteClickMode) button.classList.add('on');
-    button.addEventListener('click', (event) => { event.stopPropagation(); voteClickMode = mode; voteOverlayKey = null; updateVoteOverlay(); });
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      voteClickMode = mode;
+      voteOverlayKey = null;
+      updateVoteOverlay();
+    });
     modes.appendChild(button);
   });
   overlay.appendChild(modes);
@@ -160,15 +214,28 @@ function updateVoteOverlay() {
   if (vote.movedBy?.id || vote.secondedBy?.id) {
     const credits = document.createElement('div');
     credits.className = 'credits';
-    [[vote.movedBy, 'Moved', 'moved'], [vote.secondedBy, 'Seconded', 'seconded']].forEach(([entry, verb, mode]) => {
+    [
+      [vote.movedBy, 'Moved', 'moved'],
+      [vote.secondedBy, 'Seconded', 'seconded']
+    ].forEach(([entry, verb, mode]) => {
       if (!entry?.id) return;
       const person = peopleMap.get(entry.id) || { id: entry.id, name: entry.id };
       const item = document.createElement('span');
-      item.title = verb + ' by ' + shownName(person) + (entry.at === null || entry.at === undefined ? '' : ' at ' + fmt(entry.at)) + ' — click to change';
+      item.title =
+        verb +
+        ' by ' +
+        shownName(person) +
+        (entry.at === null || entry.at === undefined ? '' : ' at ' + fmt(entry.at)) +
+        ' — click to change';
       const text = document.createElement('span');
       text.textContent = verb + ': ' + lastName(person);
       item.append(avatar(person), text);
-      item.addEventListener('click', (event) => { event.stopPropagation(); voteClickMode = mode; voteOverlayKey = null; updateVoteOverlay(); });
+      item.addEventListener('click', (event) => {
+        event.stopPropagation();
+        voteClickMode = mode;
+        voteOverlayKey = null;
+        updateVoteOverlay();
+      });
       credits.appendChild(item);
     });
     overlay.appendChild(credits);
@@ -179,7 +246,10 @@ function updateVoteOverlay() {
     const person = peopleMap.get(id) || { id, name: id };
     const item = document.createElement('div');
     item.className = 'vote-member' + (choice === 'absent' ? ' absent' : '') + (choice === 'pending' ? ' pending' : '');
-    item.title = voteClickMode === 'vote' ? 'Click to record ' + shownName(person) + "'s vote at " + fmt(position) : shownName(person) + ' ' + voteClickMode + ' the motion at ' + fmt(position);
+    item.title =
+      voteClickMode === 'vote'
+        ? 'Click to record ' + shownName(person) + "'s vote at " + fmt(position)
+        : shownName(person) + ' ' + voteClickMode + ' the motion at ' + fmt(position);
     const face = document.createElement('span');
     face.className = 'face';
     face.appendChild(avatar(person));
@@ -195,7 +265,10 @@ function updateVoteOverlay() {
     district.className = 'district';
     district.textContent = choice === 'absent' ? 'absent' : districtOf(person);
     item.append(face, name, district);
-    item.addEventListener('click', (event) => { event.stopPropagation(); overlayClick(id); });
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
+      overlayClick(id);
+    });
     members.appendChild(item);
   });
   overlay.appendChild(members);
@@ -206,11 +279,15 @@ function updateVoteOverlay() {
 }
 function setShowVotes(visible) {
   $('show-votes').checked = visible;
-  try { localStorage.setItem('thumbnails.showVotes', visible ? '1' : '0'); } catch {}
+  try {
+    localStorage.setItem('thumbnails.showVotes', visible ? '1' : '0');
+  } catch {}
   voteOverlayKey = null;
   updateVoteOverlay();
 }
 $('show-votes').addEventListener('change', () => setShowVotes($('show-votes').checked));
-try { if (localStorage.getItem('thumbnails.showVotes') === '1') $('show-votes').checked = true; } catch {}
+try {
+  if (localStorage.getItem('thumbnails.showVotes') === '1') $('show-votes').checked = true;
+} catch {}
 
 renderVotes();

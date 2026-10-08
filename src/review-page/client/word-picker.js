@@ -12,7 +12,12 @@ function openWordPicker(word, anchor) {
   wordPicker.textContent = '';
   const head = document.createElement('div');
   head.className = 'picker-head';
-  head.textContent = '“' + (word.edited ? (word.display || word.original) : word.text) + '” at ' + fmt(word.at) + ' — who starts speaking here?';
+  head.textContent =
+    '“' +
+    (word.edited ? word.display || word.original : word.text) +
+    '” at ' +
+    fmt(word.at) +
+    ' — who starts speaking here?';
   const close = document.createElement('button');
   close.type = 'button';
   close.textContent = '✕';
@@ -35,14 +40,20 @@ function openWordPicker(word, anchor) {
   remove.type = 'button';
   remove.textContent = '🗑';
   remove.title = 'Delete this word';
-  remove.addEventListener('click', () => { saveWordEdit(word, ''); closeWordPicker(); });
+  remove.addEventListener('click', () => {
+    saveWordEdit(word, '');
+    closeWordPicker();
+  });
   editRow.append(input, save, remove);
   if (word.edited) {
     const restore = document.createElement('button');
     restore.type = 'button';
     restore.textContent = '↺';
     restore.title = 'Restore “' + word.original + '” as transcribed';
-    restore.addEventListener('click', () => { saveWordEdit(word, word.original); closeWordPicker(); });
+    restore.addEventListener('click', () => {
+      saveWordEdit(word, word.original);
+      closeWordPicker();
+    });
     editRow.appendChild(restore);
   }
   editRow.addEventListener('submit', (event) => {
@@ -53,8 +64,12 @@ function openWordPicker(word, anchor) {
   wordPicker.appendChild(editRow);
   const choose = (id, event) => {
     if (event.metaKey || event.ctrlKey) {
-      pickerSelection = pickerSelection.includes(id) ? pickerSelection.filter((item) => item !== id) : [...pickerSelection, id];
-      wordPicker.querySelectorAll('[data-id]').forEach((button) => button.classList.toggle('picked', pickerSelection.includes(button.dataset.id)));
+      pickerSelection = pickerSelection.includes(id)
+        ? pickerSelection.filter((item) => item !== id)
+        : [...pickerSelection, id];
+      wordPicker
+        .querySelectorAll('[data-id]')
+        .forEach((button) => button.classList.toggle('picked', pickerSelection.includes(button.dataset.id)));
       setSpeakersAt(word.at, pickerSelection, 0.05);
     } else {
       setSpeakersAt(word.at, [id], 0.05);
@@ -88,7 +103,9 @@ function openWordPicker(word, anchor) {
     return block;
   };
   const voting = voteData.members.map((member) => member.id).filter((id) => peopleMap.has(id));
-  const spoken = [...new Set(turns.flatMap((turn) => turn.speakers))].filter((id) => !voting.includes(id) && peopleMap.has(id));
+  const spoken = [...new Set(turns.flatMap((turn) => turn.speakers))].filter(
+    (id) => !voting.includes(id) && peopleMap.has(id)
+  );
   const others = people.map((person) => person.id).filter((id) => !voting.includes(id) && !spoken.includes(id));
   faceRow('Voting members', voting);
   faceRow('Spoke in this meeting', spoken);
@@ -111,19 +128,22 @@ function openWordPicker(word, anchor) {
   nobody.type = 'button';
   nobody.textContent = 'Nobody';
   nobody.title = 'No one (or no one in particular) speaks from this word';
-  nobody.addEventListener('click', () => { setSpeakersAt(word.at, [], 0.05); closeWordPicker(); });
+  nobody.addEventListener('click', () => {
+    setSpeakersAt(word.at, [], 0.05);
+    closeWordPicker();
+  });
   actions.appendChild(nobody);
   if (existing) {
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.textContent = 'Remove the change here';
-    remove.addEventListener('click', () => {
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.textContent = 'Remove the change here';
+    removeButton.addEventListener('click', () => {
       turns = turns.filter((turn) => turn !== existing);
       speakersChanged();
       saveTurns();
       closeWordPicker();
     });
-    actions.appendChild(remove);
+    actions.appendChild(removeButton);
   }
   const hint = document.createElement('small');
   hint.textContent = 'Cmd/Ctrl-click to pick several';
@@ -141,11 +161,25 @@ function placePicker(anchor) {
   wordPicker.style.left = left + 'px';
   wordPicker.style.top = (below + height > window.innerHeight - 8 ? Math.max(8, rect.top - height - 6) : below) + 'px';
 }
-function closeWordPicker() { wordPicker.hidden = true; }
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !wordPicker.hidden) closeWordPicker(); });
-document.addEventListener('mousedown', (event) => {
-  if (!wordPicker.hidden && !wordPicker.contains(event.target) && !event.target.classList?.contains('w')) closeWordPicker();
+function closeWordPicker() {
+  wordPicker.hidden = true;
+}
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !wordPicker.hidden) closeWordPicker();
 });
-['wheel', 'touchmove', 'keydown'].forEach((type) => transcriptList.addEventListener(type, () => { userScrolledAt = Date.now(); }, { passive: true }));
-transcriptList.addEventListener('mousedown', (event) => { if (event.target === transcriptList) userScrolledAt = Date.now(); });
-
+document.addEventListener('mousedown', (event) => {
+  if (!wordPicker.hidden && !wordPicker.contains(event.target) && !event.target.classList?.contains('w'))
+    closeWordPicker();
+});
+['wheel', 'touchmove', 'keydown'].forEach((type) =>
+  transcriptList.addEventListener(
+    type,
+    () => {
+      userScrolledAt = Date.now();
+    },
+    { passive: true }
+  )
+);
+transcriptList.addEventListener('mousedown', (event) => {
+  if (event.target === transcriptList) userScrolledAt = Date.now();
+});

@@ -1,0 +1,54 @@
+/* Accounts and people: the people and permissions tables. */
+.topbar nav {
+  flex-wrap: wrap;
+}
+.topbar nav a.account-link {
+  margin-left: 8px;
+}
+.narrow {
+  max-width: 560px;
+}
+label.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table.people,
+table.permissions {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92rem;
+}
+table.people th,
+table.people td,
+table.permissions th,
+table.permissions td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+table.permissions td.center {
+  text-align: center;
+}
+table.permissions th {
+  white-space: nowrap;
+}
+.group-name {
+  width: 8em;
+  font: inherit;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 4px;
+  color: var(--fg);
+}
+.group-name:hover,
+.group-name:focus {
+  border-color: var(--line);
+  background: var(--card);
+}

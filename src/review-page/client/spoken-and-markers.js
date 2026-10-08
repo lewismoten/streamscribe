@@ -22,13 +22,15 @@ function renderSpoke() {
   const stretches = speakingStretches(spokePerson);
   $('spoke-title').textContent = 'When ' + shownName(person) + ' spoke';
   const total = stretches.reduce((sum, item) => sum + (item.to - item.from), 0);
-  $('spoke-summary').textContent = stretches.length ? stretches.length + ' time' + (stretches.length === 1 ? '' : 's') + ', ' + fmt(total) + ' in all' : 'Not marked as speaking yet';
+  $('spoke-summary').textContent = stretches.length
+    ? stretches.length + ' time' + (stretches.length === 1 ? '' : 's') + ', ' + fmt(total) + ' in all'
+    : 'Not marked as speaking yet';
   const bar = $('spoke-bar');
   bar.textContent = '';
   stretches.forEach((item) => {
     const segment = document.createElement('span');
-    segment.style.left = (item.from / endSeconds * 100) + '%';
-    segment.style.width = ((item.to - item.from) / endSeconds * 100) + '%';
+    segment.style.left = (item.from / endSeconds) * 100 + '%';
+    segment.style.width = ((item.to - item.from) / endSeconds) * 100 + '%';
     segment.title = fmt(item.from) + '-' + fmt(item.to);
     bar.appendChild(segment);
   });
@@ -50,7 +52,11 @@ function renderSpoke() {
     const words = document.createElement('span');
     words.className = 'spoke-text';
     // Their first words in that stretch.
-    words.textContent = transcript.filter((line) => line[0] >= item.from - 0.5 && line[0] < item.to).slice(0, 2).map((line) => line[2]).join(' ');
+    words.textContent = transcript
+      .filter((line) => line[0] >= item.from - 0.5 && line[0] < item.to)
+      .slice(0, 2)
+      .map((line) => line[2])
+      .join(' ');
     go.append(when, length, words);
     go.addEventListener('click', () => showPosition(item.from));
     const boostButton = document.createElement('button');
@@ -64,7 +70,12 @@ function renderSpoke() {
     clipButton.className = 'small';
     clipButton.textContent = '✂';
     clipButton.title = 'Use this stretch as the clip';
-    clipButton.addEventListener('click', () => { start = item.from; end = item.to; update(); showPosition(item.from); });
+    clipButton.addEventListener('click', () => {
+      start = item.from;
+      end = item.to;
+      update();
+      showPosition(item.from);
+    });
     row.append(go, boostButton, clipButton);
     list.appendChild(row);
   });
@@ -75,22 +86,25 @@ function renderSpoke() {
 function updateSpokeCurrent() {
   if (!spokePerson || !$('spoke-dialog').open) return;
   const marker = $('spoke-marker');
-  if (marker) marker.style.left = (position / endSeconds * 100) + '%';
+  if (marker) marker.style.left = (position / endSeconds) * 100 + '%';
   const stretches = speakingStretches(spokePerson);
   const index = stretches.findIndex((item) => position >= item.from - 0.05 && position < item.to);
   if (index === spokeCurrent) return;
   spokeCurrent = index;
   [...$('spoke-list').children].forEach((row, rowIndex) => row.classList.toggle('current', rowIndex === index));
-  [...$('spoke-bar').children].forEach((segment, segmentIndex) => { if (segment.tagName === 'SPAN') segment.classList.toggle('now', segmentIndex === index); });
+  [...$('spoke-bar').children].forEach((segment, segmentIndex) => {
+    if (segment.tagName === 'SPAN') segment.classList.toggle('now', segmentIndex === index);
+  });
 }
 $('spoke-bar').addEventListener('click', (event) => {
   const rect = $('spoke-bar').getBoundingClientRect();
-  const seconds = (event.clientX - rect.left) / rect.width * endSeconds;
+  const seconds = ((event.clientX - rect.left) / rect.width) * endSeconds;
   // Jump to the stretch clicked, or the nearest one.
   const stretches = speakingStretches(spokePerson);
   if (!stretches.length) return;
-  const hit = stretches.find((item) => seconds >= item.from && seconds < item.to)
-    || stretches.reduce((best, item) => (Math.abs(item.from - seconds) < Math.abs(best.from - seconds) ? item : best));
+  const hit =
+    stretches.find((item) => seconds >= item.from && seconds < item.to) ||
+    stretches.reduce((best, item) => (Math.abs(item.from - seconds) < Math.abs(best.from - seconds) ? item : best));
   showPosition(hit.from);
 });
 $('spoke-prev').addEventListener('click', () => {
@@ -114,7 +128,7 @@ function renderScrubMarks() {
   eventsLane.textContent = '';
   const span = Math.max(0.001, range.max - range.min);
   const place = (element, seconds, lane, title, jumpTo) => {
-    element.style.left = ((Math.max(range.min, seconds) - range.min) / span * 100) + '%';
+    element.style.left = ((Math.max(range.min, seconds) - range.min) / span) * 100 + '%';
     element.title = fmt(seconds) + '  ' + title;
     element.addEventListener('click', () => showPosition(jumpTo ?? seconds));
     lane.appendChild(element);
@@ -135,7 +149,13 @@ function renderScrubMarks() {
       more.textContent = '+' + (people.length - 1);
       mark.appendChild(more);
     }
-    place(mark, inside ? turn.at : range.min, speakersLane, people.map(shownName).join(', ') + ' speaking', inside ? turn.at : range.min);
+    place(
+      mark,
+      inside ? turn.at : range.min,
+      speakersLane,
+      people.map(shownName).join(', ') + ' speaking',
+      inside ? turn.at : range.min
+    );
   });
   // Motions (when they were made) and each vote's first vote cast (clicking it plays the roll call from just before).
   voteData.votes.forEach((vote) => {
@@ -144,7 +164,14 @@ function renderScrubMarks() {
       mark.type = 'button';
       mark.className = 'scrub-mark event';
       mark.textContent = '✋';
-      place(mark, vote.movedBy.at, eventsLane, 'Motion by ' + shownName(peopleMap.get(vote.movedBy.id) || { id: vote.movedBy.id, name: vote.movedBy.id }) + (vote.motion ? ': ' + vote.motion : ''));
+      place(
+        mark,
+        vote.movedBy.at,
+        eventsLane,
+        'Motion by ' +
+          shownName(peopleMap.get(vote.movedBy.id) || { id: vote.movedBy.id, name: vote.movedBy.id }) +
+          (vote.motion ? ': ' + vote.motion : '')
+      );
     }
     const changes = voteChanges(vote);
     const first = changes.length ? Math.min(...changes.map((change) => change.at)) : vote.at;
@@ -153,7 +180,13 @@ function renderScrubMarks() {
       mark.type = 'button';
       mark.className = 'scrub-mark event vote-mark ' + voteState(vote, Infinity).outcome;
       mark.textContent = '🗳';
-      place(mark, first, eventsLane, 'Voting begins: ' + (vote.motion || 'Vote') + ' — ' + describeTally(vote), Math.max(range.min, first - 1));
+      place(
+        mark,
+        first,
+        eventsLane,
+        'Voting begins: ' + (vote.motion || 'Vote') + ' — ' + describeTally(vote),
+        Math.max(range.min, first - 1)
+      );
     }
   });
 }

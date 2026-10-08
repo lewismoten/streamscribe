@@ -32,7 +32,10 @@ export function stackMarks(records, viewerId = 0) {
   };
   for (const record of records) {
     const { markId, owner } = splitLayerId(record.id);
-    if (!owner) { stackOf(markId).shared = record; continue; }
+    if (!owner) {
+      stackOf(markId).shared = record;
+      continue;
+    }
     if (record.deleted || !record.data) continue;
     // A change not yet sent has no owner fields yet; it's the viewer's own.
     const layer = { ...record, owner };
@@ -40,9 +43,17 @@ export function stackMarks(records, viewerId = 0) {
     else stackOf(markId).layers.push(layer);
   }
   for (const stack of stacks.values()) {
-    stack.others = stack.layers.filter((layer) => layer.trusted !== false)
-      .sort((left, right) => (left.rank === 'admin') - (right.rank === 'admin') || String(left.updated_at || '').localeCompare(String(right.updated_at || '')));
-    stack.withoutMine = stack.others.reduce(applyLayer, stack.shared && !stack.shared.deleted ? stack.shared.data : null);
+    stack.others = stack.layers
+      .filter((layer) => layer.trusted !== false)
+      .sort(
+        (left, right) =>
+          (left.rank === 'admin') - (right.rank === 'admin') ||
+          String(left.updated_at || '').localeCompare(String(right.updated_at || ''))
+      );
+    stack.withoutMine = stack.others.reduce(
+      applyLayer,
+      stack.shared && !stack.shared.deleted ? stack.shared.data : null
+    );
     stack.data = stack.mine ? applyLayer(stack.withoutMine, stack.mine) : stack.withoutMine;
   }
   return stacks;

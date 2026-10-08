@@ -41,7 +41,7 @@ export async function listFilesRecursively(rootPath) {
   for (const entry of entries) {
     const fullPath = path.join(rootPath, entry.name);
     if (entry.isDirectory()) {
-      files.push(...await listFilesRecursively(fullPath));
+      files.push(...(await listFilesRecursively(fullPath)));
       continue;
     }
     if (entry.isFile()) {

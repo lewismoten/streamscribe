@@ -1,0 +1,25 @@
+# Checks every push and pull request: formatting (Prettier), lint (Oxlint, PHP syntax), types (TypeScript), the tests
+# (including the PHP hub's, against php -S), and that the web app builds: `npm run check` does the same locally.
+name: Check
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

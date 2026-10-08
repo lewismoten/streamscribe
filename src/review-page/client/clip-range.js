@@ -8,7 +8,10 @@ function renderCutMarks() {
   const span = Math.max(0.001, max - min);
   const at = (seconds) => 'calc(8px + (100% - 16px) * ' + ((seconds - min) / span).toFixed(5) + ')';
   const inRange = (seconds) => seconds !== null && seconds >= min && seconds <= max;
-  [['cut-start-mark', from, 'Clip start'], ['cut-end-mark', to, 'Clip end']].forEach(([id, seconds, label]) => {
+  [
+    ['cut-start-mark', from, 'Clip start'],
+    ['cut-end-mark', to, 'Clip end']
+  ].forEach(([id, seconds, label]) => {
     const mark = $(id);
     mark.hidden = !inRange(seconds);
     if (mark.hidden) return;
@@ -24,8 +27,12 @@ function renderCutMarks() {
     band.style.width = 'calc((100% - 16px) * ' + ((right - left) / span).toFixed(5) + ')';
   }
 }
-$('cut-start-mark').addEventListener('click', () => { if (start !== null) showPosition(Math.min(start, end ?? start)); });
-$('cut-end-mark').addEventListener('click', () => { if (end !== null) showPosition(Math.max(end, start ?? end)); });
+$('cut-start-mark').addEventListener('click', () => {
+  if (start !== null) showPosition(Math.min(start, end ?? start));
+});
+$('cut-end-mark').addEventListener('click', () => {
+  if (end !== null) showPosition(Math.max(end, start ?? end));
+});
 // The clip range (set with ✂⟦ ⟧✂, refined and downloaded with 🎬): shown on the toolbar buttons' tooltips and on
 // the thumbnails, and kept in the address bar.
 function update() {
@@ -35,7 +42,9 @@ function update() {
   const ready = from !== null && to !== null && Math.floor(to) > Math.floor(from);
   $('set-start').title = 'Clip starts here' + (from !== null ? ' (now ' + fmt(from) + ')' : '');
   $('set-end').title = 'Clip ends here' + (to !== null ? ' (now ' + fmt(to) + ')' : '');
-  $('clip-open').title = ready ? 'Refine and download the clip ' + fmt(from) + '-' + fmt(to) : 'Refine the clip and download it';
+  $('clip-open').title = ready
+    ? 'Refine and download the clip ' + fmt(from) + '-' + fmt(to)
+    : 'Refine the clip and download it';
   renderCutMarks();
   scheduleQueryUpdate();
   document.querySelectorAll('.grid button').forEach((button) => {
@@ -45,7 +54,6 @@ function update() {
     button.classList.toggle('in-range', ready && seconds > from && seconds < to);
   });
 }
-
 
 function renderGrid() {
   const maxLevel = Number($('density').value);
@@ -57,8 +65,17 @@ function renderGrid() {
     button.type = 'button';
     button.dataset.seconds = item.s;
     button.title = 'Go to ' + fmt(item.s);
-    button.innerHTML = '<img loading="lazy" alt="" src="' + item.f + '"><span>' + fmt(item.s) + (item.c ? ' · ' + item.c : '') + '</span>';
-    button.addEventListener('click', () => { showPosition(item.s); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    button.innerHTML =
+      '<img loading="lazy" alt="" src="' +
+      item.f +
+      '"><span>' +
+      fmt(item.s) +
+      (item.c ? ' · ' + item.c : '') +
+      '</span>';
+    button.addEventListener('click', () => {
+      showPosition(item.s);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
     grid.appendChild(button);
   });
   update();

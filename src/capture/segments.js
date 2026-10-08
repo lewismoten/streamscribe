@@ -1,7 +1,13 @@
 import path from 'path';
 import { rename, rm } from 'fs/promises';
 import { safeUrl } from '../net/http.js';
-import { captureProvider, hlsSegmentTimeoutMs, hlsFetchRetries, hlsRetryDelayMs, colorBarLookbackSegments } from './constants.js';
+import {
+  captureProvider,
+  hlsSegmentTimeoutMs,
+  hlsFetchRetries,
+  hlsRetryDelayMs,
+  colorBarLookbackSegments
+} from './constants.js';
 import { appendJsonLine, sleep } from './files.js';
 import { formatCaptureLabel, formatDuration, formatEasternTime } from './progress.js';
 import { hlsFetchOptions, fetchWithRedirectCookies, streamResponseToFile } from './requests.js';
@@ -61,7 +67,9 @@ export async function downloadSegment(segment, capture, context) {
 export async function processDownloadedSegment(segment, download, capture, knownKeys) {
   const segmentPath = path.join(capture.sessionDir, 'segments', download.fileName);
   // Providers can recognize segments not worth keeping (Swagit's silent standby slide).
-  const disposition = await captureProvider(capture).classifySegment(segmentPath, segment.durationSeconds, { readMaxVolumeDb: readSegmentMaxVolumeDb });
+  const disposition = await captureProvider(capture).classifySegment(segmentPath, segment.durationSeconds, {
+    readMaxVolumeDb: readSegmentMaxVolumeDb
+  });
   if (disposition.discard) {
     await discardCapturedSegment(segment, download, capture, knownKeys, disposition);
     return false;
@@ -78,8 +86,12 @@ export async function recordCapturedSegment(segment, download, capture, knownKey
   capture.segmentCount += 1;
   capture.bytesCaptured += download.bytes;
   capture.capturedDurationSeconds += Number(segment.durationSeconds || 0);
-  if (Number.isFinite(capture.lastObservedSegmentSequence) && segment.sequence > capture.lastObservedSegmentSequence + 1) {
-    capture.lostDurationSeconds += (segment.sequence - capture.lastObservedSegmentSequence - 1) * Number(segment.durationSeconds || 0);
+  if (
+    Number.isFinite(capture.lastObservedSegmentSequence) &&
+    segment.sequence > capture.lastObservedSegmentSequence + 1
+  ) {
+    capture.lostDurationSeconds +=
+      (segment.sequence - capture.lastObservedSegmentSequence - 1) * Number(segment.durationSeconds || 0);
   }
   capture.lastSegmentSequence = segment.sequence;
   capture.lastObservedSegmentSequence = segment.sequence;
@@ -99,9 +111,9 @@ export async function recordCapturedSegment(segment, download, capture, knownKey
   await updateStreamIdentityLog(segment, download, capture);
   if (streamStarted) {
     console.log(
-      `[live ${formatCaptureLabel(capture)}] stream started`
-        + ` | first capture ${formatEasternTime(capture.currentStream.startedAt)}`
-        + ` | seq ${capture.currentStream.firstSequence}`
+      `[live ${formatCaptureLabel(capture)}] stream started` +
+        ` | first capture ${formatEasternTime(capture.currentStream.startedAt)}` +
+        ` | seq ${capture.currentStream.firstSequence}`
     );
   }
   rememberRecentSegment(capture, segment, download);
@@ -113,7 +125,8 @@ export async function discardCapturedSegment(segment, download, capture, knownKe
   capture.discardedSegmentKeys = Array.isArray(capture.discardedSegmentKeys) ? capture.discardedSegmentKeys : [];
   capture.discardedSegmentKeys.push(segment.key);
   capture.discardedSegmentCount = Number(capture.discardedSegmentCount || 0) + 1;
-  capture.discardedDurationSeconds = Number(capture.discardedDurationSeconds || 0) + Number(segment.durationSeconds || 0);
+  capture.discardedDurationSeconds =
+    Number(capture.discardedDurationSeconds || 0) + Number(segment.durationSeconds || 0);
   capture.lastObservedSegmentSequence = segment.sequence;
   const slideShow = initializeSlideShow(capture);
   if (!slideShow.active) {
@@ -125,8 +138,8 @@ export async function discardCapturedSegment(segment, download, capture, knownKe
     capture.currentStream = null;
     capture.lastProgressOutputAt = '';
     console.log(
-      `[live ${formatCaptureLabel(capture)}] video appears to have transitioned to a slide show`
-      + ` | ${formatEasternTime(download.capturedAt)} | capture metrics reset`
+      `[live ${formatCaptureLabel(capture)}] video appears to have transitioned to a slide show` +
+        ` | ${formatEasternTime(download.capturedAt)} | capture metrics reset`
     );
   }
   slideShow.discardedSegmentCount += 1;
@@ -152,9 +165,9 @@ export async function resumeFromSlideShow(capture, download) {
   const slideShow = initializeSlideShow(capture);
   if (!slideShow.active) return;
   console.log(
-    `[live ${formatCaptureLabel(capture)}] video resumed from slide show`
-      + ` | discarded ${slideShow.discardedSegmentCount} segments (${formatDuration(slideShow.discardedDurationSeconds)})`
-      + ` | ${formatEasternTime(download.capturedAt)} | capture metrics reset`
+    `[live ${formatCaptureLabel(capture)}] video resumed from slide show` +
+      ` | discarded ${slideShow.discardedSegmentCount} segments (${formatDuration(slideShow.discardedDurationSeconds)})` +
+      ` | ${formatEasternTime(download.capturedAt)} | capture metrics reset`
   );
   slideShow.active = false;
   slideShow.endedAt = download.capturedAt;
@@ -180,7 +193,9 @@ export function initializeSlideShow(capture) {
   }
   capture.slideShow.active = Boolean(capture.slideShow.active);
   capture.slideShow.startedAt = String(capture.slideShow.startedAt || '');
-  capture.slideShow.startSequence = Number.isFinite(capture.slideShow.startSequence) ? capture.slideShow.startSequence : null;
+  capture.slideShow.startSequence = Number.isFinite(capture.slideShow.startSequence)
+    ? capture.slideShow.startSequence
+    : null;
   capture.slideShow.discardedSegmentCount = Number(capture.slideShow.discardedSegmentCount || 0);
   capture.slideShow.discardedDurationSeconds = Number(capture.slideShow.discardedDurationSeconds || 0);
   return capture.slideShow;

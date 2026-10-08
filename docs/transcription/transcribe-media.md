@@ -19,6 +19,8 @@ Both transcribe in 10-minute chunks, retry a chunk that loops on one phrase at a
 
 Timestamps follow the input file's own timeline: with `--from 21:02`, the first line is stamped at about 21:02, matching the same moment in the file.
 
+`--model <file>` uses another whisper.cpp model (default `transcription.whisperCppModel`).
+
 Output goes to `{input folder}/transcripts/` (or `--output-dir`): `{name}[-HH-MM-SS-to-HH-MM-SS]-{quality}.txt`, `.srt`, and `.json`.
 
 Example:

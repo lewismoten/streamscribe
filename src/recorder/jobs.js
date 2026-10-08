@@ -40,18 +40,45 @@ export function jobRunner({ client, findRecording, log }) {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'streamscribe-clip-'));
         try {
           const session = await loadSessionSegments(found.dir);
-          const made = await makeClip(found.dir, session, { from: job.from, to: job.to, outDir: path.join(tempDir, 'out'), tempDir, signal,
-            onProgress: (share, message) => progress(share * 0.9, message) });
+          const made = await makeClip(found.dir, session, {
+            from: job.from,
+            to: job.to,
+            outDir: path.join(tempDir, 'out'),
+            tempDir,
+            signal,
+            onProgress: (share, message) => progress(share * 0.9, message)
+          });
           progress(0.92, 'Uploading');
           const [videoHash, audioHash] = [await sha256(made.video), await sha256(made.audio)];
-          const files = [{ local: made.video, name: `clip-${videoHash.slice(0, 10)}.mp4` }, { local: made.audio, name: `clip-${audioHash.slice(0, 10)}.m4a` }];
-          const [videoPath, audioPath] = await hubFiles().sendFolder('public', `published/${job.publicationId}`, files, { keepOthers: true, signal,
-            onProgress: (share) => progress(0.92 + share * 0.07, 'Uploading') });
+          const files = [
+            { local: made.video, name: `clip-${videoHash.slice(0, 10)}.mp4` },
+            { local: made.audio, name: `clip-${audioHash.slice(0, 10)}.m4a` }
+          ];
+          const [videoPath, audioPath] = await hubFiles().sendFolder(
+            'public',
+            `published/${job.publicationId}`,
+            files,
+            { keepOthers: true, signal, onProgress: (share) => progress(0.92 + share * 0.07, 'Uploading') }
+          );
           const latest = await client.get('publications', job.publicationId);
           if (!latest) throw new Error('The publication is gone (unpublished)');
-          await client.put('publications', job.publicationId, { ...latest.data, clip: { ...latest.data.clip, status: 'ready',
-            video: { path: videoPath, bytes: fs.statSync(made.video).size, type: 'video/mp4', width: made.width, height: made.height },
-            audio: { path: audioPath, bytes: fs.statSync(made.audio).size, type: 'audio/mp4' }, madeBy: RECORDER.id, madeAt: new Date().toISOString() } });
+          await client.put('publications', job.publicationId, {
+            ...latest.data,
+            clip: {
+              ...latest.data.clip,
+              status: 'ready',
+              video: {
+                path: videoPath,
+                bytes: fs.statSync(made.video).size,
+                type: 'video/mp4',
+                width: made.width,
+                height: made.height
+              },
+              audio: { path: audioPath, bytes: fs.statSync(made.audio).size, type: 'audio/mp4' },
+              madeBy: RECORDER.id,
+              madeAt: new Date().toISOString()
+            }
+          });
           return { video: videoPath, audio: audioPath };
         } finally {
           fs.rmSync(tempDir, { recursive: true, force: true });
@@ -59,13 +86,22 @@ export function jobRunner({ client, findRecording, log }) {
       },
       async failed(job, error) {
         const publication = await client.get('publications', job.publicationId);
-        if (publication) await client.put('publications', job.publicationId, { ...publication.data, clip: { ...publication.data.clip, status: 'failed', error: error.message } });
+        if (publication)
+          await client.put('publications', job.publicationId, {
+            ...publication.data,
+            clip: { ...publication.data.clip, status: 'failed', error: error.message }
+          });
       }
     },
     encode: {
       canDo: (job) => Boolean(findRecording(job.recordingId)),
       async run(job, { signal, progress }) {
-        await publishMedia({ items: findRecording(job.recordingId).items, signal, onProgress: progress, log: () => {} });
+        await publishMedia({
+          items: findRecording(job.recordingId).items,
+          signal,
+          onProgress: progress,
+          log: () => {}
+        });
         return {};
       }
     }
@@ -75,33 +111,67 @@ export function jobRunner({ client, findRecording, log }) {
     const job = record.data;
     const lease = await claim(`job:${record.id}`, LEASE_SECONDS);
     if (!lease.granted) return;
-    await update(record.id, { status: 'working', agent: RECORDER.id, agentName: RECORDER.name, startedAt: new Date().toISOString(), progress: 0, message: 'Starting', error: null });
+    await update(record.id, {
+      status: 'working',
+      agent: RECORDER.id,
+      agentName: RECORDER.name,
+      startedAt: new Date().toISOString(),
+      progress: 0,
+      message: 'Starting',
+      error: null
+    });
     await client.sync().catch(() => {});
     const controller = new AbortController();
     let reportedAt = 0;
-    current = { id: record.id, title: job.title || job.type, progress: 0, message: 'Starting', controller, renewedAt: Date.now() };
+    current = {
+      id: record.id,
+      title: job.title || job.type,
+      progress: 0,
+      message: 'Starting',
+      controller,
+      renewedAt: Date.now()
+    };
     log(`Job ${record.id}: ${current.title}`);
     const progress = (share, message = current.message) => {
       current.progress = Math.max(0, Math.min(1, share));
       current.message = message;
       if (Date.now() - reportedAt < 5000) return;
       reportedAt = Date.now();
-      update(record.id, { progress: Number(current.progress.toFixed(3)), message }).then(() => client.sync()).catch(() => {});
+      update(record.id, { progress: Number(current.progress.toFixed(3)), message })
+        .then(() => client.sync())
+        .catch(() => {});
     };
-    current.promise = handlers[job.type].run(job, { signal: controller.signal, progress })
+    current.promise = handlers[job.type]
+      .run(job, { signal: controller.signal, progress })
       .then(async (result) => {
-        await update(record.id, { status: 'done', progress: 1, message: 'Done', result, finishedAt: new Date().toISOString() });
+        await update(record.id, {
+          status: 'done',
+          progress: 1,
+          message: 'Done',
+          result,
+          finishedAt: new Date().toISOString()
+        });
         log(`Job ${record.id} done`);
       })
       .catch(async (error) => {
         const cancelled = controller.signal.aborted;
         if (cancelled && stopping) {
           // The agent is shutting down: back in the queue for it (or another agent) to do later.
-          await update(record.id, { status: 'queued', agent: null, progress: 0, message: 'Waiting (the agent stopped)' });
+          await update(record.id, {
+            status: 'queued',
+            agent: null,
+            progress: 0,
+            message: 'Waiting (the agent stopped)'
+          });
           log(`Job ${record.id} put back in the queue`);
           return;
         }
-        await update(record.id, { status: cancelled ? 'cancelled' : 'failed', message: cancelled ? 'Cancelled' : error.message, error: cancelled ? null : error.message, finishedAt: new Date().toISOString() });
+        await update(record.id, {
+          status: cancelled ? 'cancelled' : 'failed',
+          message: cancelled ? 'Cancelled' : error.message,
+          error: cancelled ? null : error.message,
+          finishedAt: new Date().toISOString()
+        });
         if (!cancelled) await handlers[job.type].failed?.(job, error).catch(() => {});
         log(`Job ${record.id} ${cancelled ? 'cancelled' : `failed: ${error.message}`}`);
       })
@@ -113,12 +183,23 @@ export function jobRunner({ client, findRecording, log }) {
 
   return {
     // What this agent is working on, for its live report.
-    status: () => (current ? { id: current.id, title: current.title, progress: Number(current.progress.toFixed(3)), message: current.message } : null),
+    status: () =>
+      current
+        ? {
+            id: current.id,
+            title: current.title,
+            progress: Number(current.progress.toFixed(3)),
+            message: current.message
+          }
+        : null,
     async tick() {
       if (current) {
         // Still ours? Renew the claim; stop if someone cancelled it.
         const record = await client.get('jobs', current.id);
-        if (!record || record.data.status === 'cancelled') { current.controller.abort(); return; }
+        if (!record || record.data.status === 'cancelled') {
+          current.controller.abort();
+          return;
+        }
         if (Date.now() - current.renewedAt > (LEASE_SECONDS / 3) * 1000) {
           current.renewedAt = Date.now();
           await claim(`job:${current.id}`, LEASE_SECONDS).catch(() => {});
@@ -126,7 +207,12 @@ export function jobRunner({ client, findRecording, log }) {
         return;
       }
       const queued = (await client.list('jobs'))
-        .filter((record) => record.data?.status === 'queued' && handlers[record.data.type] && (!record.data.forAgent || record.data.forAgent === RECORDER.id))
+        .filter(
+          (record) =>
+            record.data?.status === 'queued' &&
+            handlers[record.data.type] &&
+            (!record.data.forAgent || record.data.forAgent === RECORDER.id)
+        )
         .sort((left, right) => String(left.data.createdAt).localeCompare(String(right.data.createdAt)));
       for (const record of queued) {
         if (!handlers[record.data.type].canDo(record.data)) continue;

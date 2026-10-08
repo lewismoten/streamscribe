@@ -16,13 +16,23 @@ const clean = (url) => String(url || '').trim();
 /** @param {string} text @returns {any} */
 export function parseOfficialUrl(text) {
   let url;
-  try { url = new URL(clean(text)); } catch { return null; }
+  try {
+    url = new URL(clean(text));
+  } catch {
+    return null;
+  }
   if (!/^https?:$/.test(url.protocol)) return null;
   const base = `${url.protocol}//${url.host}`;
   const swagit = url.hostname.endsWith('swagit.com') && url.pathname.match(/\/videos\/(\d+)/);
   if (swagit) return { swagit: { base, videoId: swagit[1] } };
-  const clerk = url.hostname.endsWith('civicclerk.com') && url.pathname.match(/\/event\/(\d+)(?:\/files\/(agenda|attachment)\/(\d+))?/);
-  if (clerk) return { civicclerk: { base, eventId: clerk[1] }, file: clerk[2] ? { type: clerk[2], id: clerk[3], url: url.href } : null };
+  const clerk =
+    url.hostname.endsWith('civicclerk.com') &&
+    url.pathname.match(/\/event\/(\d+)(?:\/files\/(agenda|attachment)\/(\d+))?/);
+  if (clerk)
+    return {
+      civicclerk: { base, eventId: clerk[1] },
+      file: clerk[2] ? { type: clerk[2], id: clerk[3], url: url.href } : null
+    };
   if (/calendar\.aspx/i.test(url.pathname) || url.searchParams.has('EID')) return { calendarUrl: url.href };
   return { link: url.href };
 }
@@ -43,7 +53,10 @@ function rawOfficialTime(swagit, position) {
     let after = points.at(-1);
     for (const point of points) {
       if (point[0] <= position) before = point;
-      if (point[0] >= position) { after = point; break; }
+      if (point[0] >= position) {
+        after = point;
+        break;
+      }
     }
     if (position <= points[0][0]) return Math.max(0, points[0][1] - (points[0][0] - position));
     if (position >= after[0] && after === points.at(-1)) return after[1] + (position - after[0]);
@@ -68,11 +81,17 @@ export const embedCode = (swagit, { autoplay = false } = {}) =>
 export function officialLinks(official, { at = null } = {}) {
   if (!official) return [];
   const links = [];
-  const add = (group, label, url) => { if (url) links.push({ group, label, url }); };
+  const add = (group, label, url) => {
+    if (url) links.push({ group, label, url });
+  };
   const swagit = official.swagit;
   if (swagit?.videoId) {
     const video = swagitVideo(swagit);
-    add('Official video', at === null ? 'Watch' : `Watch from here${officialTime(official, at) === null ? ' (start of video)' : ''}`, at === null ? video : swagitAt(official, at));
+    add(
+      'Official video',
+      at === null ? 'Watch' : `Watch from here${officialTime(official, at) === null ? ' (start of video)' : ''}`,
+      at === null ? video : swagitAt(official, at)
+    );
     add('Official video', 'Download the video', `${video}/download`);
     add('Official video', 'Transcript, with the video', `${video}#transcript`);
     add('Official video', 'Download the transcript', `${video}/transcript`);
@@ -81,8 +100,10 @@ export function officialLinks(official, { at = null } = {}) {
   const clerk = official.civicclerk;
   if (clerk?.eventId) {
     add('Documents', 'Meeting overview', `${clerk.base}/event/${clerk.eventId}/overview`);
-    if (clerk.agendaFileId) add('Documents', 'Agenda', `${clerk.base}/event/${clerk.eventId}/files/agenda/${clerk.agendaFileId}`);
-    if (clerk.packetFileId) add('Documents', 'Full agenda packet', `${clerk.base}/event/${clerk.eventId}/files/agenda/${clerk.packetFileId}`);
+    if (clerk.agendaFileId)
+      add('Documents', 'Agenda', `${clerk.base}/event/${clerk.eventId}/files/agenda/${clerk.agendaFileId}`);
+    if (clerk.packetFileId)
+      add('Documents', 'Full agenda packet', `${clerk.base}/event/${clerk.eventId}/files/agenda/${clerk.packetFileId}`);
   }
   add('Calendar', 'Calendar entry', official.calendarUrl);
   for (const link of official.links || []) add('Other', link.label || link.url, link.url);
@@ -94,9 +115,10 @@ export function officialLinks(official, { at = null } = {}) {
 export function mergeOfficial(base, edit) {
   if (!base && !edit) return null;
   return {
-    ...(base || {}), ...(edit || {}),
-    swagit: edit?.swagit || base?.swagit ? { ...(base?.swagit || {}), ...(edit?.swagit || {}) } : undefined,
-    civicclerk: edit?.civicclerk || base?.civicclerk ? { ...(base?.civicclerk || {}), ...(edit?.civicclerk || {}) } : undefined
+    ...base,
+    ...edit,
+    swagit: edit?.swagit || base?.swagit ? { ...base?.swagit, ...edit?.swagit } : undefined,
+    civicclerk: edit?.civicclerk || base?.civicclerk ? { ...base?.civicclerk, ...edit?.civicclerk } : undefined
   };
 }
 
@@ -105,20 +127,30 @@ export function mergeOfficial(base, edit) {
 // lines up with it). Points from capture are kept only where the match was confident.
 export function timelineFromAlignment(meeting, alignment) {
   const points = [];
-  const sessions = new Map((alignment?.sessions || []).map((session) => [String(session.sessionDir).split('/').pop(), session]));
+  const sessions = new Map(
+    (alignment?.sessions || []).map((session) => [String(session.sessionDir).split('/').pop(), session])
+  );
   for (const piece of meeting?.pieces || []) {
     if (piece.kind === 'archive') {
       points.push([piece.meetingStart, piece.archiveStart], [piece.meetingStart + piece.duration, piece.archiveEnd]);
     } else if (piece.kind === 'live') {
       const session = sessions.get(String(piece.session).split('/').pop());
       for (const anchor of session?.anchors || []) {
-        if (anchor.archiveTime === null || anchor.score < 0.5 || anchor.videoStart < piece.liveStart || anchor.videoStart > piece.liveEnd) continue;
+        if (
+          anchor.archiveTime === null ||
+          anchor.score < 0.5 ||
+          anchor.videoStart < piece.liveStart ||
+          anchor.videoStart > piece.liveEnd
+        )
+          continue;
         points.push([piece.meetingStart + (anchor.videoStart - piece.liveStart), anchor.archiveTime]);
       }
     }
   }
   points.sort((left, right) => left[0] - right[0]);
   const kept = [];
-  for (const point of points) if (!kept.length || (point[0] > kept.at(-1)[0] && point[1] >= kept.at(-1)[1])) kept.push(point.map((value) => Math.round(value * 10) / 10));
+  for (const point of points)
+    if (!kept.length || (point[0] > kept.at(-1)[0] && point[1] >= kept.at(-1)[1]))
+      kept.push(point.map((value) => Math.round(value * 10) / 10));
   return kept;
 }

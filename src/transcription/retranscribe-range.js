@@ -31,8 +31,23 @@ async function main() {
   const sessionDir = path.resolve(options.session);
   const workDir = path.join(sessionDir, 'retranscribe');
   const jobPath = options.job ? path.join(workDir, 'jobs', `${options.job}.json`) : '';
-  const job = { id: options.job, action: options.remove ? 'remove' : (options.clip ? 'clip' : (options.peaks ? 'peaks' : (options.preview ? 'preview' : 'transcribe'))), from: options.from, to: options.to,
-    settings: settingsOf(options), quality: options.quality, startedAt: new Date().toISOString() };
+  const job = {
+    id: options.job,
+    action: options.remove
+      ? 'remove'
+      : options.clip
+        ? 'clip'
+        : options.peaks
+          ? 'peaks'
+          : options.preview
+            ? 'preview'
+            : 'transcribe',
+    from: options.from,
+    to: options.to,
+    settings: settingsOf(options),
+    quality: options.quality,
+    startedAt: new Date().toISOString()
+  };
   const report = async (status, extra = {}) => {
     Object.assign(job, { status, updatedAt: new Date().toISOString() }, extra);
     if (jobPath) await writeJson(jobPath, job);
@@ -46,15 +61,28 @@ async function main() {
       const portions = index.portions.filter((portion) => portion.id !== options.remove);
       await writeJson(file, { ...index, portions });
       await renderFinalTranscript(sessionDir);
-      await report('done', { message: `Removed re-transcribed portion ${options.remove}; the original lines are back` });
+      await report('done', {
+        message: `Removed re-transcribed portion ${options.remove}; the original lines are back`
+      });
       return;
     }
     if (!(options.to > options.from)) throw new Error('--to must be after --from');
     if (options.clip) {
       const name = `clip-${formatPosition(options.from).replace(/:/g, '-')}-to-${formatPosition(options.to).replace(/:/g, '-')}${options.accurate ? '-exact' : ''}.mp4`;
-      await report('running', { message: `Cutting ${formatPosition(options.from)}-${formatPosition(options.to)}${options.accurate ? ' (frame-exact)' : ''}...` });
-      await runNode('extract-clip.js', ['--session', sessionDir, '--from', String(options.from), '--to', String(options.to),
-        '--output', path.join(sessionDir, 'clips', name), ...(options.accurate ? ['--accurate'] : [])]);
+      await report('running', {
+        message: `Cutting ${formatPosition(options.from)}-${formatPosition(options.to)}${options.accurate ? ' (frame-exact)' : ''}...`
+      });
+      await runNode('extract-clip.js', [
+        '--session',
+        sessionDir,
+        '--from',
+        String(options.from),
+        '--to',
+        String(options.to),
+        '--output',
+        path.join(sessionDir, 'clips', name),
+        ...(options.accurate ? ['--accurate'] : [])
+      ]);
       await report('done', { clip: `clips/${name}`, message: `Clip ready: ${name}` });
       return;
     }
@@ -62,12 +90,35 @@ async function main() {
     const session = await loadSessionSegments(sessionDir);
     const tempDir = await mkdtemp(path.join(os.tmpdir(), 'retranscribe-'));
     try {
-      await report('running', { message: `Extracting the audio for ${formatPosition(options.from)}-${formatPosition(options.to)}...` });
-      const original = await extractRangeAudio(sessionDir, session, options.from, options.to, path.join(tempDir, 'original.wav'), tempDir);
+      await report('running', {
+        message: `Extracting the audio for ${formatPosition(options.from)}-${formatPosition(options.to)}...`
+      });
+      const original = await extractRangeAudio(
+        sessionDir,
+        session,
+        options.from,
+        options.to,
+        path.join(tempDir, 'original.wav'),
+        tempDir
+      );
       if (options.peaks) {
         // Loudness for a waveform: the loudest sample in each of up to 1,200 slices (8 kHz is plenty to see speech).
         const rawPath = path.join(tempDir, 'peaks.pcm');
-        await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', original, '-ac', '1', '-ar', '8000', '-f', 's16le', rawPath]);
+        await runCommand(TOOLS.ffmpeg, [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
+          '-i',
+          original,
+          '-ac',
+          '1',
+          '-ar',
+          '8000',
+          '-f',
+          's16le',
+          rawPath
+        ]);
         const samples = await readFile(rawPath);
         const sampleCount = Math.floor(samples.length / 2);
         const count = Math.max(1, Math.min(1200, sampleCount));
@@ -87,20 +138,55 @@ async function main() {
         return;
       }
       const processed = path.join(tempDir, 'boosted.wav');
-      await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', original, '-af', boostFilter(job.settings), '-c:a', 'pcm_s16le', processed]);
+      await runCommand(TOOLS.ffmpeg, [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-i',
+        original,
+        '-af',
+        boostFilter(job.settings),
+        '-c:a',
+        'pcm_s16le',
+        processed
+      ]);
 
       if (options.preview) {
         const previewName = `${options.job || Date.now().toString(36)}.m4a`;
         const previewPath = path.join(workDir, 'previews', previewName);
         await fs.promises.mkdir(path.dirname(previewPath), { recursive: true });
-        await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', processed, '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', previewPath]);
+        await runCommand(TOOLS.ffmpeg, [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
+          '-i',
+          processed,
+          '-c:a',
+          'aac',
+          '-b:a',
+          '96k',
+          '-movflags',
+          '+faststart',
+          previewPath
+        ]);
         await report('done', { preview: `previews/${previewName}`, message: `Preview ready: ${previewPath}` });
         return;
       }
 
-      await report('running', { message: `Transcribing ${formatPosition(options.to - options.from)} (${options.quality} quality)...` });
+      await report('running', {
+        message: `Transcribing ${formatPosition(options.to - options.from)} (${options.quality} quality)...`
+      });
       const outputDir = path.join(tempDir, 'transcript');
-      await runNode('transcribe-media.js', ['--input', processed, '--quality', options.quality, '--output-dir', outputDir]);
+      await runNode('transcribe-media.js', [
+        '--input',
+        processed,
+        '--quality',
+        options.quality,
+        '--output-dir',
+        outputDir
+      ]);
       const result = await loadJson(path.join(outputDir, `boosted-${options.quality}.json`));
       const portion = {
         id: options.job || Date.now().toString(36),
@@ -112,14 +198,26 @@ async function main() {
         lines: result.lines.map((line) => {
           const startSeconds = Number((options.from + line.startSeconds).toFixed(3));
           const clock = session.clockAt(startSeconds);
-          return { text: line.text, startSeconds, endSeconds: Number(Math.min(options.to, options.from + line.endSeconds).toFixed(3)), clockTime: clock === null ? '' : new Date(clock * 1000).toISOString() };
+          return {
+            text: line.text,
+            startSeconds,
+            endSeconds: Number(Math.min(options.to, options.from + line.endSeconds).toFixed(3)),
+            clockTime: clock === null ? '' : new Date(clock * 1000).toISOString()
+          };
         })
       };
       const file = path.join(sessionDir, 'transcripts', 'retranscribed.json');
-      const index = await loadJson(file, { note: 'Portions transcribed again with boosted audio; each replaces the raw lines in its range. Manage from the thumbnails page.', portions: [] });
+      const index = await loadJson(file, {
+        note: 'Portions transcribed again with boosted audio; each replaces the raw lines in its range. Manage from the thumbnails page.',
+        portions: []
+      });
       await writeJson(file, { ...index, portions: [...index.portions, portion] });
       await renderFinalTranscript(sessionDir);
-      await report('done', { portion: portion.id, lineCount: portion.lines.length, message: `Re-transcribed ${formatPosition(options.from)}-${formatPosition(options.to)}: ${portion.lines.length} lines replace the originals in that range` });
+      await report('done', {
+        portion: portion.id,
+        lineCount: portion.lines.length,
+        message: `Re-transcribed ${formatPosition(options.from)}-${formatPosition(options.to)}: ${portion.lines.length} lines replace the originals in that range`
+      });
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -142,7 +240,22 @@ function runNode(script, args) {
 }
 
 function parseArgs(argv) {
-  const options = { session: '', from: null, to: null, gain: 0, highpass: 0, normalize: false, denoise: false, quality: 'thorough', preview: false, peaks: false, clip: false, accurate: false, remove: '', job: '' };
+  const options = {
+    session: '',
+    from: null,
+    to: null,
+    gain: 0,
+    highpass: 0,
+    normalize: false,
+    denoise: false,
+    quality: 'thorough',
+    preview: false,
+    peaks: false,
+    clip: false,
+    accurate: false,
+    remove: '',
+    job: ''
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--session') options.session = argv[++index];
@@ -162,24 +275,31 @@ function parseArgs(argv) {
     else throw new Error(`Unknown option ${arg}`);
   }
   if (!options.session || (!options.remove && (options.from === null || options.to === null))) {
-    throw new Error('Usage: npm run retranscribe-range -- --session <folder> --from HH:MM:SS --to HH:MM:SS [--gain dB] [--highpass Hz] [--normalize] [--denoise] [--quality thorough|quick] [--preview]');
+    throw new Error(
+      'Usage: npm run retranscribe-range -- --session <folder> --from HH:MM:SS --to HH:MM:SS [--gain dB] [--highpass Hz] [--normalize] [--denoise] [--quality thorough|quick] [--preview]'
+    );
   }
-  if (!Number.isFinite(options.gain) || options.gain < -10 || options.gain > 40) throw new Error('--gain must be between -10 and 40 dB');
-  if (!Number.isFinite(options.highpass) || options.highpass < 0 || options.highpass > 500) throw new Error('--highpass must be between 0 and 500 Hz');
+  if (!Number.isFinite(options.gain) || options.gain < -10 || options.gain > 40)
+    throw new Error('--gain must be between -10 and 40 dB');
+  if (!Number.isFinite(options.highpass) || options.highpass < 0 || options.highpass > 500)
+    throw new Error('--highpass must be between 0 and 500 Hz');
   if (!['quick', 'thorough'].includes(options.quality)) throw new Error('--quality must be quick or thorough');
   return options;
 }
 
 function parsePosition(value) {
-  const parts = String(value || '').split(':').map(Number);
+  const parts = String(value || '')
+    .split(':')
+    .map(Number);
   if (parts.some((part) => !Number.isFinite(part))) {
     throw new Error(`Invalid time "${value}" (use HH:MM:SS, MM:SS, or seconds)`);
   }
-  return parts.reduce((total, part) => (total * 60) + part, 0);
+  return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
 // Started by bin/retranscribe-range.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

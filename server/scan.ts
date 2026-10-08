@@ -31,7 +31,10 @@ const readJson = (filePath: string): any => {
 };
 const listDirs = (root: string): string[] => {
   try {
-    return fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory() && !entry.name.startsWith('.')).map((entry) => path.join(root, entry.name));
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map((entry) => path.join(root, entry.name));
   } catch {
     return [];
   }
@@ -49,11 +52,13 @@ function findRecordings(source: Source): Found[] {
   const found: Found[] = [];
   for (const streamDir of listDirs(source.liveStorageDir)) {
     for (const sessionDir of listDirs(streamDir)) {
-      if (fs.existsSync(path.join(sessionDir, 'segments.jsonl'))) found.push({ kind: 'session', dir: sessionDir, stream: path.basename(streamDir) });
+      if (fs.existsSync(path.join(sessionDir, 'segments.jsonl')))
+        found.push({ kind: 'session', dir: sessionDir, stream: path.basename(streamDir) });
     }
   }
   for (const meetingDir of listDirs(path.join(source.storageDir, 'meetings'))) {
-    if (fs.existsSync(path.join(meetingDir, 'segments.jsonl'))) found.push({ kind: 'meeting', dir: meetingDir, stream: '' });
+    if (fs.existsSync(path.join(meetingDir, 'segments.jsonl')))
+      found.push({ kind: 'meeting', dir: meetingDir, stream: '' });
   }
   for (const archiveDir of listDirs(path.join(source.storageDir, 'archive'))) {
     if (fs.existsSync(path.join(archiveDir, 'video.mp4'))) found.push({ kind: 'archive', dir: archiveDir, stream: '' });
@@ -68,9 +73,10 @@ export async function scanLibrary(db: DatabaseSync): Promise<{ recordings: numbe
   let changed = 0;
   let total = 0;
   for (const source of sources()) {
-    db.prepare(`INSERT INTO sources (key, name, provider, storage_dir) VALUES (?, ?, ?, ?)
-      ON CONFLICT(key) DO UPDATE SET name = excluded.name, provider = excluded.provider, storage_dir = excluded.storage_dir`)
-      .run(source.key, source.name, source.provider, source.storageDir);
+    db.prepare(
+      `INSERT INTO sources (key, name, provider, storage_dir) VALUES (?, ?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET name = excluded.name, provider = excluded.provider, storage_dir = excluded.storage_dir`
+    ).run(source.key, source.name, source.provider, source.storageDir);
     importDocumentFile(db, source, null, 'people', path.join(source.storageDir, 'people', 'people.json'));
 
     const seen = new Set<string>();
@@ -78,26 +84,67 @@ export async function scanLibrary(db: DatabaseSync): Promise<{ recordings: numbe
       total += 1;
       const relative = path.relative(source.storageDir, item.dir);
       seen.add(relative);
-      const existing = db.prepare('SELECT id, manifest_mtime, transcript_mtime FROM recordings WHERE source_key = ? AND dir = ?').get(source.key, relative) as
-        { id: number; manifest_mtime: number; transcript_mtime: number } | undefined;
-      const manifestPath = item.kind === 'archive' ? path.join(item.dir, 'video.mp4') : path.join(item.dir, 'segments.jsonl');
-      const manifestMtime = Math.max(mtimeOf(manifestPath), mtimeOf(path.join(item.dir, 'discarded-segments.jsonl')),
-        mtimeOf(path.join(item.dir, 'thumbnails', 'live.json')), mtimeOf(path.join(item.dir, 'thumbnails', 'thumbnails.json')),
-        mtimeOf(path.join(item.dir, 'thumbnails', 'cards.json')));
+      const existing = db
+        .prepare('SELECT id, manifest_mtime, transcript_mtime FROM recordings WHERE source_key = ? AND dir = ?')
+        .get(source.key, relative) as { id: number; manifest_mtime: number; transcript_mtime: number } | undefined;
+      const manifestPath =
+        item.kind === 'archive' ? path.join(item.dir, 'video.mp4') : path.join(item.dir, 'segments.jsonl');
+      const manifestMtime = Math.max(
+        mtimeOf(manifestPath),
+        mtimeOf(path.join(item.dir, 'discarded-segments.jsonl')),
+        mtimeOf(path.join(item.dir, 'thumbnails', 'live.json')),
+        mtimeOf(path.join(item.dir, 'thumbnails', 'thumbnails.json')),
+        mtimeOf(path.join(item.dir, 'thumbnails', 'cards.json'))
+      );
       let id = existing?.id;
       if (!existing || existing.manifest_mtime !== manifestMtime) {
         const info = await describe(item);
         changed += 1;
         if (existing) {
-          db.prepare(`UPDATE recordings SET kind = ?, stream = ?, part_of_dir = ?, started_at = ?, ended_at = ?, duration_seconds = ?, segment_count = ?,
-            discarded_count = ?, thumbnail = ?, has_page = ?, live = ?, manifest_mtime = ?, scanned_at = ?, missing = 0 WHERE id = ?`)
-            .run(item.kind, item.stream, info.partOf ? path.relative(source.storageDir, info.partOf) : '', info.startedAt, info.endedAt, info.duration,
-              info.segments, info.discarded, info.thumbnail, info.hasPage ? 1 : 0, info.live ? 1 : 0, manifestMtime, now, existing.id);
+          db.prepare(
+            `UPDATE recordings SET kind = ?, stream = ?, part_of_dir = ?, started_at = ?, ended_at = ?, duration_seconds = ?, segment_count = ?,
+            discarded_count = ?, thumbnail = ?, has_page = ?, live = ?, manifest_mtime = ?, scanned_at = ?, missing = 0 WHERE id = ?`
+          ).run(
+            item.kind,
+            item.stream,
+            info.partOf ? path.relative(source.storageDir, info.partOf) : '',
+            info.startedAt,
+            info.endedAt,
+            info.duration,
+            info.segments,
+            info.discarded,
+            info.thumbnail,
+            info.hasPage ? 1 : 0,
+            info.live ? 1 : 0,
+            manifestMtime,
+            now,
+            existing.id
+          );
         } else {
-          id = Number(db.prepare(`INSERT INTO recordings (source_key, kind, dir, stream, part_of_dir, started_at, ended_at, duration_seconds, segment_count,
-            discarded_count, thumbnail, has_page, live, manifest_mtime, scanned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-            .run(source.key, item.kind, relative, item.stream, info.partOf ? path.relative(source.storageDir, info.partOf) : '', info.startedAt, info.endedAt,
-              info.duration, info.segments, info.discarded, info.thumbnail, info.hasPage ? 1 : 0, info.live ? 1 : 0, manifestMtime, now).lastInsertRowid);
+          id = Number(
+            db
+              .prepare(
+                `INSERT INTO recordings (source_key, kind, dir, stream, part_of_dir, started_at, ended_at, duration_seconds, segment_count,
+            discarded_count, thumbnail, has_page, live, manifest_mtime, scanned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              )
+              .run(
+                source.key,
+                item.kind,
+                relative,
+                item.stream,
+                info.partOf ? path.relative(source.storageDir, info.partOf) : '',
+                info.startedAt,
+                info.endedAt,
+                info.duration,
+                info.segments,
+                info.discarded,
+                info.thumbnail,
+                info.hasPage ? 1 : 0,
+                info.live ? 1 : 0,
+                manifestMtime,
+                now
+              ).lastInsertRowid
+          );
         }
       } else if (existing) {
         db.prepare('UPDATE recordings SET missing = 0 WHERE id = ?').run(existing.id);
@@ -113,20 +160,27 @@ export async function scanLibrary(db: DatabaseSync): Promise<{ recordings: numbe
       for (const kind of RECORDING_DOCUMENTS) {
         importDocumentFile(db, source, recordingId, kind, path.join(item.dir, `${kind}.json`));
       }
-      const meetingInfo = db.prepare("SELECT body FROM documents WHERE recording_id = ? AND kind = 'meeting-info'").get(recordingId) as { body: string } | undefined;
+      const meetingInfo = db
+        .prepare("SELECT body FROM documents WHERE recording_id = ? AND kind = 'meeting-info'")
+        .get(recordingId) as { body: string } | undefined;
       const title = meetingInfo ? String(JSON.parse(meetingInfo.body)?.name || '') : '';
       db.prepare('UPDATE recordings SET title = ? WHERE id = ? AND title != ?').run(title, recordingId, title);
     }
     // A full meeting's official recording (meeting.json names it) is part of that meeting, like its live captures.
-    for (const row of db.prepare("SELECT dir FROM recordings WHERE source_key = ? AND kind = 'meeting'").all(source.key) as { dir: string }[]) {
+    for (const row of db
+      .prepare("SELECT dir FROM recordings WHERE source_key = ? AND kind = 'meeting'")
+      .all(source.key) as { dir: string }[]) {
       const archive = String(readJson(path.join(source.storageDir, row.dir, 'meeting.json'))?.archive || '');
       if (archive) {
-        db.prepare("UPDATE recordings SET part_of_dir = ? WHERE source_key = ? AND kind = 'archive' AND dir = ? AND part_of_dir != ?")
-          .run(row.dir, source.key, path.dirname(archive), row.dir);
+        db.prepare(
+          "UPDATE recordings SET part_of_dir = ? WHERE source_key = ? AND kind = 'archive' AND dir = ? AND part_of_dir != ?"
+        ).run(row.dir, source.key, path.dirname(archive), row.dir);
       }
     }
     // Folders that are gone (split, moved, deleted) are kept but flagged, so their marks aren't lost by accident.
-    for (const row of db.prepare('SELECT id, dir FROM recordings WHERE source_key = ? AND missing = 0').all(source.key) as { id: number; dir: string }[]) {
+    for (const row of db
+      .prepare('SELECT id, dir FROM recordings WHERE source_key = ? AND missing = 0')
+      .all(source.key) as { id: number; dir: string }[]) {
       if (!seen.has(row.dir)) db.prepare('UPDATE recordings SET missing = 1 WHERE id = ?').run(row.id);
     }
   }
@@ -152,7 +206,17 @@ async function describe(item: Found): Promise<Description> {
   const partOf = String(readJson(path.join(item.dir, 'full-meeting.json'))?.meetingDir || '');
   if (item.kind === 'archive') {
     // An official recording's length comes from its transcript, when it has one (see the recordings API).
-    return { startedAt: null, endedAt: null, duration: 0, segments: 0, discarded: 0, thumbnail: '', hasPage, live: false, partOf: '' };
+    return {
+      startedAt: null,
+      endedAt: null,
+      duration: 0,
+      segments: 0,
+      discarded: 0,
+      thumbnail: '',
+      hasPage,
+      live: false,
+      partOf: ''
+    };
   }
   const session = await loadSessionSegments(item.dir);
   const last = session.retained.at(-1);
@@ -163,18 +227,27 @@ async function describe(item: Found): Promise<Description> {
   };
   let discarded = 0;
   try {
-    discarded = fs.readFileSync(path.join(item.dir, 'discarded-segments.jsonl'), 'utf8').split('\n').filter(Boolean).length;
+    discarded = fs
+      .readFileSync(path.join(item.dir, 'discarded-segments.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean).length;
   } catch {
     // none discarded
   }
   // A picture from a little way in (meetings often open on a title slide), from the thumbnails if there are any, and
   // never one of the title cards shown while the meeting is paused (such as "Executive Session").
-  const thumbs = readJson(path.join(thumbnailsDir, 'thumbnails.json'))?.thumbnails as { fileName: string; positionSeconds: number }[] | undefined;
+  const thumbs = readJson(path.join(thumbnailsDir, 'thumbnails.json'))?.thumbnails as
+    { fileName: string; positionSeconds: number }[] | undefined;
   const cards = (readJson(path.join(thumbnailsDir, 'cards.json'))?.cards || []) as { from: number; to: number }[];
   const onCard = (seconds: number) => cards.some((card) => seconds >= card.from - 5 && seconds <= card.to + 5);
   const target = Math.min(600, duration * 0.25);
-  const pick = (thumbs || []).filter((item) => !onCard(item.positionSeconds)).reduce<{ fileName: string; positionSeconds: number } | null>((best, item) =>
-    (!best || Math.abs(item.positionSeconds - target) < Math.abs(best.positionSeconds - target) ? item : best), null);
+  const pick = (thumbs || [])
+    .filter((thumb) => !onCard(thumb.positionSeconds))
+    .reduce<{ fileName: string; positionSeconds: number } | null>(
+      (best, thumb) =>
+        !best || Math.abs(thumb.positionSeconds - target) < Math.abs(best.positionSeconds - target) ? thumb : best,
+      null
+    );
   // Live while extract-thumbnails --watch says so and the capture wrote recently.
   const live = Boolean(liveFile?.live) && Date.now() - mtimeOf(path.join(item.dir, 'segments.jsonl')) < 10 * 60000;
   return {
@@ -192,16 +265,30 @@ async function describe(item: Found): Promise<Description> {
 
 // Word corrections made on the review page (word-edits.json) for the usual transcript: by line start, word number,
 // and the word as transcribed (as the page matches them). '' deletes a word; several words replace it.
-function applyWordEdits<T extends { startSeconds: number; text: string }>(db: DatabaseSync, recordingId: number, lines: T[]): T[] {
-  const row = db.prepare("SELECT body FROM documents WHERE recording_id = ? AND kind = 'word-edits'").get(recordingId) as { body: string } | undefined;
-  const edits = ((row ? JSON.parse(row.body)?.edits : null) || []) as { transcript: string; line: number; index: number; original: string; text: string }[];
+function applyWordEdits<T extends { startSeconds: number; text: string }>(
+  db: DatabaseSync,
+  recordingId: number,
+  lines: T[]
+): T[] {
+  const row = db
+    .prepare("SELECT body FROM documents WHERE recording_id = ? AND kind = 'word-edits'")
+    .get(recordingId) as { body: string } | undefined;
+  const edits = ((row ? JSON.parse(row.body)?.edits : null) || []) as {
+    transcript: string;
+    line: number;
+    index: number;
+    original: string;
+    text: string;
+  }[];
   const mine = edits.filter((edit) => edit.transcript === 'latest');
   if (mine.length === 0) return lines;
   return lines.map((line) => {
     const key = Math.round(Number(line.startSeconds) * 100) / 100;
     const forLine = mine.filter((edit) => edit.line === key);
     if (forLine.length === 0) return line;
-    const words = String(line.text || '').split(' ').filter(Boolean);
+    const words = String(line.text || '')
+      .split(' ')
+      .filter(Boolean);
     const fixed = words.map((word, index) => {
       const edit = forLine.find((item) => item.index === index && item.original === word);
       return edit ? edit.text : word;
@@ -211,12 +298,32 @@ function applyWordEdits<T extends { startSeconds: number; text: string }>(db: Da
 }
 
 function importTranscript(db: DatabaseSync, recordingId: number, filePath: string, mtime: number) {
-  const lines = applyWordEdits(db, recordingId, (readJson(filePath)?.lines || []) as { startSeconds: number; endSeconds: number; text: string; retranscribed?: boolean }[]);
+  const lines = applyWordEdits(
+    db,
+    recordingId,
+    (readJson(filePath)?.lines || []) as {
+      startSeconds: number;
+      endSeconds: number;
+      text: string;
+      retranscribed?: boolean;
+    }[]
+  );
   db.exec('BEGIN');
   try {
     db.prepare('DELETE FROM transcript_lines WHERE recording_id = ?').run(recordingId);
-    const insert = db.prepare('INSERT INTO transcript_lines (recording_id, line_index, start_seconds, end_seconds, text, retranscribed) VALUES (?, ?, ?, ?, ?, ?)');
-    lines.forEach((line, index) => insert.run(recordingId, index, Number(line.startSeconds) || 0, Number(line.endSeconds) || 0, String(line.text || ''), line.retranscribed ? 1 : 0));
+    const insert = db.prepare(
+      'INSERT INTO transcript_lines (recording_id, line_index, start_seconds, end_seconds, text, retranscribed) VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    lines.forEach((line, index) =>
+      insert.run(
+        recordingId,
+        index,
+        Number(line.startSeconds) || 0,
+        Number(line.endSeconds) || 0,
+        String(line.text || ''),
+        line.retranscribed ? 1 : 0
+      )
+    );
     db.prepare('UPDATE recordings SET transcript_mtime = ? WHERE id = ?').run(mtime, recordingId);
     db.exec('COMMIT');
   } catch (error) {

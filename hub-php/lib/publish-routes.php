@@ -49,10 +49,10 @@ function hub_links($value): array {
   return $links;
 }
 
-function hub_stamp(float $seconds, bool $srt = false): string {
+function hub_stamp(float $seconds, bool $srt = false, string $decimal = ','): string {
   $whole = (int)floor($seconds);
   $text = sprintf('%02d:%02d:%02d', intdiv($whole, 3600), intdiv($whole % 3600, 60), $whole % 60);
-  return $srt ? $text . ',' . sprintf('%03d', (int)round(($seconds - $whole) * 1000) % 1000) : $text;
+  return $srt ? $text . $decimal . sprintf('%03d', (int)round(($seconds - $whole) * 1000) % 1000) : $text;
 }
 
 if ($method === 'POST' && $route === 'publish') {
@@ -122,6 +122,9 @@ if ($method === 'POST' && $route === 'publish') {
     $srt[] = ($index + 1) . "\n" . hub_stamp($line['start'], true) . ' --> ' . hub_stamp(max($line['end'], $line['start'] + 0.5), true) . "\n" . ($line['speaker'] ? $line['speaker'] . ': ' : '') . $line['text'] . "\n";
   }
   if ($lines) file_put_contents("$dir/captions.srt", implode("\n", $srt));
+  // The same captions as WebVTT, which browsers' players read (<track>).
+  if ($lines) file_put_contents("$dir/captions.vtt", "WEBVTT\n\n" . implode("\n", array_map(fn ($line) => hub_stamp($line['start'], true, '.') . ' --> '
+    . hub_stamp(max($line['end'], $line['start'] + 0.5), true, '.') . "\n" . ($line['speaker'] ? '<v ' . str_replace('>', '', $line['speaker']) . '>' : '') . $line['text'] . "\n", $lines)));
   // A picture: the first still in the stretch, copied out of the private files.
   $poster = null;
   $statement = $db->prepare("SELECT data FROM records WHERE collection = 'stills' AND id LIKE ? AND deleted = 0");
@@ -143,7 +146,7 @@ if ($method === 'POST' && $route === 'publish') {
     'recordedAt' => $recording['startedAt'] ?? null, 'from' => $from, 'to' => $to, 'seconds' => round($to - $from, 2),
     'officialUrl' => $official,
     'official' => $officialSources,
-    'transcript' => $lines ? ['path' => "media/$folder/transcript.json", 'text' => "media/$folder/transcript.txt", 'captions' => "media/$folder/captions.srt", 'lines' => count($lines)] : null,
+    'transcript' => $lines ? ['path' => "media/$folder/transcript.json", 'text' => "media/$folder/transcript.txt", 'captions' => "media/$folder/captions.srt", 'vtt' => "media/$folder/captions.vtt", 'lines' => count($lines)] : null,
     'chapters' => $chapters, 'poster' => $poster,
     'clip' => $wantsClip ? ['status' => 'queued', 'job' => "clip-$id", 'hasVideo' => (bool)($media['video'] ?? false)] : null,
     'publishedAt' => hub_now(), 'publishedBy' => $viewer['name'],

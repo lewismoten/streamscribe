@@ -1,16 +1,23 @@
 import path from 'path';
 import { TOOLS } from '../config/runtime-config.js';
 import { writeJsonAtomically } from '../util/fs-utils.js';
-import { execFileAsync, silenceThresholdDb, colorBarScanFps, visualTransitionScanFps, visualTransitionThreshold } from './constants.js';
+import {
+  execFileAsync,
+  silenceThresholdDb,
+  colorBarScanFps,
+  visualTransitionScanFps,
+  visualTransitionThreshold
+} from './constants.js';
 import { formatDuration } from './progress.js';
 
 // What the audio and picture show: silence periods, color bars, and abrupt picture changes, logged per session.
 
 export async function updateSilenceLog(segment, download, capture, knownMaxVolumeDb = null) {
   const segmentPath = path.join(capture.sessionDir, 'segments', download.fileName);
-  const maxVolumeDb = typeof knownMaxVolumeDb === 'number' && !Number.isNaN(knownMaxVolumeDb)
-    ? knownMaxVolumeDb
-    : await readSegmentMaxVolumeDb(segmentPath);
+  const maxVolumeDb =
+    typeof knownMaxVolumeDb === 'number' && !Number.isNaN(knownMaxVolumeDb)
+      ? knownMaxVolumeDb
+      : await readSegmentMaxVolumeDb(segmentPath);
   if (maxVolumeDb === null) {
     return;
   }
@@ -65,11 +72,7 @@ export async function updateSilenceLog(segment, download, capture, knownMaxVolum
 export async function recordColorBarTransitions(capture, options = {}) {
   const log = initializeColorBarLog(capture);
   const recent = Array.isArray(capture.recentSegments) ? capture.recentSegments : [];
-  const candidates = options.includePriorSegments
-    ? recent
-    : options.scanCurrentSegment
-      ? recent.slice(-1)
-      : [];
+  const candidates = options.includePriorSegments ? recent : options.scanCurrentSegment ? recent.slice(-1) : [];
 
   for (const segment of candidates) {
     if (!segment || log.events.some((event) => Number(event.sequence) === Number(segment.sequence))) {
@@ -98,7 +101,9 @@ export async function recordColorBarTransitions(capture, options = {}) {
     const sequenceDistance = Number(current?.sequence || 0) - Number(segment.sequence || 0);
     const segmentStartSeconds = Math.max(
       0,
-      currentEndSeconds - Number(current?.durationSeconds || 0) - (sequenceDistance * Number(segment.durationSeconds || 0))
+      currentEndSeconds -
+        Number(current?.durationSeconds || 0) -
+        sequenceDistance * Number(segment.durationSeconds || 0)
     );
     for (const detection of detections) {
       log.events.push({
@@ -137,22 +142,26 @@ export function initializeColorBarLog(capture) {
 
 export async function findColorBarOffsets(filePath) {
   try {
-    const { stdout } = await execFileAsync(TOOLS.ffmpeg, [
-      '-hide_banner',
-      '-loglevel', 'error',
-      '-i', filePath,
-      '-vf', `fps=${colorBarScanFps},scale=70:1:flags=area,format=rgb24`,
-      '-f', 'rawvideo',
-      '-'
-    ], { encoding: 'buffer', maxBuffer: 1024 * 1024 });
+    const { stdout } = await execFileAsync(
+      TOOLS.ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-i',
+        filePath,
+        '-vf',
+        `fps=${colorBarScanFps},scale=70:1:flags=area,format=rgb24`,
+        '-f',
+        'rawvideo',
+        '-'
+      ],
+      { encoding: 'buffer', maxBuffer: 1024 * 1024 }
+    );
     const data = Buffer.from(stdout || '');
     const frameSize = 70 * 3;
     const offsets = [];
-    for (
-      let offset = 0, frameIndex = 0;
-      offset + frameSize <= data.length;
-      offset += frameSize, frameIndex += 1
-    ) {
+    for (let offset = 0, frameIndex = 0; offset + frameSize <= data.length; offset += frameSize, frameIndex += 1) {
       if (looksLikeColorBars(data.subarray(offset, offset + frameSize))) {
         offsets.push(frameIndex / colorBarScanFps);
       }
@@ -187,14 +196,22 @@ export async function findAbruptVisualTransitionOffsets(filePath) {
     const width = 64;
     const height = 36;
     const frameSize = width * height * 3;
-    const { stdout } = await execFileAsync(TOOLS.ffmpeg, [
-      '-hide_banner',
-      '-loglevel', 'error',
-      '-i', filePath,
-      '-vf', `fps=${visualTransitionScanFps},scale=${width}:${height}:flags=area,format=rgb24`,
-      '-f', 'rawvideo',
-      '-'
-    ], { encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 });
+    const { stdout } = await execFileAsync(
+      TOOLS.ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-i',
+        filePath,
+        '-vf',
+        `fps=${visualTransitionScanFps},scale=${width}:${height}:flags=area,format=rgb24`,
+        '-f',
+        'rawvideo',
+        '-'
+      ],
+      { encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 }
+    );
     const data = Buffer.from(stdout || '');
     const offsets = [];
     let previous = null;
@@ -234,15 +251,11 @@ export function initializeSilenceLog(capture) {
 
 export async function readSegmentMaxVolumeDb(filePath) {
   try {
-    const { stderr } = await execFileAsync(TOOLS.ffmpeg, [
-      '-hide_banner',
-      '-nostats',
-      '-i', filePath,
-      '-map', '0:a:0',
-      '-af', 'volumedetect',
-      '-f', 'null',
-      '-'
-    ], { maxBuffer: 1024 * 1024 });
+    const { stderr } = await execFileAsync(
+      TOOLS.ffmpeg,
+      ['-hide_banner', '-nostats', '-i', filePath, '-map', '0:a:0', '-af', 'volumedetect', '-f', 'null', '-'],
+      { maxBuffer: 1024 * 1024 }
+    );
     const match = String(stderr || '').match(/max_volume:\s*(-?(?:\d+(?:\.\d+)?)|inf)\s*dB/i);
     if (!match) {
       return null;

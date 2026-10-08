@@ -3,7 +3,14 @@ import { mkdirChecked as mkdir } from '../config/ensure-mounted-volume.js';
 import { STATE_ROOT, SOURCES } from '../config/runtime-config.js';
 import { parsePositiveIntegerArg, selectConfiguredSources } from '../util/cli.js';
 import { loadJson, removeStaleDownloadFiles, writeJsonAtomically } from '../util/fs-utils.js';
-import { defaultDiscoveryPollMs, defaultSegmentPollMs, defaultVideoPageRefreshMs, defaultCaptureStaleMs, quietProgressIntervalMs, repeatedQuietProgressIntervalMs } from './constants.js';
+import {
+  defaultDiscoveryPollMs,
+  defaultSegmentPollMs,
+  defaultVideoPageRefreshMs,
+  defaultCaptureStaleMs,
+  quietProgressIntervalMs,
+  repeatedQuietProgressIntervalMs
+} from './constants.js';
 import { discoverLiveEntries, getMonitorUrls } from './discovery.js';
 import { sanitizeSegment, sleep } from './files.js';
 import { pollCaptureSession } from './poll.js';
@@ -11,8 +18,9 @@ import { restoreRecentCaptureSessions, ensureCaptureSession, completeCapture } f
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const sources = selectConfiguredSources(SOURCES, options.sources, 'sources')
-    .filter((source) => getMonitorUrls(source).length > 0);
+  const sources = selectConfiguredSources(SOURCES, options.sources, 'sources').filter(
+    (source) => getMonitorUrls(source).length > 0
+  );
 
   if (sources.length === 0) {
     throw new Error('No sources with liveUrls or discoveryUrls are configured in config.local.js');
@@ -87,7 +95,9 @@ async function runSource(source, options) {
   await mkdir(source.liveStorageDir, { recursive: true });
   const removedPartialCount = await removeStaleDownloadFiles(source.liveStorageDir);
 
-  console.log(`Monitoring live source ${source.name} (${source.key}, ${source.provider}) into ${source.liveStorageDir}`);
+  console.log(
+    `Monitoring live source ${source.name} (${source.key}, ${source.provider}) into ${source.liveStorageDir}`
+  );
   if (removedPartialCount > 0) {
     console.log(`Removed ${removedPartialCount.toLocaleString('en-US')} stale .download files`);
   }
@@ -126,10 +136,11 @@ async function runSource(source, options) {
   try {
     while (true) {
       const cycleStartedAt = Date.now();
-      const hasRecordingAtStart = Object.values(state.captures || {}).some((capture) => capture && capture.status === 'recording');
-      const shouldDiscover = liveEntries.length === 0
-        || !hasRecordingAtStart
-        || Date.now() - lastDiscoveryAtMs >= options.pollMs;
+      const hasRecordingAtStart = Object.values(state.captures || {}).some(
+        (capture) => capture && capture.status === 'recording'
+      );
+      const shouldDiscover =
+        liveEntries.length === 0 || !hasRecordingAtStart || Date.now() - lastDiscoveryAtMs >= options.pollMs;
 
       if (shouldDiscover) {
         try {
@@ -190,7 +201,9 @@ async function runSource(source, options) {
       state.scanner.updatedAt = state.scanner.lastDiscoveryAt;
       await writeJsonAtomically(statePath, state);
 
-      const hasRecording = Object.values(state.captures || {}).some((capture) => capture && capture.status === 'recording');
+      const hasRecording = Object.values(state.captures || {}).some(
+        (capture) => capture && capture.status === 'recording'
+      );
       const elapsed = Date.now() - cycleStartedAt;
       const waitMs = hasRecording ? options.segmentPollMs : options.pollMs;
       currentLabel = hasRecording
@@ -220,13 +233,12 @@ function buildInitialState(source) {
 }
 
 function countRecordingCaptures(state) {
-  return Object.values(state?.captures || {})
-    .filter((capture) => capture && capture.status === 'recording')
-    .length;
+  return Object.values(state?.captures || {}).filter((capture) => capture && capture.status === 'recording').length;
 }
 
 // Started by bin/capture.js.
-export const run = () => main().catch((error) => {
-  console.error(error?.stack || error?.message || String(error));
-  process.exitCode = 1;
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error?.stack || error?.message || String(error));
+    process.exitCode = 1;
+  });

@@ -1,68 +1,57 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { layerData, layerId, stackMarks } from '../../../src/sync/layers.js';
-import { MARK_PERMISSIONS } from '../../../src/sync/permissions.js';
 import { can, useAccount } from '../data/account.ts';
-import { putRecord, useRecords, type HubRecord } from '../data/useRecords.ts';
+import { putRecord, useRecords } from '../data/useRecords.ts';
 import { syncNow } from '../data/sync.ts';
-import { clock, duration } from '../format.ts';
-import { dateTime, mediaUrlOf, STATUS_LABEL, type RecordingData } from './MeetingsPage.tsx';
-import MediaPlayer, { type MediaData, type PlayerControl } from '../MediaPlayer.tsx';
-import PublishPanel, { type PublishLine } from '../PublishPanel.tsx';
-import OfficialPanel, { type Official } from '../OfficialPanel.tsx';
-import { mergeOfficial, officialTime, parseOfficialUrl, swagitAt } from '../../../src/sync/official.js';
+import { clock } from '../format.ts';
+import { mediaUrlOf, type RecordingData } from './MeetingsPage.tsx';
+import MediaPlayer, { type MediaData, type PlayerControl } from '../meeting/MediaPlayer.tsx';
+import PublishPanel, { type PublishLine } from '../meeting/PublishPanel.tsx';
+import OfficialPanel, { type Official } from '../meeting/OfficialPanel.tsx';
+import MeetingHeader from '../meeting/MeetingHeader.tsx';
+import Transcript from '../meeting/Transcript.tsx';
+import { Chapters, Votes, type Chapter, type Vote } from '../meeting/Chapters.tsx';
+import { captionsVtt } from '../meeting/captions.ts';
+import { transcriptEdits } from '../meeting/edits.ts';
+import { useFollowAlong } from '../meeting/useFollowAlong.ts';
+import { correctedBy, markList, useMeetingMarks } from '../meeting/useMeetingMarks.ts';
+import {
+  buildLines,
+  lineText,
+  personName,
+  speakersIn,
+  type Chunk,
+  type Person,
+  type Still,
+  type Turn,
+  type Word
+} from '../meeting/words.ts';
+import { mergeOfficial, parseOfficialUrl } from '../../../src/sync/official.js';
 
 // One meeting from the hub: its stills, chapters, votes, and transcript (the final one when it's ready, the quick
 // one while recording), with the word corrections and speakers everyone may see. Signed in, a click on a word of the
 // final transcript corrects it or says who is speaking from there; each person's changes are their own layer (see
 // src/sync/layers.js), public if their group allows that kind of change and they're trusted, else theirs alone.
-interface Line { start: number; end: number; text: string; clockTime?: string; words?: [number, number, string][] }
-interface Chunk { recordingId: string; kind: 'quick' | 'final'; part: string; partIndex: number; from: number; lines: Line[] }
-interface Still { recordingId: string; part: string; partIndex: number; position: number; clockTime: string; path: string }
-interface WordEdit { transcript: string; line: number; index: number; at: number; original: string; text: string; updatedAt?: string }
-interface Turn { at: number; speakers: string[] }
-interface Person { id: string; name: string; role?: string; nameUnknown?: boolean }
-interface Word { text: string; shown: string; at: number; line: number; index: number; edit: WordEdit | null; part: string }
-type Stack = { data: Record<string, unknown> | null; layers: (HubRecord & { owner: number; owner_name?: string })[]; mine: (HubRecord & { layer?: string }) | null; withoutMine: unknown };
-
-const round = (seconds: number, places = 100) => Math.round(seconds * places) / places;
-
-// A line's words: from the transcript's word times where it has them, else spread over the line by length (as the
-// review page does, so corrections made in either place match the same words).
-function wordsOf(line: Line) {
-  if (line.words?.length) return line.words.map(([at, , text]) => ({ text, at: round(at) }));
-  const parts = String(line.text).split(' ').filter(Boolean);
-  const total = parts.reduce((sum, word) => sum + word.length + 1, 0) || 1;
-  const span = Math.max(0.01, line.end - line.start);
-  let used = 0;
-  return parts.map((text) => {
-    const at = round(line.start + (span * used) / total);
-    used += text.length + 1;
-    return { text, at };
-  });
-}
-
-const personName = (person: Person | undefined, id: string) => (!person ? id : person.nameUnknown || !person.name?.trim() ? person.role || 'Unknown' : person.name);
-
+// The parts live in ../meeting: the transcript and its word editor, the player, and the side panels.
 export default function MeetingPage() {
   const { id = '' } = useParams();
   const account = useAccount();
-  const viewerId = account.user?.id || 0;
   const { records: recordings } = useRecords<RecordingData>('recordings');
   const { records: chunks } = useRecords<Chunk>('transcript_chunks');
   const { records: stills } = useRecords<Still>('stills');
-  const { records: marks } = useRecords<Record<string, unknown>>('marks');
-  const [filter, setFilter] = useState('');
-  const [picked, setPicked] = useState<Word | null>(null);
   const { records: mediaRecords } = useRecords<MediaData>('media');
+  const [picked, setPicked] = useState<Word | null>(null);
   const [partShown, setPartShown] = useState('');
   const [seek, setSeek] = useState<{ time: number; n: number } | null>(null);
   const player = useRef<PlayerControl>(null);
-  const [nowLine, setNowLine] = useState('');
   const [status, setStatus] = useState('');
   const recording = recordings?.find((record) => record.id === id);
-  const stacks = useMemo(() => stackMarks((marks || []).filter((mark) => mark.id.startsWith(`${id}:`) || (recording && mark.id.startsWith(`${recording.data.sourceKey}:people`))), viewerId) as Map<string, Stack>, [marks, id, recording, viewerId]);
-  const markData = <T,>(markId: string) => (stacks.get(markId)?.data || null) as T | null;
+  const { stacks, markData, save } = useMeetingMarks({
+    id,
+    sourceKey: recording?.data.sourceKey,
+    account,
+    onSaved: setStatus
+  });
   const mine = useMemo(() => (chunks || []).filter((chunk) => chunk.data.recordingId === id), [chunks, id]);
   const kind = mine.some((chunk) => chunk.data.kind === 'final') ? 'final' : 'quick';
   const editable = Boolean(account.user) && kind === 'final';
@@ -70,312 +59,245 @@ export default function MeetingPage() {
   const peopleId = recording ? `${recording.data.sourceKey}:people` : '';
   const people = markData<{ people?: Person[] }>(peopleId)?.people || [];
   const peopleMap = new Map(people.map((person) => [person.id, person]));
+  const nameOf = (speaker: string) => personName(peopleMap.get(speaker), speaker);
 
-  // Lines with their words (corrections applied) and who is speaking at each word.
-  const lines = useMemo(() => mine.filter((chunk) => chunk.data.kind === kind)
-    .sort((a, b) => a.data.partIndex - b.data.partIndex || a.data.from - b.data.from)
-    .flatMap((chunk) => {
-      const part = chunk.data.part;
-      const edits = (markData<{ edits?: WordEdit[] }>(`${id}:${part}:word-edits`)?.edits || []).filter((edit) => edit.transcript === 'latest');
-      return chunk.data.lines.map((line) => {
-        const lineKey = round(line.start);
-        const words: Word[] = wordsOf(line).map((word, index) => {
-          const edit = kind === 'final' ? edits.find((item) => item.line === lineKey && item.index === index && item.original === word.text) || null : null;
-          return { text: word.text, shown: edit ? edit.text : word.text, at: word.at, line: lineKey, index, edit, part };
-        });
-        return { ...line, part, partIndex: chunk.data.partIndex, words };
-      });
-    }), [mine, kind, stacks, id]);
-  const turnsOf = (part: string) => (markData<{ turns?: Turn[] }>(`${id}:${part}:speakers`)?.turns || []).slice().sort((a, b) => a.at - b.at);
-  const speakersAt = (part: string, seconds: number) => {
-    let found: string[] = [];
-    for (const turn of turnsOf(part)) if (turn.at <= seconds + 0.15) found = turn.speakers;
-    return found;
-  };
+  // Lines with their words (corrections applied), and who is speaking at each word.
+  const lines = useMemo(() => buildLines(mine, kind, id, stacks), [mine, kind, id, stacks]);
+  const speakersAt = (part: string, seconds: number) =>
+    speakersIn(
+      (markData<{ turns?: Turn[] }>(`${id}:${part}:speakers`)?.turns || []).slice().sort((a, b) => a.at - b.at),
+      seconds
+    );
+  const edits = transcriptEdits({ id, peopleId, people, markData, save, closeEditor: () => setPicked(null) });
 
-  const needle = filter.trim().toLowerCase();
-  const shown = needle ? lines.filter((line) => line.words.map((word) => word.shown).join(' ').toLowerCase().includes(needle)) : lines;
-  const pictures = (stills || []).filter((still) => still.data.recordingId === id).sort((a, b) => a.data.partIndex - b.data.partIndex || a.data.position - b.data.position);
-  const markList = <T,>(kindName: string, field: string) => [...stacks.entries()]
-    .filter(([markId]) => markId.startsWith(`${id}:`) && markId.endsWith(`:${kindName}`))
-    .flatMap(([markId, stack]) => ((stack.data?.[field] as T[]) || []).map((item) => ({ ...item, markId })));
+  const pictures = (stills || [])
+    .filter((still) => still.data.recordingId === id)
+    .sort((a, b) => a.data.partIndex - b.data.partIndex || a.data.position - b.data.position);
   // Chapters (agenda items), each with any official files of its own (links: draft minutes, attachments).
-  const chapters = markList<{ id: string; at: number; title: string; links?: { label: string; url: string }[] }>('agenda', 'items');
-  const votes = markList<{ id: string; at: number; motion?: string }>('votes', 'votes');
-
-  // Saving: this person's layer of the mark, measured against what they see without it.
-  const save = async (markId: string, value: Record<string, unknown>, done: string) => {
-    const stack = stacks.get(markId);
-    await putRecord('marks', layerId(markId, viewerId), layerData(stack, { ...value, updatedAt: new Date().toISOString() }));
-    const permission = MARK_PERMISSIONS[markId.split(':').at(-1) as keyof typeof MARK_PERMISSIONS];
-    const publicChange = can(permission, account) && account.user?.trusted;
-    setStatus(`${done}${publicChange ? '' : ' (only you see this)'}`);
-    syncNow();
-  };
-  const saveWord = (word: Word, text: string) => {
-    const markId = `${id}:${word.part}:word-edits`;
-    const current = markData<{ edits?: WordEdit[] }>(markId) || {};
-    const original = word.text;
-    const edits = (current.edits || []).filter((edit) => !(edit.transcript === 'latest' && edit.line === word.line && edit.index === word.index));
-    if (text !== original) edits.push({ transcript: 'latest', line: word.line, index: word.index, at: word.at, original, text, updatedAt: new Date().toISOString() });
-    setPicked(null);
-    return save(markId, { ...current, edits }, text === original ? `Restored “${original}”` : text ? `Corrected “${original}” to “${text}”` : `Deleted “${original}”`);
-  };
-  // Who is speaking from a word on: a change within a second of another edits it; one repeating the turn before goes.
-  const saveSpeakers = (word: Word, speakers: string[], names: Record<string, string> = {}) => {
-    const markId = `${id}:${word.part}:speakers`;
-    const current = markData<{ turns?: Turn[] }>(markId) || {};
-    const at = round(word.at, 10);
-    let turns = (current.turns || []).filter((turn) => Math.abs(turn.at - at) >= 1);
-    turns.push({ at, speakers });
-    turns.sort((a, b) => a.at - b.at);
-    turns = turns.filter((turn, index) => index === 0 || JSON.stringify(turn.speakers) !== JSON.stringify(turns[index - 1].speakers));
-    setPicked(null);
-    return save(markId, { ...current, turns }, `${speakers.map((speaker) => names[speaker] || personName(peopleMap.get(speaker), speaker)).join(' and ') || 'Nobody'} speaking from ${clock(at)}`);
-  };
-  const addPerson = async (word: Word, name: string, role: string) => {
-    const current = markData<{ people?: Person[]; groups?: unknown[] }>(peopleId) || {};
-    const person = { id: `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'person'}-${Math.random().toString(36).slice(2, 6)}`, name, role };
-    await save(peopleId, { ...current, people: [...(current.people || []), person] }, `Added ${name}`);
-    await saveSpeakers(word, [person.id], { [person.id]: name });
-  };
-  // Who made a word's correction (when it wasn't the recorder's own).
-  const correctedBy = (word: Word) => {
-    const stack = stacks.get(`${id}:${word.part}:word-edits`);
-    if (!stack || !word.edit) return '';
-    const key = (edit: WordEdit) => edit.line === word.line && edit.index === word.index;
-    const changed = (layer: { data: unknown }) => {
-      const { base, value } = (layer.data || {}) as { base?: { edits?: WordEdit[] }; value?: { edits?: WordEdit[] } };
-      return JSON.stringify(value?.edits?.find(key)) !== JSON.stringify(base?.edits?.find(key));
-    };
-    if (stack.mine && changed(stack.mine)) return 'you';
-    const layer = [...stack.layers].reverse().find((item) => (item as { trusted?: boolean }).trusted !== false && changed(item));
-    return layer ? layer.owner_name || 'someone' : '';
-  };
+  const chapters = markList<Omit<Chapter, 'markId'>>(stacks, id, 'agenda', 'items');
+  const votes = markList<Vote>(stacks, id, 'votes', 'votes');
 
   // Published audio and video (npm run publish-media), per part; the player follows the transcript's clicks.
-  const media = (mediaRecords || []).filter((record) => record.data.recordingId === id).map((record) => record.data).sort((a, b) => a.partIndex - b.partIndex);
+  const media = (mediaRecords || [])
+    .filter((record) => record.data.recordingId === id)
+    .map((record) => record.data)
+    .sort((a, b) => a.partIndex - b.partIndex);
   const playing = media.find((item) => item.part === partShown) || media[0];
+  const canPlay = (part: string) => media.some((item) => item.part === part);
+  const follow = useFollowAlong(lines, playing?.part);
   // Plays from a time: right away in the player showing that part (inside the click, as Safari needs), or by switching
-  // to the part's player first.
+  // to the part's player first (each seek is a new one, even to the same time).
   const playAt = (part: string, seconds: number) => {
-    if (!media.some((item) => item.part === part)) return;
-    setFollowing(true);
-    if (playing?.part === part && player.current) { player.current.playFrom(seconds); return; }
-    setPartShown(part);
-    setSeek({ time: seconds, n: Date.now() });
-  };
-  const playingPart = playing?.part;
-  // Following along: the line being spoken is highlighted and scrolled near the top of the transcript (level with the
-  // player), and its word being spoken is marked. Scrolling the transcript yourself stops the following until
-  // "Follow along" (or a click on a time) turns it back on.
-  const list = useRef<HTMLOListElement>(null);
-  const [following, setFollowing] = useState(true);
-  const playerTime = useRef(0);
-  const onTime = useCallback((seconds: number) => {
-    playerTime.current = seconds;
-    let current = '';
-    for (const line of lines) if (line.part === playingPart && line.start <= seconds + 0.2) current = `${line.part}-${line.start}`;
-    setNowLine((previous) => (previous === current ? previous : current));
-    // The word: marked straight in the page (re-rendering the whole transcript several times a second would be slow).
-    const root = list.current;
-    if (!root) return;
-    let word: Element | null = null;
-    for (const button of root.querySelectorAll('li.now [data-at]')) if (Number((button as HTMLElement).dataset.at) <= seconds + 0.05) word = button;
-    const previous = root.querySelector('.speaking');
-    if (previous !== word) {
-      previous?.classList.remove('speaking');
-      word?.classList.add('speaking');
+    if (!canPlay(part)) return;
+    follow.follow();
+    if (playing?.part === part && player.current) {
+      player.current.playFrom(seconds);
+      return;
     }
-  }, [lines, playingPart]);
-  useEffect(() => {
-    const root = list.current;
-    const line = root?.querySelector('li.now') as HTMLElement | null;
-    if (!root || !line || !following) return;
-    root.scrollTo({ top: Math.max(0, line.offsetTop - 12), behavior: 'smooth' });
-  }, [nowLine, following]);
-  const followAgain = () => setFollowing(true);
+    setPartShown(part);
+    setSeek((previous) => ({ time: seconds, n: (previous?.n || 0) + 1 }));
+  };
 
   if (account.checked && !can('view.meetings', account)) {
-    return <p className="empty">Meetings are private. {account.user ? 'Your group can\'t see them.' : <><Link to="/account">Sign in</Link> if you may see them.</>} <Link to="/">See what's published</Link></p>;
+    return (
+      <p className="empty">
+        Meetings are private.{' '}
+        {account.user ? (
+          "Your group can't see them."
+        ) : (
+          <>
+            <Link to="/account">Sign in</Link> if you may see them.
+          </>
+        )}{' '}
+        <Link to="/">See what's published</Link>
+      </p>
+    );
   }
   if (!recordings) return <p className="empty">Loading…</p>;
-  if (!recording) return <p>No such meeting on the hub. <Link to="/meetings">All meetings</Link></p>;
+  if (!recording)
+    return (
+      <p>
+        No such meeting on the hub. <Link to="/meetings">All meetings</Link>
+      </p>
+    );
   const data = recording.data;
   // Official sources (src/sync/official.js): what the recorder knew (a built meeting's archive, lined up with it), with
   // what people set here over it (meeting-info, a mark). An older plain link still counts.
   const infoId = `${id}:${data.parts?.[0]?.name || ''}:meeting-info`;
   const info = markData<{ official?: Official; officialUrl?: string }>(infoId) || {};
   const legacy = info.officialUrl || data.officialUrl;
-  const official = mergeOfficial(data.official || (legacy ? parseOfficialUrl(legacy) : null), info.official) as Official | null;
+  const official = mergeOfficial(
+    data.official || (legacy ? parseOfficialUrl(legacy) : null),
+    info.official
+  ) as Official | null;
   const saveOfficial = (next: Official) => save(infoId, { ...info, official: next }, 'Official sources saved');
   const editChapters = can('contribute.chapters', account);
-  const addChapterFile = async (chapter: (typeof chapters)[number]) => {
+  const addChapterFile = async (chapter: Chapter) => {
     const url = prompt(`An official file for “${chapter.title}” (such as its draft minutes or attachment):`);
     if (!url?.trim()) return;
-    if (!/^https?:\/\//.test(url.trim())) { setStatus('That isn\'t a web address'); return; }
+    if (!/^https?:\/\//.test(url.trim())) {
+      setStatus("That isn't a web address");
+      return;
+    }
     const label = prompt('What is it?', 'Attachment') || 'Attachment';
     const current = markData<{ items?: { id: string }[] }>(chapter.markId) || {};
-    const items = (current.items || []).map((item) => (item.id === chapter.id ? { ...item, links: [...(chapter.links || []), { label: label.trim(), url: url.trim() }] } : item));
+    const items = (current.items || []).map((item) =>
+      item.id === chapter.id
+        ? { ...item, links: [...(chapter.links || []), { label: label.trim(), url: url.trim() }] }
+        : item
+    );
     await save(chapter.markId, { ...current, items }, `Added “${label.trim()}” to ${chapter.title}`);
   };
-  // The transcript as shown (corrections, speaker names), for publishing.
-  const linesFor = (part: string): PublishLine[] => lines.filter((line) => line.part === part).map((line) => ({
-    start: line.start, end: line.end,
-    speaker: speakersAt(part, line.start + 0.01).map((speaker) => personName(peopleMap.get(speaker), speaker)).join(', '),
-    text: line.words.map((word) => word.shown).filter(Boolean).join(' ')
-  }));
+  // The transcript as shown (corrections, speaker names), for publishing and for the player's captions.
+  const linesFor = (part: string): PublishLine[] =>
+    lines
+      .filter((line) => line.part === part)
+      .map((line) => ({
+        start: line.start,
+        end: line.end,
+        speaker: speakersAt(part, line.start + 0.01)
+          .map(nameOf)
+          .join(', '),
+        text: lineText(line)
+      }));
   const firstPart = data.parts?.[0]?.name || lines[0]?.part || '';
+  const playChapterAt = playing ? (seconds: number) => playAt(playing.part, seconds) : null;
   const encodeQueued = async () => {
-    await putRecord('jobs', `encode-${id}`, { type: 'encode', status: 'queued', title: `Audio and video: ${data.title}`, recordingId: id, progress: 0, message: '', agent: null, createdAt: new Date().toISOString(), createdBy: account.user?.displayName || account.user?.username || '' });
+    await putRecord('jobs', `encode-${id}`, {
+      type: 'encode',
+      status: 'queued',
+      title: `Audio and video: ${data.title}`,
+      recordingId: id,
+      progress: 0,
+      message: '',
+      agent: null,
+      createdAt: new Date().toISOString(),
+      createdBy: account.user?.displayName || account.user?.username || ''
+    });
     setStatus('Queued for an agent (see Agents)');
     syncNow();
   };
   return (
     <article className="recording">
-      <header className="recording-head">
-        {pictures[0] && <img src={mediaUrlOf(pictures[0].data.path)} alt="" className="recording-picture" />}
-        <div>
-          <div className="card-kind">{STATUS_LABEL[data.status] || data.status} · {data.sourceKey} · recorded by {data.recorderId}</div>
-          <h1>{data.title}</h1>
-          <p className="meta">
-            {dateTime(data.startedAt)}{data.stoppedAt ? ` – ${new Date(data.stoppedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}
-            {data.durationSeconds > 0 && <> · {duration(data.durationSeconds)}</>}
-            {data.stopReason && <> · stopped after {data.stopReason === 'standby' ? 'the standby slide' : data.stopReason === 'idle' ? 'no new video' : data.stopReason === 'cap' ? 'the time limit' : data.stopReason}</>}
-          </p>
-          {data.error && <p className="error">{data.error}</p>}
-          <p className="muted">
-            {account.user
-              ? <>Click a word to correct it or to say who is speaking from there.{account.user.trusted ? '' : ' Your changes are visible only to you.'}</>
-              : <><Link to="/account">Sign in</Link> to correct the transcript or say who is speaking.</>}
-            {' '}{(mediaRecords || []).some((record) => record.data.recordingId === id) ? `The full-quality video is on ${data.recorderId}.` : `The video is on ${data.recorderId}.`}
-          </p>
-          {!media.length && can('publish', account) && <p className="small"><button type="button" className="link-button" onClick={encodeQueued}>Make audio and video for the hub</button></p>}
-        </div>
-      </header>
+      <MeetingHeader
+        recording={data}
+        picture={pictures[0]?.data.path}
+        account={account}
+        hasMedia={media.length > 0}
+        onEncode={encodeQueued}
+      />
       {pictures.length > 0 && (
-        <div className="stills">{pictures.map((still) => media.some((item) => item.part === still.data.part)
-          ? <button key={still.id} type="button" className="still-button" title={`Play from ${clock(still.data.position)}`} onClick={() => playAt(still.data.part, still.data.position)}><img src={mediaUrlOf(still.data.path)} alt="" loading="lazy" /></button>
-          : <img key={still.id} src={mediaUrlOf(still.data.path)} alt="" loading="lazy" title={clock(still.data.position)} />)}</div>
+        <div className="stills">
+          {pictures.map((still) =>
+            canPlay(still.data.part) ? (
+              <button
+                key={still.id}
+                type="button"
+                className="still-button"
+                title={`Play from ${clock(still.data.position)}`}
+                aria-label={`Play from ${clock(still.data.position)}`}
+                onClick={() => playAt(still.data.part, still.data.position)}
+              >
+                <img src={mediaUrlOf(still.data.path)} alt="" loading="lazy" />
+              </button>
+            ) : (
+              <img
+                key={still.id}
+                src={mediaUrlOf(still.data.path)}
+                alt=""
+                loading="lazy"
+                title={clock(still.data.position)}
+              />
+            )
+          )}
+        </div>
       )}
       <div className="recording-columns">
         <div className="side">
           {playing && (
             <div className="sticky-player">
               {media.length > 1 && (
-                <span className="segmented" role="group" aria-label="Part">
-                  {media.map((item) => <button key={item.part} type="button" className={item.part === playing.part ? 'on' : ''} onClick={() => setPartShown(item.part)}>Part {item.partIndex + 1}</button>)}
-                </span>
+                <fieldset className="segmented" aria-label="Part">
+                  {media.map((item) => (
+                    <button
+                      key={item.part}
+                      type="button"
+                      className={item.part === playing.part ? 'on' : ''}
+                      onClick={() => setPartShown(item.part)}
+                    >
+                      Part {item.partIndex + 1}
+                    </button>
+                  ))}
+                </fieldset>
               )}
-              <MediaPlayer key={playing.part} media={playing} seek={seek} control={player}
-                stills={pictures.filter((still) => still.data.part === playing.part).map((still) => ({ position: still.data.position, path: still.data.path }))} onTime={onTime} />
+              <MediaPlayer
+                key={playing.part}
+                media={playing}
+                seek={seek}
+                control={player}
+                stills={pictures
+                  .filter((still) => still.data.part === playing.part)
+                  .map((still) => ({ position: still.data.position, path: still.data.path }))}
+                onTime={follow.onTime}
+                captions={captionsVtt(linesFor(playing.part))}
+              />
             </div>
           )}
           {can('publish', account) && (
-            <PublishPanel recordingId={id} part={playing?.part || firstPart} seconds={playing?.seconds || data.durationSeconds || 0} playerTime={() => playerTime.current}
-              linesFor={linesFor} official={official} chapters={chapters.map((chapter) => ({ at: chapter.at, title: chapter.title, links: chapter.links || [] }))}
-              clips={((markData<{ clips?: { title: string; from: number; to: number }[] }>(`${id}:${playing?.part || firstPart}:playlist`))?.clips) || []} />
+            <PublishPanel
+              recordingId={id}
+              part={playing?.part || firstPart}
+              seconds={playing?.seconds || data.durationSeconds || 0}
+              playerTime={follow.currentTime}
+              linesFor={linesFor}
+              official={official}
+              chapters={chapters.map((chapter) => ({
+                at: chapter.at,
+                title: chapter.title,
+                links: chapter.links || []
+              }))}
+              clips={
+                markData<{ clips?: { title: string; from: number; to: number }[] }>(
+                  `${id}:${playing?.part || firstPart}:playlist`
+                )?.clips || []
+              }
+            />
           )}
-          <OfficialPanel official={official} playerTime={() => playerTime.current} canEdit={editChapters} onSave={saveOfficial} />
-          {chapters.length > 0 && (
-            <section className="panel"><h2>Chapters</h2>
-              <ol className="chapters">{chapters.sort((a, b) => a.at - b.at).map((chapter) => (
-                <li key={chapter.id}>
-                  <TimeLink seconds={chapter.at} onPlay={playing ? () => playAt(playing.part, chapter.at) : null} /> {chapter.title}
-                  {official?.swagit && officialTime(official, chapter.at) !== null && <a className="official-at" href={swagitAt(official, chapter.at) || ''} target="_blank" rel="noopener noreferrer" title="On the official video, at this moment">↗</a>}
-                  {(chapter.links?.length || editChapters) && (
-                    <span className="chapter-files small">
-                      {(chapter.links || []).map((link) => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}
-                      {editChapters && <button type="button" className="link-button" onClick={() => addChapterFile(chapter)}>+ file</button>}
-                    </span>
-                  )}
-                </li>
-              ))}</ol>
-            </section>
-          )}
-          {votes.length > 0 && (
-            <section className="panel"><h2>Votes</h2>
-              <ul className="votes">{votes.sort((a, b) => a.at - b.at).map((vote) => <li key={vote.id}><TimeLink seconds={vote.at} onPlay={playing ? () => playAt(playing.part, vote.at) : null} /> {vote.motion || 'Motion'}</li>)}</ul>
-            </section>
-          )}
+          <OfficialPanel
+            official={official}
+            playerTime={follow.currentTime}
+            canEdit={editChapters}
+            onSave={saveOfficial}
+          />
+          <Chapters
+            chapters={chapters}
+            official={official}
+            playAt={playChapterAt}
+            onAddFile={editChapters ? addChapterFile : null}
+          />
+          <Votes votes={votes} playAt={playChapterAt} />
         </div>
-        <section className="panel transcript">
-          <div className="panel-head">
-            <h2>Transcript{kind === 'quick' ? ' (quick, while recording)' : ''}</h2>
-            <input type="search" placeholder="Find in this transcript" value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Find in this transcript" />
-            {playing && !following && nowLine && <button type="button" className="button" onClick={followAgain}>↓ Follow along</button>}
-          </div>
-          {status && <p className="note" role="status">{status}</p>}
-          {lines.length === 0 ? <p className="muted">No transcript yet.</p> : (
-            <ol className="lines" ref={list} onWheel={() => setFollowing(false)} onTouchMove={() => setFollowing(false)}
-              onKeyDown={(event) => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) setFollowing(false); }}>{shown.map((line, lineIndex) => {
-              let last = lineIndex > 0 ? speakersAt(shown[lineIndex - 1].part, shown[lineIndex - 1].end - 0.01).join() : '';
-              return (
-                <li key={`${line.part}-${line.start}`} className={nowLine === `${line.part}-${line.start}` ? 'now' : undefined}>
-                  <TimeLink seconds={line.start} onPlay={media.some((item) => item.part === line.part) ? () => playAt(line.part, line.start) : null} />
-                  <span className="words">{line.words.map((word) => {
-                    const speakers = speakersAt(line.part, word.at);
-                    const label = speakers.join() !== last ? speakers.map((speaker) => personName(peopleMap.get(speaker), speaker)).join(', ') : '';
-                    last = speakers.join();
-                    const by = word.edit ? correctedBy(word) : '';
-                    return (
-                      <span key={word.index}>
-                        {label && <strong className="speaker-label">{label}: </strong>}
-                        {word.edit && word.shown === '' ? (editable && <button type="button" className="word deleted" title={`Deleted “${word.text}”${by ? ` by ${by}` : ''}`} onClick={() => setPicked(word)}>×</button>) : (
-                          <button type="button" className={`word${word.edit ? ' edited' : ''}`} disabled={!editable} data-at={word.at}
-                            title={word.edit ? `Was “${word.text}”${by ? ` · corrected by ${by}` : ''}` : undefined} onClick={() => setPicked(word)}>{word.shown}</button>
-                        )}{' '}
-                        {picked && picked.part === word.part && picked.line === word.line && picked.index === word.index && (
-                          <WordEditor word={word} people={people} speakers={speakers} onWord={saveWord} onSpeakers={saveSpeakers} onAdd={addPerson} onClose={() => setPicked(null)} />
-                        )}
-                      </span>
-                    );
-                  })}</span>
-                </li>
-              );
-            })}</ol>
-          )}
-        </section>
+        <Transcript
+          kind={kind}
+          lines={lines}
+          status={status}
+          editable={editable}
+          people={people}
+          nameOf={nameOf}
+          speakersAt={speakersAt}
+          correctedBy={(word) => correctedBy(stacks, id, word)}
+          canPlay={canPlay}
+          playAt={playAt}
+          listRef={follow.listRef}
+          nowLine={follow.nowLine}
+          following={follow.following}
+          onFollow={follow.follow}
+          playing={Boolean(playing)}
+          picked={picked}
+          onPick={setPicked}
+          edits={edits}
+        />
       </div>
     </article>
-  );
-}
-
-// A time that plays from there when there's published audio.
-function TimeLink({ seconds, onPlay }: { seconds: number; onPlay: (() => void) | null }) {
-  if (!onPlay) return <span className="time">{clock(seconds)}</span>;
-  return <button type="button" className="time time-link" title="Play from here" onClick={onPlay}>{clock(seconds)}</button>;
-}
-
-function WordEditor({ word, people, speakers, onWord, onSpeakers, onAdd, onClose }: {
-  word: Word; people: Person[]; speakers: string[];
-  onWord: (word: Word, text: string) => void; onSpeakers: (word: Word, speakers: string[]) => void;
-  onAdd: (word: Word, name: string, role: string) => void; onClose: () => void;
-}) {
-  const [text, setText] = useState(word.shown);
-  const [newPerson, setNewPerson] = useState({ name: '', role: '' });
-  const submit = (event: FormEvent) => { event.preventDefault(); onWord(word, text.trim()); };
-  return (
-    <span className="word-editor panel" role="dialog" aria-label={`Change “${word.shown}”`} onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }}>
-      <form onSubmit={submit}>
-        <label>Word at {clock(word.at)} <input autoFocus value={text} onChange={(event) => setText(event.target.value)} /></label>
-        <span className="toolbar">
-          <button type="submit" className="button primary">Correct</button>
-          <button type="button" className="button" onClick={() => onWord(word, '')}>Delete word</button>
-          {word.edit && <button type="button" className="button" onClick={() => onWord(word, word.text)}>Restore “{word.text}”</button>}
-        </span>
-      </form>
-      <label>Speaking from here <select value={speakers.join()} onChange={(event) => onSpeakers(word, event.target.value ? event.target.value.split(',') : [])}>
-        <option value="">Nobody / unknown</option>
-        {!people.some((person) => person.id === speakers.join()) && speakers.length > 0 && <option value={speakers.join()}>{speakers.join(', ')}</option>}
-        {people.map((person) => <option key={person.id} value={person.id}>{personName(person, person.id)}{person.role && !person.nameUnknown ? `, ${person.role}` : ''}</option>)}
-      </select></label>
-      <form className="toolbar" onSubmit={(event) => { event.preventDefault(); if (newPerson.name.trim()) onAdd(word, newPerson.name.trim(), newPerson.role.trim()); }}>
-        <input placeholder="Someone new: name" value={newPerson.name} onChange={(event) => setNewPerson({ ...newPerson, name: event.target.value })} aria-label="New person's name" />
-        <input placeholder="role" value={newPerson.role} onChange={(event) => setNewPerson({ ...newPerson, role: event.target.value })} aria-label="New person's role" />
-        <button type="submit" className="button">Add, speaking from here</button>
-      </form>
-      <button type="button" className="link-button" onClick={onClose}>Close</button>
-    </span>
   );
 }

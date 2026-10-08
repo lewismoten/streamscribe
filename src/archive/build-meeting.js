@@ -9,7 +9,15 @@ import { loadSessionSegments } from '../sessions/session.js';
 import { writeThumbnailsPage } from '../review-page/page.js';
 import { archiveIdFor } from '../providers/index.js';
 import { binPath } from '../config/paths.js';
-import { carrySpeakers, carryEdits, carryRetranscriptions, carryBoosts, carryName, carryAgenda, carryVotes } from './meeting-marks.js';
+import {
+  carrySpeakers,
+  carryEdits,
+  carryRetranscriptions,
+  carryBoosts,
+  carryName,
+  carryAgenda,
+  carryVotes
+} from './meeting-marks.js';
 import { buildSegments } from './meeting-segments.js';
 import { buildTranscript } from './meeting-transcript.js';
 
@@ -38,7 +46,9 @@ async function main() {
   const source = selectConfiguredSources(SOURCES, options.sources, 'sources')[0];
   const videoId = archiveIdFor({ id: options.videoId, url: options.url, file: options.file }, source);
   if (!videoId) {
-    throw new Error('Expected --url <archived video page or link>, --file <video file>, or --video-id for one already downloaded');
+    throw new Error(
+      'Expected --url <archived video page or link>, --file <video file>, or --video-id for one already downloaded'
+    );
   }
   const archiveDir = path.join(source.storageDir, 'archive', videoId);
   const archivePath = path.join(archiveDir, 'video.mp4');
@@ -47,11 +57,18 @@ async function main() {
   if (options.realign || !fs.existsSync(alignmentPath) || !fs.existsSync(archivePath)) {
     const url = options.url || (await loadJson(alignmentPath, null))?.url;
     if (!url && !options.file) {
-      throw new Error(`Archive ${videoId} hasn't been downloaded yet; pass --url <archived video page or link> or --file <video file>`);
+      throw new Error(
+        `Archive ${videoId} hasn't been downloaded yet; pass --url <archived video page or link> or --file <video file>`
+      );
     }
     console.log('Downloading and lining up the archive (backfill-from-archive)...');
-    await runNode('backfill-from-archive.js', [...(options.file ? ['--file', options.file] : ['--url', url]), '--id', videoId,
-      ...options.sessions.flatMap((item) => ['--session', item]), ...options.sources.flatMap((item) => ['--source', item])]);
+    await runNode('backfill-from-archive.js', [
+      ...(options.file ? ['--file', options.file] : ['--url', url]),
+      '--id',
+      videoId,
+      ...options.sessions.flatMap((item) => ['--session', item]),
+      ...options.sources.flatMap((item) => ['--source', item])
+    ]);
   }
   const alignment = await loadJson(alignmentPath);
   const sessions = new Map();
@@ -66,7 +83,9 @@ async function main() {
 
   const firstSession = [...sessions.keys()].sort()[0];
   const date = path.basename(firstSession).slice(0, 10);
-  const meetingDir = options.output ? path.resolve(options.output) : path.join(source.storageDir, 'meetings', `${date} video-${videoId}`);
+  const meetingDir = options.output
+    ? path.resolve(options.output)
+    : path.join(source.storageDir, 'meetings', `${date} video-${videoId}`);
   await fs.promises.mkdir(meetingDir, { recursive: true });
   const previous = await loadJson(path.join(meetingDir, 'meeting.json'), null);
   console.log(`Meeting: ${meetingDir}`);
@@ -84,8 +103,11 @@ async function main() {
     builtAt: new Date().toISOString(),
     note: 'pieces lists, in order, where each stretch of the meeting comes from; meetingStart and duration are in seconds of the meeting.',
     signature,
-    pieces: pieces.map((piece) => ({ ...piece, ...(piece.session ? { session: relative(piece.session) } : {}),
-      ...(piece.liveHole ? { liveHole: { ...piece.liveHole, session: relative(piece.liveHole.session) } } : {}) }))
+    pieces: pieces.map((piece) => ({
+      ...piece,
+      ...(piece.session ? { session: relative(piece.session) } : {}),
+      ...(piece.liveHole ? { liveHole: { ...piece.liveHole, session: relative(piece.liveHole.session) } } : {})
+    }))
   };
   printTimeline(pieces);
   if (timelineChanged) {
@@ -112,15 +134,29 @@ async function main() {
 
   if (pending.length > 0 && options.transcribe) {
     const total = pending.reduce((sum, range) => sum + range.to - range.from, 0);
-    console.log(`Transcribing ${pending.length} archive stretch${pending.length === 1 ? '' : 'es'} not transcribed yet (${formatPosition(total)}, ${options.quality} quality); the page above already works and gets the text when this finishes.`);
+    console.log(
+      `Transcribing ${pending.length} archive stretch${pending.length === 1 ? '' : 'es'} not transcribed yet (${formatPosition(total)}, ${options.quality} quality); the page above already works and gets the text when this finishes.`
+    );
     for (const range of pending) {
-      await runNode('transcribe-media.js', ['--input', archivePath, '--from', range.from.toFixed(3), '--to', range.to.toFixed(3),
-        '--quality', options.quality, '--output-dir', path.join(meetingDir, 'transcripts', 'pieces')]);
+      await runNode('transcribe-media.js', [
+        '--input',
+        archivePath,
+        '--from',
+        range.from.toFixed(3),
+        '--to',
+        range.to.toFixed(3),
+        '--quality',
+        options.quality,
+        '--output-dir',
+        path.join(meetingDir, 'transcripts', 'pieces')
+      ]);
     }
     pending = await buildTranscript(meetingDir, pieces, archivePath, archiveDir);
     await runNode('extract-thumbnails.js', ['--session', meetingDir]);
   } else if (pending.length > 0) {
-    console.log(`${pending.length} archive stretch${pending.length === 1 ? ' has' : 'es have'} no transcript yet; run again without --no-transcribe to transcribe ${pending.length === 1 ? 'it' : 'them'}.`);
+    console.log(
+      `${pending.length} archive stretch${pending.length === 1 ? ' has' : 'es have'} no transcript yet; run again without --no-transcribe to transcribe ${pending.length === 1 ? 'it' : 'them'}.`
+    );
   }
   console.log(`Done. Open the meeting with npm start, then ${path.join(meetingDir, 'thumbnails', 'index.html')}`);
 }
@@ -129,26 +165,48 @@ async function main() {
 // ranges backfill-from-archive found (before, between, and after sessions, and inside capture gaps).
 function planPieces(alignment, sessions) {
   const pieces = [];
-  const addArchive = (range) => pieces.push({
-    kind: 'archive',
-    reason: range.kind,
-    archiveStart: range.archiveStart,
-    archiveEnd: range.archiveEnd,
-    clockStart: range.clockStart || '',
-    liveHole: range.kind === 'gap' ? { session: range.sessionDir, start: range.videoPositionStart, end: range.videoPositionEnd } : null
-  });
-  const ordered = alignment.sessions.filter((item) => sessions.has(item.sessionDir)).sort((left, right) => left.offset - right.offset);
+  const addArchive = (range) =>
+    pieces.push({
+      kind: 'archive',
+      reason: range.kind,
+      archiveStart: range.archiveStart,
+      archiveEnd: range.archiveEnd,
+      clockStart: range.clockStart || '',
+      liveHole:
+        range.kind === 'gap'
+          ? { session: range.sessionDir, start: range.videoPositionStart, end: range.videoPositionEnd }
+          : null
+    });
+  const ordered = alignment.sessions
+    .filter((item) => sessions.has(item.sessionDir))
+    .sort((left, right) => left.offset - right.offset);
   for (const item of ordered) {
-    alignment.missing.filter((range) => range.sessionDir === item.sessionDir && ['before-capture', 'between-sessions'].includes(range.kind)).forEach(addArchive);
+    alignment.missing
+      .filter(
+        (range) => range.sessionDir === item.sessionDir && ['before-capture', 'between-sessions'].includes(range.kind)
+      )
+      .forEach(addArchive);
     const retained = sessions.get(item.sessionDir).retained;
     let runStart = 0;
     for (let index = 1; index <= retained.length; index += 1) {
       if (index < retained.length && retained[index].sequence === retained[index - 1].sequence + 1) continue;
       const run = retained.slice(runStart, index);
       const liveEnd = run.at(-1).videoStart + run.at(-1).durationSeconds;
-      pieces.push({ kind: 'live', session: item.sessionDir, liveStart: run[0].videoStart, liveEnd, firstSequence: run[0].sequence, lastSequence: run.at(-1).sequence });
+      pieces.push({
+        kind: 'live',
+        session: item.sessionDir,
+        liveStart: run[0].videoStart,
+        liveEnd,
+        firstSequence: run[0].sequence,
+        lastSequence: run.at(-1).sequence
+      });
       if (index < retained.length) {
-        const gap = alignment.missing.find((range) => range.sessionDir === item.sessionDir && range.kind === 'gap' && Math.abs(range.videoPositionStart - liveEnd) < 0.5);
+        const gap = alignment.missing.find(
+          (range) =>
+            range.sessionDir === item.sessionDir &&
+            range.kind === 'gap' &&
+            Math.abs(range.videoPositionStart - liveEnd) < 0.5
+        );
         if (gap) addArchive(gap);
       }
       runStart = index;
@@ -158,15 +216,18 @@ function planPieces(alignment, sessions) {
   return pieces;
 }
 
-const pieceKey = (piece) => (piece.kind === 'live'
-  ? ['live', piece.session, piece.firstSequence, piece.lastSequence]
-  : ['archive', piece.archiveStart.toFixed(1), piece.archiveEnd.toFixed(1)]);
+const pieceKey = (piece) =>
+  piece.kind === 'live'
+    ? ['live', piece.session, piece.firstSequence, piece.lastSequence]
+    : ['archive', piece.archiveStart.toFixed(1), piece.archiveEnd.toFixed(1)];
 
 function resolvePiece(piece, storageDir) {
   return {
     ...piece,
     ...(piece.session ? { session: path.resolve(storageDir, piece.session) } : {}),
-    ...(piece.liveHole ? { liveHole: { ...piece.liveHole, session: path.resolve(storageDir, piece.liveHole.session) } } : {})
+    ...(piece.liveHole
+      ? { liveHole: { ...piece.liveHole, session: path.resolve(storageDir, piece.liveHole.session) } }
+      : {})
   };
 }
 
@@ -184,10 +245,13 @@ async function linkSessionPages(meetingDir, sessionDirs) {
 function printTimeline(pieces) {
   console.log('Timeline:');
   for (const piece of pieces) {
-    const where = piece.kind === 'live'
-      ? `live ${path.basename(piece.session)} ${formatPosition(piece.liveStart)}-${formatPosition(piece.liveEnd)}`
-      : `archive ${formatPosition(piece.archiveStart)}-${formatPosition(piece.archiveEnd)} (${piece.reason})`;
-    console.log(`  ${formatPosition(piece.meetingStart)}-${formatPosition(piece.meetingStart + piece.duration)}  ${where}`);
+    const where =
+      piece.kind === 'live'
+        ? `live ${path.basename(piece.session)} ${formatPosition(piece.liveStart)}-${formatPosition(piece.liveEnd)}`
+        : `archive ${formatPosition(piece.archiveStart)}-${formatPosition(piece.archiveEnd)} (${piece.reason})`;
+    console.log(
+      `  ${formatPosition(piece.meetingStart)}-${formatPosition(piece.meetingStart + piece.duration)}  ${where}`
+    );
   }
 }
 
@@ -200,7 +264,18 @@ function runNode(script, args) {
 }
 
 function parseArgs(argv) {
-  const options = { url: '', file: '', videoId: '', sessions: [], sources: [], output: '', quality: 'thorough', transcribe: true, realign: false, reimportSpeakers: false };
+  const options = {
+    url: '',
+    file: '',
+    videoId: '',
+    sessions: [],
+    sources: [],
+    output: '',
+    quality: 'thorough',
+    transcribe: true,
+    realign: false,
+    reimportSpeakers: false
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--url') options.url = argv[++index];
@@ -217,7 +292,9 @@ function parseArgs(argv) {
     else throw new Error(`Unknown option ${arg}`);
   }
   if (!options.url && !options.videoId && !options.file) {
-    throw new Error('Usage: npm run build-meeting -- (--url <archived video page or link> | --file <video file> | --video-id <id>) [--session <folder> ...] [--quality quick|thorough] [--no-transcribe] [--realign] [--reimport-speakers]');
+    throw new Error(
+      'Usage: npm run build-meeting -- (--url <archived video page or link> | --file <video file> | --video-id <id>) [--session <folder> ...] [--quality quick|thorough] [--no-transcribe] [--realign] [--reimport-speakers]'
+    );
   }
   if (!['quick', 'thorough'].includes(options.quality)) {
     throw new Error('--quality must be quick or thorough');
@@ -226,7 +303,8 @@ function parseArgs(argv) {
 }
 
 // Started by bin/build-meeting.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

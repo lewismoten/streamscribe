@@ -30,11 +30,26 @@ export async function describeCards(sessionDir, session, outputDir, stills, opti
       image = `cards/card-${thumbnailFileName(from)}`;
       await fs.promises.mkdir(path.join(outputDir, 'cards'), { recursive: true });
       const offset = Math.min(from + 2 - segment.videoStart, Math.max(0, segment.durationSeconds - 1.2));
-      if (!await extractThumbnail(path.join(sessionDir, 'segments', segment.fileName), offset, path.join(outputDir, image), 960)) continue;
+      if (
+        !(await extractThumbnail(
+          path.join(sessionDir, 'segments', segment.fileName),
+          offset,
+          path.join(outputDir, image),
+          960
+        ))
+      )
+        continue;
       text = (await readImageText(path.join(outputDir, image))).slice(0, 120);
     }
     // A card still showing at the end of a capture that's still recording isn't over yet.
-    cards.push({ from, to, text, image, open: Boolean(live) && end - to < 15, chaptered: Boolean(existing?.chaptered) });
+    cards.push({
+      from,
+      to,
+      text,
+      image,
+      open: Boolean(live) && end - to < 15,
+      chaptered: Boolean(existing?.chaptered)
+    });
   }
   await addCardChapters(sessionDir, cards);
   if (cards.length || known.size) {
@@ -66,9 +81,16 @@ export async function addCardChapters(sessionDir, cards) {
       items.push({ id: newId(), at: Number(card.from.toFixed(2)), title, auto: 'title card' });
     }
     if (!near(card.to)) {
-      items.push({ id: newId(), at: Number(card.to.toFixed(2)), title: closed ? 'Back in open session' : 'Resumed', auto: 'title card' });
+      items.push({
+        id: newId(),
+        at: Number(card.to.toFixed(2)),
+        title: closed ? 'Back in open session' : 'Resumed',
+        auto: 'title card'
+      });
     }
-    console.log(`  Title card at ${formatPosition(card.from)}-${formatPosition(card.to)}${card.text ? ` ("${card.text}")` : ''}: chapters added`);
+    console.log(
+      `  Title card at ${formatPosition(card.from)}-${formatPosition(card.to)}${card.text ? ` ("${card.text}")` : ''}: chapters added`
+    );
   }
   items.sort((left, right) => Number(left.at) - Number(right.at));
   await writeJsonAtomically(agendaPath, { ...agenda, updatedAt: new Date().toISOString(), items });

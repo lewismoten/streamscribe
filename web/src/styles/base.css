@@ -1,0 +1,101 @@
+/* Colors (light and dark), the page body, headings, and the small shared text styles. */
+:root {
+  /* Colors of the Stream Scribe logo and preview (docs/socialpreview.jpg, web/favicon.ico): deep navy, teal, cream,
+     with amber and violet touches. Light mode turns it over: cream paper, navy ink, a deeper teal. */
+  color-scheme: light dark;
+  --bg: #f7f2e6;
+  --fg: #0b1b2b;
+  --muted: #556677;
+  --card: #fffdf8;
+  --line: #e1d8c5;
+  --accent: #017f72;
+  --accent-fg: #ffffff;
+  --live: #c8412f;
+  --pass: #017f72;
+  --fail: #b3261e;
+  --code: #efe8d8;
+  --note: #fff1c7;
+  --mark: #ffd472;
+  --violet: #6b62a0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #091928;
+    --fg: #fbf5e5;
+    --muted: #93a5b6;
+    --card: #0f2236;
+    --line: #22384d;
+    --accent: #2fc4b1;
+    --accent-fg: #04201c;
+    --live: #ff7a66;
+    --pass: #2fc4b1;
+    --fail: #ff7a66;
+    --code: #16304a;
+    --note: #123445;
+    --mark: #6b5418;
+    --violet: #9a91c8;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    15px/1.45 system-ui,
+    sans-serif;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+  background: var(--code);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+h1 {
+  font-size: 1.5rem;
+  margin: 2px 0 6px;
+}
+h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+h3 {
+  font-size: 0.98rem;
+  margin: 2px 0 6px;
+  line-height: 1.3;
+}
+input[type='search'],
+select {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+}
+.muted {
+  color: var(--muted);
+}
+.error {
+  color: var(--fail);
+}
+.empty {
+  color: var(--muted);
+  padding: 24px 0;
+}
+.note {
+  background: var(--note);
+  padding: 8px 12px;
+  border-radius: 8px;
+}

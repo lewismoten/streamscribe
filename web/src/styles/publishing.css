@@ -1,0 +1,42 @@
+/* Published (public) pages, the publish panel, and the list of published pages. */
+.publication {
+  max-width: 900px;
+}
+.publication .player video {
+  width: 100%;
+  border-radius: 6px;
+  background: #000;
+}
+.publication .player audio {
+  width: 100%;
+}
+.publication .body {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin: 12px 0 18px;
+}
+.publication .transcript .lines {
+  max-height: 60vh;
+}
+.publish textarea {
+  width: 100%;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--fg);
+}
+.publish .range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.publish .range input {
+  width: 6.5em;
+}
+.published-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}

@@ -17,7 +17,9 @@ const pendingLoads = new Map();
 
 export class RobotsDisallowedError extends Error {
   constructor(url, robotsUrl, rule) {
-    super(`Blocked by robots.txt (${rule}): ${url}. See ${robotsUrl}, or add the host to http.robots.ignoreHosts in config.local.js.`);
+    super(
+      `Blocked by robots.txt (${rule}): ${url}. See ${robotsUrl}, or add the host to http.robots.ignoreHosts in config.local.js.`
+    );
     this.name = 'RobotsDisallowedError';
     this.code = 'ROBOTS_DISALLOWED';
     this.url = url;
@@ -64,17 +66,20 @@ async function loadRobotsPolicy(origin, robotsUrl, fetchRobots) {
     return cached;
   }
   const refresh = startRefresh(origin, robotsUrl, fetchRobots);
-  return cached || await refresh;
+  return cached || (await refresh);
 }
 
 function startRefresh(origin, robotsUrl, fetchRobots) {
   if (!pendingLoads.has(origin)) {
-    pendingLoads.set(origin, refreshRobotsPolicy(origin, robotsUrl, fetchRobots)
-      .catch((error) => {
-        console.warn(`robots.txt refresh failed for ${origin}: ${error.message}`);
-        return memoryCache.get(origin);
-      })
-      .finally(() => pendingLoads.delete(origin)));
+    pendingLoads.set(
+      origin,
+      refreshRobotsPolicy(origin, robotsUrl, fetchRobots)
+        .catch((error) => {
+          console.warn(`robots.txt refresh failed for ${origin}: ${error.message}`);
+          return memoryCache.get(origin);
+        })
+        .finally(() => pendingLoads.delete(origin))
+    );
   }
   return pendingLoads.get(origin);
 }
@@ -99,12 +104,20 @@ async function refreshRobotsPolicy(origin, robotsUrl, fetchRobots) {
   } catch (error) {
     const fallback = memoryCache.get(origin) || diskRecord;
     if (fallback) {
-      console.warn(`robots.txt unreachable for ${origin} (${error.message}); using cached copy from ${fallback.fetchedAt}`);
+      console.warn(
+        `robots.txt unreachable for ${origin} (${error.message}); using cached copy from ${fallback.fetchedAt}`
+      );
       // Retry in an hour rather than on every request.
-      return remember(origin, { ...fallback, fetchedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + unreachableCacheMs).toISOString() });
+      return remember(origin, {
+        ...fallback,
+        fetchedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + unreachableCacheMs).toISOString()
+      });
     }
     const allow = HTTP.robots.onUnreachable !== 'disallow';
-    console.warn(`robots.txt unreachable for ${origin} (${error.message}); ${allow ? 'allowing' : 'disallowing'} requests (http.robots.onUnreachable)`);
+    console.warn(
+      `robots.txt unreachable for ${origin} (${error.message}); ${allow ? 'allowing' : 'disallowing'} requests (http.robots.onUnreachable)`
+    );
     // Cached for a shorter time than a real robots.txt so it is retried soon, without slowing every restart.
     const unreachable = {
       origin,
@@ -186,7 +199,9 @@ export function parseRobots(body) {
 // Merges every group naming our product token; falls back to the `*` groups.
 export function selectGroup(groups, userAgentToken) {
   const token = String(userAgentToken || '').toLowerCase();
-  const matching = groups.filter((group) => token && group.agents.some((agent) => agent !== '*' && token.startsWith(agent)));
+  const matching = groups.filter(
+    (group) => token && group.agents.some((agent) => agent !== '*' && token.startsWith(agent))
+  );
   const chosen = matching.length > 0 ? matching : groups.filter((group) => group.agents.includes('*'));
   return {
     rules: chosen.flatMap((group) => group.rules),
@@ -201,7 +216,11 @@ export function evaluate(group, pathAndQuery) {
     if (!patternMatches(rule.pattern, pathAndQuery)) {
       continue;
     }
-    if (!best || rule.pattern.length > best.pattern.length || (rule.pattern.length === best.pattern.length && rule.allow)) {
+    if (
+      !best ||
+      rule.pattern.length > best.pattern.length ||
+      (rule.pattern.length === best.pattern.length && rule.allow)
+    ) {
       best = rule;
     }
   }
@@ -213,7 +232,10 @@ export function evaluate(group, pathAndQuery) {
 function patternMatches(pattern, pathAndQuery) {
   const anchored = pattern.endsWith('$');
   const body = safeDecode(anchored ? pattern.slice(0, -1) : pattern);
-  const regex = body.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+  const regex = body
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
   return new RegExp(`^${regex}${anchored ? '$' : ''}`).test(safeDecode(pathAndQuery));
 }
 
@@ -226,7 +248,9 @@ function safeDecode(value) {
 }
 
 function hostMatches(hostname, host) {
-  const value = String(host || '').toLowerCase().trim();
+  const value = String(host || '')
+    .toLowerCase()
+    .trim();
   const name = String(hostname || '').toLowerCase();
   return Boolean(value) && (name === value || name.endsWith(`.${value}`));
 }

@@ -25,7 +25,10 @@ async function main() {
     if (!options.job) return;
     const jobsDir = path.join(clipsDir, 'jobs');
     await fs.promises.mkdir(jobsDir, { recursive: true });
-    await writeFile(path.join(jobsDir, `${options.job}.json`), `${JSON.stringify({ id: options.job, status, updatedAt: new Date().toISOString(), ...extra }, null, 2)}\n`);
+    await writeFile(
+      path.join(jobsDir, `${options.job}.json`),
+      `${JSON.stringify({ id: options.job, status, updatedAt: new Date().toISOString(), ...extra }, null, 2)}\n`
+    );
   };
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'streamscribe-playlist-'));
   try {
@@ -35,19 +38,56 @@ async function main() {
       console.log(message);
       await report('running', { message, progress: index / (options.clips.length + 1) });
       const partPath = path.join(tempDir, `clip-${String(index).padStart(3, '0')}.mp4`);
-      await runNode('extract-clip.js', ['--session', sessionDir, '--from', String(clip.from), '--to', String(clip.to), '--output', partPath, '--accurate']);
+      await runNode('extract-clip.js', [
+        '--session',
+        sessionDir,
+        '--from',
+        String(clip.from),
+        '--to',
+        String(clip.to),
+        '--output',
+        partPath,
+        '--accurate'
+      ]);
       parts.push(partPath);
     }
-    await report('running', { message: 'Joining the clips', progress: options.clips.length / (options.clips.length + 1) });
+    await report('running', {
+      message: 'Joining the clips',
+      progress: options.clips.length / (options.clips.length + 1)
+    });
     const listPath = path.join(tempDir, 'clips.txt');
     await writeFile(listPath, parts.map((part) => `file '${part}'`).join('\n'));
     const partial = `${outputPath}.download`;
-    await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', '-movflags', '+faststart', '-f', 'mp4', partial]);
+    await runCommand(TOOLS.ffmpeg, [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'concat',
+      '-safe',
+      '0',
+      '-i',
+      listPath,
+      '-c',
+      'copy',
+      '-movflags',
+      '+faststart',
+      '-f',
+      'mp4',
+      partial
+    ]);
     fs.renameSync(partial, outputPath);
     const sizeMb = fs.statSync(outputPath).size / 1e6;
     const total = options.clips.reduce((sum, clip) => sum + (clip.to - clip.from), 0);
-    console.log(`Saved ${options.clips.length} clips (${formatPosition(total)}) to ${outputPath} (${sizeMb.toFixed(1)} MB)`);
-    await report('done', { file: path.relative(sessionDir, outputPath), message: `Playlist video ready (${sizeMb.toFixed(1)} MB)`, progress: 1 });
+    console.log(
+      `Saved ${options.clips.length} clips (${formatPosition(total)}) to ${outputPath} (${sizeMb.toFixed(1)} MB)`
+    );
+    await report('done', {
+      file: path.relative(sessionDir, outputPath),
+      message: `Playlist video ready (${sizeMb.toFixed(1)} MB)`,
+      progress: 1
+    });
   } catch (error) {
     await report('failed', { message: String(error.message || error).slice(0, 500) });
     throw error;
@@ -65,9 +105,11 @@ function runNode(script, args) {
 }
 
 function parsePosition(value) {
-  const parts = String(value || '').split(':').map(Number);
+  const parts = String(value || '')
+    .split(':')
+    .map(Number);
   if (parts.length === 0 || parts.some((part) => !Number.isFinite(part))) throw new Error(`Invalid time "${value}"`);
-  return parts.reduce((total, part) => (total * 60) + part, 0);
+  return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
 function parseArgs(argv) {
@@ -76,22 +118,28 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (arg === '--session') options.session = argv[++index];
     else if (arg === '--clips') {
-      options.clips = String(argv[++index]).split(',').filter(Boolean).map((range) => {
-        const [from, to] = range.split('-').map(parsePosition);
-        return { from, to };
-      });
+      options.clips = String(argv[++index])
+        .split(',')
+        .filter(Boolean)
+        .map((range) => {
+          const [from, to] = range.split('-').map(parsePosition);
+          return { from, to };
+        });
     } else if (arg === '--output') options.output = argv[++index];
     else if (arg === '--job') options.job = argv[++index];
     else throw new Error(`Unknown option ${arg}`);
   }
   if (!options.session || options.clips.length === 0 || options.clips.some((clip) => !(clip.to > clip.from))) {
-    throw new Error('Usage: npm run render-playlist -- --session <folder> --clips 01:02:03-01:04:00,01:20:00-01:21:30 [--output <file.mp4>]');
+    throw new Error(
+      'Usage: npm run render-playlist -- --session <folder> --clips 01:02:03-01:04:00,01:20:00-01:21:30 [--output <file.mp4>]'
+    );
   }
   return options;
 }
 
 // Started by bin/render-playlist.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

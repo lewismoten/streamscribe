@@ -40,10 +40,7 @@ async function getMountedPathIssue(targetPath, label) {
     return '';
   }
 
-  const [parentStats, volumeStats] = await Promise.all([
-    safeStat(VOLUMES_ROOT),
-    safeStat(volumeRoot)
-  ]);
+  const [parentStats, volumeStats] = await Promise.all([safeStat(VOLUMES_ROOT), safeStat(volumeRoot)]);
 
   return formatMountIssue({
     targetPath,

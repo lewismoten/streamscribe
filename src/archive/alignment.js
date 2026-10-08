@@ -60,7 +60,11 @@ export function audioEnvelope({ input, rate, concat = false, start = null, durat
       stderr += chunk.toString();
     });
     child.on('error', reject);
-    child.on('close', (code) => (code === 0 ? resolve(Float32Array.from(values)) : reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`))));
+    child.on('close', (code) =>
+      code === 0
+        ? resolve(Float32Array.from(values))
+        : reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`))
+    );
   });
 }
 
@@ -111,7 +115,15 @@ export async function alignSession(sessionDir, session, videoPath, archiveEnvelo
       const runSeconds = run.reduce((total, item) => total + item.durationSeconds, 0);
       if (runSeconds >= 30) {
         const predicted = expected === null ? null : run[0].videoStart + expected;
-        const match = await matchRun(run, sessionDir, tempDir, videoPath, archiveEnvelope, `anchor-${index}`, predicted);
+        const match = await matchRun(
+          run,
+          sessionDir,
+          tempDir,
+          videoPath,
+          archiveEnvelope,
+          `anchor-${index}`,
+          predicted
+        );
         const found = match.score >= minimumMatchScore;
         anchors.push({
           videoStart: run[0].videoStart,
@@ -136,13 +148,20 @@ export async function alignSession(sessionDir, session, videoPath, archiveEnvelo
     }
     // Live material the archive lacks: anchors not found, and spans where the capture runs longer than the archive.
     const removedFromArchive = [];
-    anchors.filter((anchor) => anchor.archiveTime === null).forEach((anchor) => removedFromArchive.push({
-      videoPositionStart: anchor.videoStart,
-      videoPositionEnd: Number((anchor.videoStart + anchor.seconds).toFixed(3)),
-      reason: `not found in the archive (best match ${anchor.score})`
-    }));
+    anchors
+      .filter((anchor) => anchor.archiveTime === null)
+      .forEach((anchor) =>
+        removedFromArchive.push({
+          videoPositionStart: anchor.videoStart,
+          videoPositionEnd: Number((anchor.videoStart + anchor.seconds).toFixed(3)),
+          reason: `not found in the archive (best match ${anchor.score})`
+        })
+      );
     for (let index = 1; index < matched.length; index += 1) {
-      const shortBy = (matched[index].videoStart - matched[index - 1].videoStart) - (matched[index].archiveTime - matched[index - 1].archiveTime);
+      const shortBy =
+        matched[index].videoStart -
+        matched[index - 1].videoStart -
+        (matched[index].archiveTime - matched[index - 1].archiveTime);
       if (shortBy > offsetToleranceSeconds) {
         removedFromArchive.push({
           videoPositionStart: matched[index - 1].videoStart,
@@ -184,7 +203,8 @@ export function offsetAt(anchors, position) {
   const matched = anchors.filter((anchor) => anchor.archiveTime !== null);
   let offset = matched[0].offset;
   for (const anchor of matched) {
-    if (anchor.videoStart <= position) offset = anchor.offset; else break;
+    if (anchor.videoStart <= position) offset = anchor.offset;
+    else break;
   }
   return offset;
 }
@@ -194,7 +214,11 @@ export function findUnbrokenRun(retained, fromIndex, wantedSeconds = templateSec
   for (let index = fromIndex; index < retained.length; index += 1) {
     const run = [retained[index]];
     let seconds = retained[index].durationSeconds;
-    for (let next = index + 1; next < retained.length && seconds < wantedSeconds && retained[next].sequence === retained[next - 1].sequence + 1; next += 1) {
+    for (
+      let next = index + 1;
+      next < retained.length && seconds < wantedSeconds && retained[next].sequence === retained[next - 1].sequence + 1;
+      next += 1
+    ) {
       run.push(retained[next]);
       seconds += retained[next].durationSeconds;
     }
@@ -205,14 +229,26 @@ export function findUnbrokenRun(retained, fromIndex, wantedSeconds = templateSec
   return retained.slice(fromIndex, fromIndex + 1);
 }
 
-export async function matchRun(run, sessionDir, tempDir, videoPath, archiveEnvelope, label, expectedArchiveTime = null) {
+export async function matchRun(
+  run,
+  sessionDir,
+  tempDir,
+  videoPath,
+  archiveEnvelope,
+  label,
+  expectedArchiveTime = null
+) {
   const listPath = path.join(tempDir, `${label}.txt`);
   const quote = (value) => `'${value.replace(/'/g, `'\\''`)}'`;
-  await writeFile(listPath, run.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n'));
+  await writeFile(
+    listPath,
+    run.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n')
+  );
   const coarseTemplate = await audioEnvelope({ input: listPath, rate: coarseRate, concat: true });
   // Search near the prediction (allowing for cuts of up to 10 minutes), or everywhere for the first point.
   const searchFrom = expectedArchiveTime === null ? 0 : Math.round((expectedArchiveTime - 600) * coarseRate);
-  const searchTo = expectedArchiveTime === null ? archiveEnvelope.length : Math.round((expectedArchiveTime + 600) * coarseRate);
+  const searchTo =
+    expectedArchiveTime === null ? archiveEnvelope.length : Math.round((expectedArchiveTime + 600) * coarseRate);
   const coarse = bestMatch(archiveEnvelope, coarseTemplate, searchFrom, searchTo);
   const coarseTime = coarse.lag / coarseRate;
 
@@ -220,7 +256,12 @@ export async function matchRun(run, sessionDir, tempDir, videoPath, archiveEnvel
   const refineSeconds = Math.min(120, coarseTemplate.length / coarseRate);
   const fineTemplate = await audioEnvelope({ input: listPath, rate: fineRate, concat: true, duration: refineSeconds });
   const windowStart = Math.max(0, coarseTime - 2);
-  const fineSignal = await audioEnvelope({ input: videoPath, rate: fineRate, start: windowStart, duration: refineSeconds + 4 });
+  const fineSignal = await audioEnvelope({
+    input: videoPath,
+    rate: fineRate,
+    start: windowStart,
+    duration: refineSeconds + 4
+  });
   const fine = bestMatch(fineSignal, fineTemplate, 0, 4 * fineRate);
-  return { archiveTime: windowStart + (fine.lag / fineRate), score: Math.min(coarse.score, fine.score) };
+  return { archiveTime: windowStart + fine.lag / fineRate, score: Math.min(coarse.score, fine.score) };
 }

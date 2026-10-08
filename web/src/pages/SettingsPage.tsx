@@ -21,7 +21,11 @@ export default function SettingsPage() {
       // A different hub: this browser's copy of the old one goes. Changes made without a hub are kept and sent to the
       // new one; changes waiting for the old hub would be sent against the wrong versions, so they go too.
       const pending = (await idbStore.listPending()).length;
-      if (pending && !confirm(`${pending} change${pending === 1 ? '' : 's'} not yet sent to ${previous} will be lost. Switch hubs?`)) return;
+      if (
+        pending &&
+        !confirm(`${pending} change${pending === 1 ? '' : 's'} not yet sent to ${previous} will be lost. Switch hubs?`)
+      )
+        return;
       await idbStore.clear();
     } else if (!previous && next) {
       await idbStore.clearHubCopy();
@@ -30,7 +34,10 @@ export default function SettingsPage() {
     saveHubSettings({ ...settings, token: next !== previous ? '' : hubSettings().token });
     setSettings(hubSettings());
     refreshAccount();
-    if (!settings.url) { setMessage('Saved: no hub, so this browser keeps its own copy only.'); return; }
+    if (!settings.url) {
+      setMessage('Saved: no hub, so this browser keeps its own copy only.');
+      return;
+    }
     try {
       const info = await fetch(`${hubSettings().url}/info`).then((response) => response.json());
       setMessage(`Connected to ${info.name} (${info.rev} changes so far). Syncing…`);
@@ -42,7 +49,9 @@ export default function SettingsPage() {
   const exportAll = async () => {
     const records = await idbStore.allRecords();
     const pending = await idbStore.listPending();
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), records, pending }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), records, pending }, null, 2)], {
+      type: 'application/json'
+    });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `streamscribe-${new Date().toISOString().slice(0, 10)}.json`;
@@ -55,13 +64,17 @@ export default function SettingsPage() {
     const value = JSON.parse(await file.text());
     // Only what an editor may change (schedules, sources, marks, settings); what recorders made (recordings,
     // transcripts, stills) goes into a hub with its tools/import.php instead.
-    const all = [...(value.records || []), ...(value.pending || [])].filter((item) => item.collection && item.id && !item.deleted);
+    const all = [...(value.records || []), ...(value.pending || [])].filter(
+      (item) => item.collection && item.id && !item.deleted
+    );
     const items = all.filter((item) => canWrite(item.collection, 'editor'));
     const client = syncClient();
     for (const item of items) await client.put(item.collection, item.id, item.data);
     const skipped = all.length - items.length;
-    setMessage(`Imported ${items.length} records${hubSettings().url ? '; they go to the hub on the next sync' : ''}.`
-      + (skipped ? ` Skipped ${skipped} made by recorders (load those into a hub with its tools/import.php).` : ''));
+    setMessage(
+      `Imported ${items.length} records${hubSettings().url ? '; they go to the hub on the next sync' : ''}.` +
+        (skipped ? ` Skipped ${skipped} made by recorders (load those into a hub with its tools/import.php).` : '')
+    );
     event.target.value = '';
     syncNow();
   };
@@ -71,25 +84,56 @@ export default function SettingsPage() {
       <h1>Settings</h1>
       <form className="panel schedule-form" onSubmit={save}>
         <h2>Hub</h2>
-        <p className="muted">The hub (docs/hub/hub.md) is where recorders report and schedules live. Without one, this browser keeps its own copy only.</p>
+        <p className="muted">
+          The hub (docs/hub/hub.md) is where recorders report and schedules live. Without one, this browser keeps its
+          own copy only.
+        </p>
         <div className="form-grid">
-          <label>Hub address <input value={settings.url} onChange={(event) => setSettings({ ...settings, url: event.target.value })} placeholder="https://example.com/streamscribe/api.php" /></label>
+          <label>
+            Hub address{' '}
+            <input
+              value={settings.url}
+              onChange={(event) => setSettings({ ...settings, url: event.target.value })}
+              placeholder="https://example.com/streamscribe/api.php"
+            />
+          </label>
           <details>
             <summary>Key (for scripts; people sign in under Account)</summary>
-            <label>Editor key <input type="password" value={settings.key} onChange={(event) => setSettings({ ...settings, key: event.target.value })} placeholder="from the hub's config.php" autoComplete="off" /></label>
+            <label>
+              Editor key{' '}
+              <input
+                type="password"
+                value={settings.key}
+                onChange={(event) => setSettings({ ...settings, key: event.target.value })}
+                placeholder="from the hub's config.php"
+                autoComplete="off"
+              />
+            </label>
           </details>
         </div>
         <div className="card-actions">
-          <button type="submit" className="button primary">Save and connect</button>
-          <button type="button" className="button" onClick={() => syncNow()}>↻ Sync now</button>
+          <button type="submit" className="button primary">
+            Save and connect
+          </button>
+          <button type="button" className="button" onClick={() => syncNow()}>
+            ↻ Sync now
+          </button>
         </div>
         {message && <p className="note">{message}</p>}
         {state && (
           <p className="muted">
-            {state.syncing ? 'Syncing…' : state.lastSyncAt ? `Last synced ${new Date(state.lastSyncAt).toLocaleTimeString()}` : 'Not synced yet'}
-            {state.pending ? ` · ${state.pending} change${state.pending === 1 ? '' : 's'} waiting to be sent${settings.key || settings.token ? '' : ' (sign in to send them)'}` : ''}
+            {state.syncing
+              ? 'Syncing…'
+              : state.lastSyncAt
+                ? `Last synced ${new Date(state.lastSyncAt).toLocaleTimeString()}`
+                : 'Not synced yet'}
+            {state.pending
+              ? ` · ${state.pending} change${state.pending === 1 ? '' : 's'} waiting to be sent${settings.key || settings.token ? '' : ' (sign in to send them)'}`
+              : ''}
             {state.conflicts ? ` · ${state.conflicts} merged with someone else's changes` : ''}
-            {state.refused.length ? ` · the hub refused ${state.refused.length} (dropped): ${state.refused.join('; ')}` : ''}
+            {state.refused.length
+              ? ` · the hub refused ${state.refused.length} (dropped): ${state.refused.join('; ')}`
+              : ''}
             {state.error && <span className="error"> · {state.error}</span>}
           </p>
         )}
@@ -98,9 +142,25 @@ export default function SettingsPage() {
         <h2>Data</h2>
         <p className="muted">Everything this browser holds, as JSON: a backup, or a way to start a new hub.</p>
         <div className="card-actions">
-          <button type="button" className="button" onClick={exportAll}>⬇ Export</button>
-          <label className="button">⬆ Import <input type="file" accept="application/json" onChange={importAll} hidden /></label>
-          <button type="button" className="button" onClick={async () => { if (confirm('Clear this browser\'s copy? (The hub keeps its data; unsent changes are lost.)')) { await idbStore.clear(); setMessage('Cleared. Syncing again…'); syncNow(); } }}>Clear this browser's copy</button>
+          <button type="button" className="button" onClick={exportAll}>
+            ⬇ Export
+          </button>
+          <label className="button">
+            ⬆ Import <input type="file" accept="application/json" onChange={importAll} hidden />
+          </label>
+          <button
+            type="button"
+            className="button"
+            onClick={async () => {
+              if (confirm("Clear this browser's copy? (The hub keeps its data; unsent changes are lost.)")) {
+                await idbStore.clear();
+                setMessage('Cleared. Syncing again…');
+                syncNow();
+              }
+            }}
+          >
+            Clear this browser's copy
+          </button>
         </div>
       </section>
     </section>

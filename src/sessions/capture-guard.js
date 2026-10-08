@@ -31,8 +31,14 @@ export function assertCaptureStopped(action = 'splitting') {
   const running = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' })
     .split('\n')
     // Only processes that are Node itself running one of these scripts (not a shell whose command mentions them).
-    .filter((line) => /^\s*\d+\s+(\S*\/)?node\s+(\S+\s+)*\S*(bin|scripts)\/(capture|transcribe|extract-slides|extract-thumbnails)\.js/.test(line));
+    .filter((line) =>
+      /^\s*\d+\s+(\S*\/)?node\s+(\S+\s+)*\S*(bin|scripts)\/(capture|transcribe|extract-slides|extract-thumbnails)\.js/.test(
+        line
+      )
+    );
   if (running.length > 0) {
-    throw new Error(`Wait for these to finish (or stop them) before ${action}:\n${running.map((line) => `  ${line.trim()}`).join('\n')}`);
+    throw new Error(
+      `Wait for these to finish (or stop them) before ${action}:\n${running.map((line) => `  ${line.trim()}`).join('\n')}`
+    );
   }
 }

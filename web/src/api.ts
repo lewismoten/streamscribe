@@ -127,12 +127,18 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const api = {
   config: () => request<Config>('/api/config'),
   recordings: (params: { source?: string; kind?: Kind } = {}) =>
-    request<Recording[]>(`/api/recordings?${new URLSearchParams(Object.entries(params).filter(([, value]) => value) as [string, string][])}`),
+    request<Recording[]>(
+      `/api/recordings?${new URLSearchParams(Object.entries(params).filter(([, value]) => value) as [string, string][])}`
+    ),
   recording: (id: number) => request<RecordingDetail>(`/api/recordings/${id}`),
   search: (query: string, source = '', parts = false) =>
-    request<SearchResponse>(`/api/search?${new URLSearchParams({ q: query, ...(source ? { source } : {}), ...(parts ? { parts: '1' } : {}) })}`),
+    request<SearchResponse>(
+      `/api/search?${new URLSearchParams({ q: query, ...(source ? { source } : {}), ...(parts ? { parts: '1' } : {}) })}`
+    ),
   scan: () => request<{ ok: boolean }>('/api/scan', { method: 'POST' }),
   capture: () => request<CaptureStatus[]>('/api/capture'),
-  startCapture: (source: string) => request<CaptureStatus>(`/api/capture/${encodeURIComponent(source)}/start`, { method: 'POST' }),
-  stopCapture: (source: string) => request<CaptureStatus>(`/api/capture/${encodeURIComponent(source)}/stop`, { method: 'POST' })
+  startCapture: (source: string) =>
+    request<CaptureStatus>(`/api/capture/${encodeURIComponent(source)}/start`, { method: 'POST' }),
+  stopCapture: (source: string) =>
+    request<CaptureStatus>(`/api/capture/${encodeURIComponent(source)}/stop`, { method: 'POST' })
 };

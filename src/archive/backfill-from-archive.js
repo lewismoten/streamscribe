@@ -39,8 +39,16 @@ async function main() {
   if (options.file) {
     if (!fs.existsSync(videoPath)) {
       // A video already on disk: linked in (no copy) when it's on the same drive.
-      try { fs.linkSync(path.resolve(options.file), videoPath); } catch { fs.copyFileSync(path.resolve(options.file), videoPath); }
-      await writeJson(path.join(archiveDir, 'download.json'), { file: path.resolve(options.file), videoId, linkedAt: new Date().toISOString() });
+      try {
+        fs.linkSync(path.resolve(options.file), videoPath);
+      } catch {
+        fs.copyFileSync(path.resolve(options.file), videoPath);
+      }
+      await writeJson(path.join(archiveDir, 'download.json'), {
+        file: path.resolve(options.file),
+        videoId,
+        linkedAt: new Date().toISOString()
+      });
     }
   } else {
     await downloadArchive(options.url, videoId, videoPath, archiveDir, providerFor(source));
@@ -48,7 +56,8 @@ async function main() {
   const archiveDuration = await probeDuration(videoPath);
   console.log(`Archive: ${formatPosition(archiveDuration)} (${videoPath})`);
 
-  const sessionDirs = options.sessions.length > 0 ? options.sessions.map((item) => path.resolve(item)) : findSameDaySessions(source);
+  const sessionDirs =
+    options.sessions.length > 0 ? options.sessions.map((item) => path.resolve(item)) : findSameDaySessions(source);
   if (sessionDirs.length === 0) {
     throw new Error('No live sessions to compare; pass --session <folder>');
   }
@@ -64,9 +73,13 @@ async function main() {
       continue;
     }
     const alignment = await alignSession(sessionDir, session, videoPath, archiveEnvelope);
-    console.log(`  ${path.basename(sessionDir)}: video position 0 = archive ${formatPosition(alignment.offset)} (${alignment.anchors.length} matching points, weakest match ${alignment.score.toFixed(2)}, offset changes by ${alignment.drift.toFixed(1)}s across the session)`);
+    console.log(
+      `  ${path.basename(sessionDir)}: video position 0 = archive ${formatPosition(alignment.offset)} (${alignment.anchors.length} matching points, weakest match ${alignment.score.toFixed(2)}, offset changes by ${alignment.drift.toFixed(1)}s across the session)`
+    );
     for (const removed of alignment.removedFromArchive) {
-      console.log(`    archive differs from the live capture at ${formatPosition(removed.videoPositionStart)}-${formatPosition(removed.videoPositionEnd)}: ${removed.reason}`);
+      console.log(
+        `    archive differs from the live capture at ${formatPosition(removed.videoPositionStart)}-${formatPosition(removed.videoPositionEnd)}: ${removed.reason}`
+      );
     }
     aligned.push({ sessionDir, session, ...alignment });
   }
@@ -81,7 +94,15 @@ async function main() {
     archiveDuration,
     createdAt: new Date().toISOString(),
     note: 'Live captures are never replaced. removedFromArchive lists live material the archive lacks (possible county edits).',
-    sessions: aligned.map(({ sessionDir, offset, score, drift, covered, anchors, removedFromArchive }) => ({ sessionDir, offset, score, drift, covered, anchors, removedFromArchive })),
+    sessions: aligned.map(({ sessionDir, offset, score, drift, covered, anchors, removedFromArchive }) => ({
+      sessionDir,
+      offset,
+      score,
+      drift,
+      covered,
+      anchors,
+      removedFromArchive
+    })),
     missing: plan.map(({ sessionDir, ...range }) => ({ sessionDir, ...range }))
   });
 
@@ -96,7 +117,9 @@ async function main() {
         await cutRange(videoPath, range.archiveStart, range.archiveEnd, path.join(fillDir, fileName));
       }
       exported.push({ ...range, fileName });
-      console.log(`  ${options.dryRun ? 'would save' : 'saved'} ${path.basename(item.sessionDir)}/archive-fill/${fileName} (${range.kind}, ${formatPosition(range.archiveEnd - range.archiveStart)})`);
+      console.log(
+        `  ${options.dryRun ? 'would save' : 'saved'} ${path.basename(item.sessionDir)}/archive-fill/${fileName} (${range.kind}, ${formatPosition(range.archiveEnd - range.archiveStart)})`
+      );
     }
     if (!options.dryRun && exported.length > 0) {
       await writeJson(path.join(fillDir, 'archive-fill.json'), {
@@ -108,12 +131,14 @@ async function main() {
         drift: item.drift,
         anchors: item.anchors,
         removedFromArchive: item.removedFromArchive,
-        ranges: exported.map(({ sessionDir, ...range }) => range)
+        ranges: exported.map(({ sessionDir: _sessionDir, ...range }) => range)
       });
     }
   }
   const total = plan.reduce((sum, range) => sum + (range.archiveEnd - range.archiveStart), 0);
-  console.log(`${plan.length} missing range${plan.length === 1 ? '' : 's'}, ${formatPosition(total)} in total${options.dryRun ? ' (dry run; nothing cut)' : ''}.`);
+  console.log(
+    `${plan.length} missing range${plan.length === 1 ? '' : 's'}, ${formatPosition(total)} in total${options.dryRun ? ' (dry run; nothing cut)' : ''}.`
+  );
 }
 
 function parseArgs(argv) {
@@ -130,7 +155,9 @@ function parseArgs(argv) {
     else throw new Error(`Unknown option ${arg}`);
   }
   if (!options.url && !options.file) {
-    throw new Error('Usage: npm run backfill-from-archive -- (--url <archived video page or video link> | --file <video file> [--id <name>]) [--session <folder> ...] [--dry-run]');
+    throw new Error(
+      'Usage: npm run backfill-from-archive -- (--url <archived video page or video link> | --file <video file> [--id <name>]) [--session <folder> ...] [--dry-run]'
+    );
   }
   return options;
 }
@@ -159,7 +186,10 @@ function findSameDaySessions(source) {
 
 function listDirs(root) {
   try {
-    return fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name));
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name));
   } catch {
     return [];
   }
@@ -182,7 +212,8 @@ function planMissingRanges(aligned, archiveDuration) {
       archiveEnd: Number(archiveEnd.toFixed(3)),
       videoPositionStart: Number(positionStart.toFixed(3)),
       videoPositionEnd: Number(positionEnd.toFixed(3)),
-      clockStart: item.session.clockZero === null ? '' : new Date((item.session.clockZero + positionStart) * 1000).toISOString()
+      clockStart:
+        item.session.clockZero === null ? '' : new Date((item.session.clockZero + positionStart) * 1000).toISOString()
     });
   };
   let coveredUntil = 0;
@@ -192,8 +223,14 @@ function planMissingRanges(aligned, archiveDuration) {
       return;
     }
     const startOffset = offsetAt(item.anchors, 0);
-    add(item, index === 0 ? 'before-capture' : 'between-sessions', coveredUntil, item.covered.archiveStart,
-      coveredUntil - startOffset, item.covered.archiveStart - startOffset);
+    add(
+      item,
+      index === 0 ? 'before-capture' : 'between-sessions',
+      coveredUntil,
+      item.covered.archiveStart,
+      coveredUntil - startOffset,
+      item.covered.archiveStart - startOffset
+    );
     const retained = item.session.retained;
     for (let segmentIndex = 1; segmentIndex < retained.length; segmentIndex += 1) {
       const previous = retained[segmentIndex - 1];
@@ -201,13 +238,27 @@ function planMissingRanges(aligned, archiveDuration) {
       if (current.sequence === previous.sequence + 1) continue;
       const holeStart = previous.videoStart + previous.durationSeconds;
       const holeEnd = current.videoStart;
-      add(item, 'gap', holeStart + offsetAt(item.anchors, previous.videoStart), holeEnd + offsetAfter(item.anchors, holeEnd), holeStart, holeEnd);
+      add(
+        item,
+        'gap',
+        holeStart + offsetAt(item.anchors, previous.videoStart),
+        holeEnd + offsetAfter(item.anchors, holeEnd),
+        holeStart,
+        holeEnd
+      );
     }
     coveredUntil = Math.max(coveredUntil, item.covered.archiveEnd);
   });
   const lastSession = sessions.at(-1);
   const lastOffset = offsetAt(lastSession.anchors, Infinity);
-  add(lastSession, 'after-capture', coveredUntil, archiveDuration, coveredUntil - lastOffset, archiveDuration - lastOffset);
+  add(
+    lastSession,
+    'after-capture',
+    coveredUntil,
+    archiveDuration,
+    coveredUntil - lastOffset,
+    archiveDuration - lastOffset
+  );
   return ranges;
 }
 
@@ -215,15 +266,30 @@ function planMissingRanges(aligned, archiveDuration) {
 async function cutRange(videoPath, archiveStart, archiveEnd, outputPath) {
   const partialPath = `${outputPath}.download`;
   await runCommand(TOOLS.ffmpeg, [
-    '-hide_banner', '-loglevel', 'error', '-y',
-    '-ss', archiveStart.toFixed(3), '-to', archiveEnd.toFixed(3), '-i', videoPath,
-    '-c', 'copy', '-movflags', '+faststart', '-f', 'mp4', partialPath
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-ss',
+    archiveStart.toFixed(3),
+    '-to',
+    archiveEnd.toFixed(3),
+    '-i',
+    videoPath,
+    '-c',
+    'copy',
+    '-movflags',
+    '+faststart',
+    '-f',
+    'mp4',
+    partialPath
   ]);
   fs.renameSync(partialPath, outputPath);
 }
 
 // Started by bin/backfill-from-archive.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

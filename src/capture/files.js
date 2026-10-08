@@ -3,11 +3,13 @@ import { appendFile, rename, rm, writeFile } from 'fs/promises';
 // Small file helpers for capture sessions.
 
 export function sanitizeSegment(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'stream';
+  return (
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'stream'
+  );
 }
 
 export async function appendJsonLine(filePath, value) {

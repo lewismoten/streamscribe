@@ -32,7 +32,10 @@ async function main() {
       throw new Error(`No captured segments in ${sessionDir}`);
     }
     console.log(`Session ${sessionDir}`);
-    await refresh(sessionDir, session, await loadThumbnailIndex(sessionDir, options), options, { live: false, verbose: true });
+    await refresh(sessionDir, session, await loadThumbnailIndex(sessionDir, options), options, {
+      live: false,
+      verbose: true
+    });
     return;
   }
 
@@ -42,8 +45,12 @@ async function main() {
   // named a single session. It stops once no segment has arrived for --idle-minutes, or on Ctrl+C.
   console.log(`Watching every ${options.watch}s; stops after ${options.idleMinutes} minutes without new segments`);
   let stopping = false;
-  process.on('SIGINT', () => { stopping = true; });
-  process.on('SIGTERM', () => { stopping = true; });
+  process.on('SIGINT', () => {
+    stopping = true;
+  });
+  process.on('SIGTERM', () => {
+    stopping = true;
+  });
   while (sessionDir) {
     const next = await watchSession(sessionDir, options, () => stopping);
     sessionDir = !stopping && !options.session ? next : '';
@@ -73,7 +80,9 @@ async function watchSession(sessionDir, options, isStopping) {
       try {
         await refresh(sessionDir, session, byFile, options, { live: true, verbose: false });
         const last = session.retained.at(-1);
-        console.log(`  ${new Date().toLocaleTimeString()}: ${formatPosition(last.videoStart + last.durationSeconds)} captured, ${byFile.size} thumbnails`);
+        console.log(
+          `  ${new Date().toLocaleTimeString()}: ${formatPosition(last.videoStart + last.durationSeconds)} captured, ${byFile.size} thumbnails`
+        );
       } catch (error) {
         console.error(`  ${new Date().toLocaleTimeString()}: ${error.message || error}`);
       }
@@ -104,7 +113,9 @@ async function refresh(sessionDir, session, byFile, options, { live, verbose }) 
   const last = session.retained.at(-1);
   const totalSeconds = last.videoStart + last.durationSeconds;
   if (verbose) {
-    console.log(`  ${formatPosition(totalSeconds)} of video; thumbnails ${options.width}px wide, every ${options.firstInterval}s down to every ${options.minInterval}s or less`);
+    console.log(
+      `  ${formatPosition(totalSeconds)} of video; thumbnails ${options.width}px wide, every ${options.firstInterval}s down to every ${options.minInterval}s or less`
+    );
   }
   const outputDir = path.join(sessionDir, 'thumbnails');
   const indexPath = path.join(outputDir, 'thumbnails.json');
@@ -115,7 +126,11 @@ async function refresh(sessionDir, session, byFile, options, { live, verbose }) 
   while (interval >= options.minInterval) {
     // Level 0 covers 0, 300, 600, ...; each later level adds only the midpoints of the one before.
     const targets = [];
-    for (let position = level === 0 ? 0 : interval; position < totalSeconds; position += level === 0 ? interval : interval * 2) {
+    for (
+      let position = level === 0 ? 0 : interval;
+      position < totalSeconds;
+      position += level === 0 ? interval : interval * 2
+    ) {
       targets.push(position);
     }
     const jobs = [];
@@ -137,20 +152,24 @@ async function refresh(sessionDir, session, byFile, options, { live, verbose }) 
       // Seeking past a segment's last keyframe (about a second before its end) returns nothing, so stay before
       // it, and fall back to the segment's first frame if a seek still comes up empty.
       const offset = Math.min(job.position - job.segment.videoStart, Math.max(0, job.segment.durationSeconds - 1.2));
-      const ok = await extractThumbnail(segmentPath, offset, outputPath, options.width)
-        || (offset > 0 && await extractThumbnail(segmentPath, 0, outputPath, options.width));
+      const ok =
+        (await extractThumbnail(segmentPath, offset, outputPath, options.width)) ||
+        (offset > 0 && (await extractThumbnail(segmentPath, 0, outputPath, options.width)));
       if (ok) {
         byFile.set(job.fileName, {
           fileName: job.fileName,
           positionSeconds: Number(job.position.toFixed(3)),
           level,
           sequence: job.segment.sequence,
-          clockTime: session.clockAt(job.position) === null ? '' : new Date(session.clockAt(job.position) * 1000).toISOString()
+          clockTime:
+            session.clockAt(job.position) === null ? '' : new Date(session.clockAt(job.position) * 1000).toISOString()
         });
       }
     });
     if (verbose) {
-      console.log(`  pass ${level + 1}: every ${formatInterval(interval)} (${jobs.length} new, ${byFile.size} total, ${((Date.now() - started) / 1000).toFixed(1)}s)`);
+      console.log(
+        `  pass ${level + 1}: every ${formatInterval(interval)} (${jobs.length} new, ${byFile.size} total, ${((Date.now() - started) / 1000).toFixed(1)}s)`
+      );
       await saveIndex(indexPath, sessionDir, options, byFile);
     }
     interval /= 2;
@@ -169,18 +188,34 @@ async function refresh(sessionDir, session, byFile, options, { live, verbose }) 
 
   const { stills } = await detectScenes(sessionDir, session, outputDir, options, verbose);
   await describeCards(sessionDir, session, outputDir, stills, options, live);
-  await writeThumbnailsPage(sessionDir, [...byFile.values()].sort((a, b) => a.positionSeconds - b.positionSeconds), { live });
+  await writeThumbnailsPage(
+    sessionDir,
+    [...byFile.values()].sort((a, b) => a.positionSeconds - b.positionSeconds),
+    { live }
+  );
 }
 
 // The next session folder of the same stream, once the capture has started one after this session.
 function newerSession(sessionDir) {
   const name = path.basename(sessionDir);
-  return listDirs(path.dirname(sessionDir)).filter((dir) => path.basename(dir) > name && fs.existsSync(path.join(dir, 'segments.jsonl')))
-    .sort()[0] || '';
+  return (
+    listDirs(path.dirname(sessionDir))
+      .filter((dir) => path.basename(dir) > name && fs.existsSync(path.join(dir, 'segments.jsonl')))
+      .sort()[0] || ''
+  );
 }
 
 function parseArgs(argv) {
-  const options = { sources: [], session: '', firstInterval: 300, minInterval: 5, width: 320, concurrency: Math.max(2, os.cpus().length), watch: 0, idleMinutes: 90 };
+  const options = {
+    sources: [],
+    session: '',
+    firstInterval: 300,
+    minInterval: 5,
+    width: 320,
+    concurrency: Math.max(2, os.cpus().length),
+    watch: 0,
+    idleMinutes: 90
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => argv[++index];
@@ -194,8 +229,16 @@ function parseArgs(argv) {
     else if (arg === '--idle-minutes') options.idleMinutes = Number(next());
     else throw new Error(`Unknown option ${arg}`);
   }
-  if (!(options.firstInterval > 0) || !(options.minInterval > 0) || !(options.width >= 16) || !(options.concurrency >= 1) || !(options.idleMinutes > 0)) {
-    throw new Error('--first-interval, --min-interval, --width, --concurrency, and --idle-minutes must be positive numbers');
+  if (
+    !(options.firstInterval > 0) ||
+    !(options.minInterval > 0) ||
+    !(options.width >= 16) ||
+    !(options.concurrency >= 1) ||
+    !(options.idleMinutes > 0)
+  ) {
+    throw new Error(
+      '--first-interval, --min-interval, --width, --concurrency, and --idle-minutes must be positive numbers'
+    );
   }
   return options;
 }
@@ -220,7 +263,10 @@ function findLatestSession(sourceKeys) {
 
 function listDirs(root) {
   try {
-    return fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name));
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name));
   } catch {
     return [];
   }
@@ -232,7 +278,8 @@ async function saveIndex(indexPath, sessionDir, options, byFile) {
     updatedAt: new Date().toISOString(),
     width: options.width,
     firstInterval: options.firstInterval,
-    timeNote: 'positionSeconds is the video position, matching the transcript; level 0 is the coarsest pass; clockTime is approximate.',
+    timeNote:
+      'positionSeconds is the video position, matching the transcript; level 0 is the coarsest pass; clockTime is approximate.',
     thumbnails: [...byFile.values()].sort((left, right) => left.positionSeconds - right.positionSeconds)
   });
 }
@@ -242,7 +289,8 @@ function formatInterval(seconds) {
 }
 
 // Started by bin/extract-thumbnails.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

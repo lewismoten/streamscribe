@@ -7,7 +7,17 @@ name: Deploy hub
 on:
   push:
     branches: [main]
-    paths: ['hub-php/**', 'web/**', 'src/sync/**', 'package.json', 'package-lock.json', 'vite.config.ts', 'bin/deploy-hub.sh', '.github/workflows/deploy-hub.yml']
+    paths:
+      [
+        'hub-php/**',
+        'web/**',
+        'src/sync/**',
+        'package.json',
+        'package-lock.json',
+        'vite.config.ts',
+        'bin/deploy-hub.sh',
+        '.github/workflows/deploy-hub.yml'
+      ]
   workflow_dispatch:
 concurrency:
   group: deploy-hub

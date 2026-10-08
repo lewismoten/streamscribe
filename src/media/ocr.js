@@ -18,7 +18,11 @@ export async function readImageText(imagePath) {
   if (!(await ready)) return '';
   try {
     const { stdout } = await execFileAsync(binaryPath, [imagePath], { timeout: 30000 });
-    return stdout.split('\n').map((line) => line.trim()).filter(Boolean).join(' ');
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(' ');
   } catch {
     return '';
   }

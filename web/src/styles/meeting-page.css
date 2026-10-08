@@ -1,0 +1,166 @@
+/* Correcting the transcript, and playing published audio and video, on a meeting page. */
+.lines .words {
+  line-height: 1.7;
+}
+.word {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.word:disabled {
+  cursor: text;
+}
+.word:not(:disabled):hover {
+  background: var(--mark);
+}
+.word.edited {
+  text-decoration: underline dotted var(--accent);
+  text-underline-offset: 3px;
+}
+.word.deleted {
+  color: var(--muted);
+}
+.speaker-label {
+  color: var(--violet);
+}
+.word-editor {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 10px;
+  max-width: 520px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+}
+.word-editor form {
+  display: grid;
+  gap: 6px;
+}
+.word-editor .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Published audio and video on a meeting page */
+.sticky-player {
+  position: sticky;
+  top: 64px;
+  z-index: 2;
+  margin-bottom: 12px;
+}
+.player {
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+.player-picture {
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.player-picture video,
+.player-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.player-blank {
+  color: #aaa;
+}
+.player audio {
+  width: 100%;
+}
+.player-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.segmented button {
+  border: 0;
+  background: var(--card);
+  color: var(--fg);
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.segmented button.on {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.time-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+.lines li.now {
+  background: var(--note);
+  border-radius: 6px;
+}
+.small {
+  font-size: 0.85rem;
+}
+.still-button {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.still-button:hover img {
+  outline: 2px solid var(--accent);
+}
+.transcript .lines {
+  position: relative;
+  scroll-padding-top: 12px;
+}
+.word.speaking {
+  background: var(--mark);
+  border-radius: 3px;
+}
+
+/* Grouped switches (Video/Pictures, parts) are fieldsets; the picture is a play/pause button; the word editor is a
+   dialog shown in place. None of them should carry the browser's own frame, position, or colors. */
+fieldset.segmented {
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+button.player-picture {
+  border: 0;
+  padding: 0;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+.player-blank {
+  display: block;
+}
+dialog.word-editor {
+  position: static;
+  inset: auto;
+  color: inherit;
+}

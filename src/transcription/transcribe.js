@@ -5,7 +5,15 @@ import path from 'path';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { SOURCES, TOOLS, TRANSCRIPTION } from '../config/runtime-config.js';
 import { applyCorrections, loadCorrections, renderFinalTranscript, writeTranscriptFiles } from './transcript.js';
-import { assertWhisperModels, buildVocabularyPrompt, collapseRepeats, longestRepeat, maxRepeatedLines, runWhisper, segmentWords } from './whisper.js';
+import {
+  assertWhisperModels,
+  buildVocabularyPrompt,
+  collapseRepeats,
+  longestRepeat,
+  maxRepeatedLines,
+  runWhisper,
+  segmentWords
+} from './whisper.js';
 import { loadSessionSegments, splitIntoBatches } from '../sessions/session.js';
 import { selectConfiguredSources } from '../util/cli.js';
 import { fileExists, loadJson, writeJson } from '../util/fs-utils.js';
@@ -46,7 +54,9 @@ async function main() {
   }
   const audioMinutes = session.retained.reduce((total, item) => total + item.durationSeconds, 0) / 60;
   console.log(`Session ${sessionDir}`);
-  console.log(`  ${session.retained.length} segments (${audioMinutes.toFixed(1)} min of audio), sequences ${session.firstSequence}-${session.lastSequence}`);
+  console.log(
+    `  ${session.retained.length} segments (${audioMinutes.toFixed(1)} min of audio), sequences ${session.firstSequence}-${session.lastSequence}`
+  );
 
   const chunkDir = path.join(sessionDir, 'transcripts', 'chunks');
   await fs.promises.mkdir(chunkDir, { recursive: true });
@@ -58,8 +68,9 @@ async function main() {
       chunks.push(session.retained.slice(index, index + chunkSegmentCount));
     }
   }
-  const boosts = options.best ? ((await loadJson(path.join(sessionDir, 'audio-boosts.json'), null))?.boosts || []) : [];
-  if (boosts.length) console.log(`  applying ${boosts.length} volume boost${boosts.length === 1 ? '' : 's'} from audio-boosts.json`);
+  const boosts = options.best ? (await loadJson(path.join(sessionDir, 'audio-boosts.json'), null))?.boosts || [] : [];
+  if (boosts.length)
+    console.log(`  applying ${boosts.length} volume boost${boosts.length === 1 ? '' : 's'} from audio-boosts.json`);
 
   const lines = [];
   for (const [index, chunk] of chunks.entries()) {
@@ -68,8 +79,13 @@ async function main() {
     const promptKey = crypto.createHash('sha1').update(options.prompt).digest('hex').slice(0, 8);
     // --best chunks are cached apart, keyed by the boosts that apply to them too.
     const chunkBoosts = boostsInChunk(boosts, chunk);
-    const variant = options.best ? `best-${crypto.createHash('sha1').update(JSON.stringify(chunkBoosts)).digest('hex').slice(0, 8)}-` : '';
-    const cachePath = path.join(chunkDir, `${path.basename(options.model, '.bin')}-${promptKey}-${variant}${chunk[0].sequence}-${chunk.at(-1).sequence}.json`);
+    const variant = options.best
+      ? `best-${crypto.createHash('sha1').update(JSON.stringify(chunkBoosts)).digest('hex').slice(0, 8)}-`
+      : '';
+    const cachePath = path.join(
+      chunkDir,
+      `${path.basename(options.model, '.bin')}-${promptKey}-${variant}${chunk[0].sequence}-${chunk.at(-1).sequence}.json`
+    );
     const cached = await loadJson(cachePath);
     if (cached?.lines) {
       console.log(`${label}: cached`);
@@ -78,7 +94,9 @@ async function main() {
     }
     console.log(`${label}: transcribing...`);
     const result = await transcribeChunk(chunk, sessionDir, session, options, chunkBoosts);
-    console.log(`  ${result.lines.length} lines${result.retried ? ' (retried at a higher temperature after a repetition loop)' : ''}${result.loopWarning ? ` | ${result.loopWarning}` : ''}`);
+    console.log(
+      `  ${result.lines.length} lines${result.retried ? ' (retried at a higher temperature after a repetition loop)' : ''}${result.loopWarning ? ` | ${result.loopWarning}` : ''}`
+    );
     await writeJson(cachePath, { sequences: { first: chunk[0].sequence, last: chunk.at(-1).sequence }, ...result });
     lines.push(...result.lines);
   }
@@ -97,19 +115,28 @@ async function writeNamedTranscript(sessionDir, lines, options, session, boosts)
   const corrected = applyCorrections(lines, corrections).map((line, index) => {
     if (!line.words) return line;
     const texts = line.text.split(' ').filter(Boolean);
-    return texts.length === line.words.length ? { ...line, words: line.words.map((word, wordIndex) => [word[0], word[1], texts[wordIndex]]) } : { ...line, words: lines[index].words };
+    return texts.length === line.words.length
+      ? { ...line, words: line.words.map((word, wordIndex) => [word[0], word[1], texts[wordIndex]]) }
+      : { ...line, words: lines[index].words };
   });
-  const base = await writeTranscriptFiles(path.join(sessionDir, 'transcripts'), corrected, {
-    sessionDir,
-    model: path.basename(options.model),
-    vad: Boolean(options.vadModel),
-    language: options.language,
-    best: Boolean(options.best),
-    boosts: boosts.length,
-    correctionCount: Object.keys(corrections).length,
-    sequences: { first: session.firstSequence, last: session.lastSequence, retained: session.retained.length },
-    wordNote: options.best ? 'words: [start, end, text] in video positions (aligned by whisper.cpp dynamic time warping).' : undefined
-  }, { baseName: options.output });
+  const base = await writeTranscriptFiles(
+    path.join(sessionDir, 'transcripts'),
+    corrected,
+    {
+      sessionDir,
+      model: path.basename(options.model),
+      vad: Boolean(options.vadModel),
+      language: options.language,
+      best: Boolean(options.best),
+      boosts: boosts.length,
+      correctionCount: Object.keys(corrections).length,
+      sequences: { first: session.firstSequence, last: session.lastSequence, retained: session.retained.length },
+      wordNote: options.best
+        ? 'words: [start, end, text] in video positions (aligned by whisper.cpp dynamic time warping).'
+        : undefined
+    },
+    { baseName: options.output }
+  );
   console.log(`Wrote ${corrected.length} lines to ${base}.{txt,srt,json}`);
 }
 
@@ -151,7 +178,11 @@ export async function transcribeChunk(chunk, sessionDir, session, options, chunk
       }
       retried = true;
     }
-    return { lines: collapseRepeats(lines), retried, loopWarning: 'still looping after retry; repeated lines were collapsed' };
+    return {
+      lines: collapseRepeats(lines),
+      retried,
+      loopWarning: 'still looping after retry; repeated lines were collapsed'
+    };
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -185,9 +216,13 @@ function parseArgs(argv) {
     else if (arg === '--no-vad') options.vadModel = '';
     else if (arg === '--language') options.language = next();
     else if (arg === '--prompt') options.prompt = next();
-    else if (arg === '--continue') options.continue = true; // kept for compatibility; finished chunks are always reused
-    else if (arg === '--best') { options.best = true; options.keepContext = true; options.words = true; }
-    else if (arg === '--output') options.output = next().replace(/[^a-zA-Z0-9._-]+/g, '-');
+    else if (arg === '--continue')
+      options.continue = true; // kept for compatibility; finished chunks are always reused
+    else if (arg === '--best') {
+      options.best = true;
+      options.keepContext = true;
+      options.words = true;
+    } else if (arg === '--output') options.output = next().replace(/[^a-zA-Z0-9._-]+/g, '-');
     else throw new Error(`Unknown option ${arg}`);
   }
   return options;
@@ -226,11 +261,28 @@ async function listDirs(root) {
 async function buildAudio(retained, sessionDir, tempDir, wavPath) {
   const listPath = path.join(tempDir, 'segments.txt');
   const quote = (value) => `'${value.replace(/'/g, `'\\''`)}'`;
-  await writeFile(listPath, retained.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n'));
+  await writeFile(
+    listPath,
+    retained.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n')
+  );
   await runCommand(TOOLS.ffmpeg, [
-    '-hide_banner', '-loglevel', 'error', '-y',
-    '-f', 'concat', '-safe', '0', '-i', listPath,
-    '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'concat',
+    '-safe',
+    '0',
+    '-i',
+    listPath,
+    '-vn',
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-c:a',
+    'pcm_s16le',
     wavPath
   ]);
 }
@@ -259,7 +311,15 @@ function mapToMeetingTime(transcription, session, withWords = false) {
       text: String(item.text || '').trim(),
       startSeconds: locate(Number(item.offsets?.from || 0) / 1000),
       endSeconds: locate(Number(item.offsets?.to || 0) / 1000),
-      ...(withWords ? { words: segmentWords(item).map(([from, to, text]) => [round2(locate(from / 1000)), round2(locate(to / 1000)), text]) } : {})
+      ...(withWords
+        ? {
+            words: segmentWords(item).map(([from, to, text]) => [
+              round2(locate(from / 1000)),
+              round2(locate(to / 1000)),
+              text
+            ])
+          }
+        : {})
     }))
     .filter((item) => item.text)
     .map((item) => ({
@@ -278,7 +338,8 @@ async function writeTranscripts(sessionDir, lines, options, session) {
     language: options.language,
     prompt: options.prompt,
     sequences: { first: session.firstSequence, last: session.lastSequence, retained: session.retained.length },
-    timeNote: 'startSeconds/endSeconds are video positions (discarded and missed segments included); clockTime is approximate.',
+    timeNote:
+      'startSeconds/endSeconds are video positions (discarded and missed segments included); clockTime is approximate.',
     lines
   });
   const final = await renderFinalTranscript(sessionDir);
@@ -286,7 +347,8 @@ async function writeTranscripts(sessionDir, lines, options, session) {
 }
 
 // Started by bin/transcribe.js.
-export const run = () => main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });

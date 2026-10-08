@@ -24,12 +24,14 @@ Audio is transcribed in chunks of about 10 minutes, cached in `transcripts/chunk
 Options:
 
 - `--continue` transcribes only segments captured after the latest transcript and appends them (for a session that kept recording after the last run); timestamps stay on one timeline
+- `--best` transcribes more carefully: each chunk keeps the text before it as context, and every word gets its own time (slower; used for a second, better transcript)
+- `--output <name>` writes `transcripts/<name>.json` (and `.txt`, `.srt`) instead of `latest`, such as `--best --output best`
 - `--session <folder>` transcribes this session folder (default: the most recently updated capture)
 - `--source <key>` limits the default session search to one source
 - `--model <file>` uses another whisper.cpp model (default `transcription.whisperCppModel`)
 - `--vad-model <file>` / `--no-vad` changes or disables voice activity detection
 - `--language <code>` (default `transcription.whisperLanguage`)
-- `--prompt <text>` gives Whisper context for names and spelling (default: the jurisdiction from `reportGeoFocus` plus as many `transcription.vocabulary` terms as fit in Whisper's ~224-token prompt)
+- `--prompt <text>` gives Whisper context for names and spelling (default: `transcription.context` plus as many `transcription.vocabulary` terms as fit in Whisper's ~224-token prompt)
 
 Setup (once):
 

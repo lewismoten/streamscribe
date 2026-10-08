@@ -1,0 +1,196 @@
+/* The narrow-window layout, frozen frames, the frames panel, and the scrubber with its marks and clip range. */
+@media (max-width: 1100px) {
+  .player-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .transcript {
+    position: relative;
+    top: auto;
+    height: 360px;
+  }
+}
+.freeze {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.freeze[hidden] {
+  display: none;
+}
+.frames-panel {
+  max-width: 960px;
+  margin: 8px 0;
+  padding: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.frames-panel[hidden] {
+  display: none;
+}
+.frames {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+.frames button {
+  flex: 0 0 auto;
+  width: 150px;
+  padding: 0;
+  overflow: hidden;
+  scroll-snap-align: center;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.frames canvas {
+  display: block;
+  width: 150px;
+  height: auto;
+  background: #000;
+}
+.frames span {
+  display: block;
+  padding: 2px 4px;
+  font-variant-numeric: tabular-nums;
+}
+.frames button.current {
+  outline: 3px solid var(--start);
+}
+input[type='range'] {
+  width: 100%;
+  max-width: 960px;
+  margin: 12px 0 4px;
+}
+.scrub {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 960px;
+  margin: 8px 0 2px;
+}
+.scrub input[type='range'] {
+  width: 100%;
+  margin: 0;
+}
+.scrub .track {
+  flex: 1;
+  min-width: 0;
+}
+/* Chapter scope: markers above the scrubber (inset by the slider thumb's radius so they line up with it). */
+.scrub-marks {
+  margin: 0 8px -5px;
+}
+.scrub-marks[hidden] {
+  display: none;
+}
+.scrub-marks .lane {
+  position: relative;
+}
+.speakers-lane {
+  height: 22px;
+  margin-bottom: -16px;
+}
+.events-lane {
+  height: 16px;
+}
+.events-lane .scrub-mark {
+  bottom: 4px;
+}
+.scrub-mark {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 1;
+}
+.scrub-mark .avatar {
+  width: 20px;
+  height: 20px;
+  font-size: 0.55rem;
+  box-shadow: 0 0 0 1px var(--card);
+}
+.scrub-mark .more {
+  margin-left: -4px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 0.6rem;
+}
+.scrub-mark.event {
+  font-size: 0.85rem;
+}
+.scrub-mark.vote-mark {
+  padding: 1px;
+  border-radius: 50%;
+  border: 2px dashed var(--line);
+}
+.scrub-mark.vote-mark.passed {
+  border: 2px solid #2e9d5b;
+}
+.scrub-mark.vote-mark.failed {
+  border: 2px dotted #d33b2f;
+}
+.scrub button {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+/* The clip range on the scrubber: a highlight between the start and end, and a marker above each. Positions are
+   inset by the slider thumb's radius (8px) so they line up with the track. */
+.slider-wrap {
+  position: relative;
+}
+.cut-band {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
+  background: rgba(255, 209, 102, 0.75);
+  pointer-events: none;
+  z-index: 1;
+}
+.cut-band[hidden],
+.cut-mark[hidden] {
+  display: none;
+}
+.cut-mark {
+  position: absolute;
+  top: -12px;
+  transform: translateX(-50%);
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+.cut-mark.start-mark {
+  color: var(--start);
+}
+.cut-mark.end-mark {
+  color: var(--end);
+}
+#set-start {
+  color: var(--start);
+}
+#set-end {
+  color: var(--end);
+}
+/* In chapter scope the scrubber takes a different color, so it's clear it covers only the chapter. */
+#slider.chapter-scope {
+  accent-color: #7c5cff;
+}

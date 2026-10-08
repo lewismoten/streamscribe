@@ -1,0 +1,271 @@
+/* The toolbar, settings, clip and display dialogs, position inputs, buttons, notes, and the thumbnail grid. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+/* One row of player controls under the slider; scrolls sideways instead of wrapping on narrow screens. */
+.live-edge {
+  color: #d93025;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.home {
+  text-decoration: none;
+  padding: 0 4px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: center;
+  max-width: 960px;
+  margin: 2px 0 6px;
+  overflow-x: auto;
+}
+.toolbar button {
+  flex: 0 0 auto;
+  min-width: 36px;
+  padding: 5px 8px;
+  line-height: 1.2;
+}
+.toolbar button[hidden] {
+  display: none;
+}
+.button-group {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.button-group button {
+  border-radius: 0;
+  min-width: 28px;
+}
+.button-group button + button {
+  border-left: 0;
+}
+.button-group button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.button-group button:last-child {
+  border-radius: 0 6px 6px 0;
+}
+.find-buttons button {
+  padding: 4px 8px;
+}
+.transcript-empty {
+  margin: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.toolbar .sep {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--line);
+}
+.toolbar .position {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.toolbar .boost-active {
+  flex: 0 0 auto;
+  font-size: 0.85rem;
+}
+.toolbar .status {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+.settings {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.settings label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.settings .hint {
+  font-size: 0.8rem;
+}
+.settings input[type='range'] {
+  width: 110px;
+  margin: 0;
+}
+.settings .size {
+  font-size: 0.8rem;
+  color: var(--muted);
+  min-width: 3.2em;
+  font-variant-numeric: tabular-nums;
+}
+/* Not modal: opens in the top right corner without dimming the page, so overlays can be watched (and dragged) while
+   adjusting them. Every dialog can be moved by dragging its heading. */
+/* Resizable with the mouse (bottom-right corner). */
+#clip-dialog {
+  position: fixed;
+  inset: 72px 16px auto auto;
+  margin: 0;
+  width: min(720px, calc(100vw - 32px));
+  max-width: calc(100vw - 16px);
+  min-width: 420px;
+  z-index: 20;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  resize: both;
+  overflow: auto;
+}
+.wave canvas.strip {
+  height: 54px;
+  margin-bottom: 4px;
+  background: #111;
+  cursor: ew-resize;
+}
+#clip-dialog input.time {
+  width: 7.5em;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+#display-dialog {
+  position: fixed;
+  inset: 72px 16px auto auto;
+  margin: 0;
+  max-width: 520px;
+  width: min(520px, calc(100vw - 32px));
+  z-index: 20;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+dialog h2.drag-handle {
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+dialog h2.drag-handle::after {
+  content: '  ⠿';
+  color: var(--muted);
+  font-weight: 400;
+}
+.label {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.position {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 5.5em;
+}
+input.position {
+  width: 6.2em;
+  min-width: 0;
+  padding: 2px 4px;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+input.position:hover {
+  border-color: var(--line);
+}
+input.position:focus {
+  border-color: var(--start);
+  background: var(--card);
+  outline: none;
+}
+input.position.invalid {
+  border-color: var(--end);
+}
+button,
+select,
+input[type='text'] {
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.start {
+  border-color: var(--start);
+  color: var(--start);
+  font-weight: 600;
+}
+button.end {
+  border-color: var(--end);
+  color: var(--end);
+  font-weight: 600;
+}
+.note {
+  max-width: 960px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: var(--note);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.note code {
+  font-size: 0.85rem;
+}
+pre {
+  margin: 10px 0 6px;
+  padding: 10px;
+  background: var(--code);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+h2.grid-title {
+  font-size: 1.05rem;
+  margin: 24px 0 8px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.grid button {
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.grid img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.grid span {
+  display: block;
+  padding: 3px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.grid button.in-range {
+  outline: 2px solid color-mix(in srgb, var(--start) 45%, transparent);
+}
+.grid button.is-start {
+  outline: 3px solid var(--start);
+}
+.grid button.is-end {
+  outline: 3px solid var(--end);
+}

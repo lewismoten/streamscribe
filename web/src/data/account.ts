@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { hubCall, hubSettings, saveHubSettings, setFileKey } from './hub.ts';
 import { idbStore } from './idb-store.ts';
 import { syncNow } from './sync.ts';
@@ -17,7 +17,11 @@ export interface User {
   createdAt: string;
   lastSeenAt: string | null;
 }
-export interface HubSignupSettings { registration: 'open' | 'closed'; defaultGroupId: number; newUsersTrusted: boolean }
+export interface HubSignupSettings {
+  registration: 'open' | 'closed';
+  defaultGroupId: number;
+  newUsersTrusted: boolean;
+}
 export interface Account {
   user: User | null;
   permissions: string[];
@@ -27,7 +31,14 @@ export interface Account {
   fileKeyAt: number;
 }
 
-let account: Account = { user: null, permissions: [], settings: null, permissionNames: {}, checked: false, fileKeyAt: 0 };
+let account: Account = {
+  user: null,
+  permissions: [],
+  settings: null,
+  permissionNames: {},
+  checked: false,
+  fileKeyAt: 0
+};
 const listeners = new Set<(value: Account) => void>();
 function set(value: Partial<Account>) {
   account = { ...account, ...value };
@@ -42,13 +53,22 @@ function keepFileKey() {
   const wanted = account.permissions.includes('view.meetings');
   if (!wanted) {
     setFileKey(null);
-    if (fileKeyTimer) { clearInterval(fileKeyTimer); fileKeyTimer = null; }
+    if (fileKeyTimer) {
+      clearInterval(fileKeyTimer);
+      fileKeyTimer = null;
+    }
     return;
   }
   if (fileKeyTimer) return;
-  const fetchKey = () => hubCall<{ e: number; s: string }>('file-key')
-    .then((key) => { setFileKey(key); set({ fileKeyAt: Date.now() }); })
-    .catch(() => { /* tried again later */ });
+  const fetchKey = () =>
+    hubCall<{ e: number; s: string }>('file-key')
+      .then((key) => {
+        setFileKey(key);
+        set({ fileKeyAt: Date.now() });
+      })
+      .catch(() => {
+        /* tried again later */
+      });
   fileKeyTimer = window.setInterval(fetchKey, 4 * 3600 * 1000);
   fetchKey();
 }
@@ -56,19 +76,21 @@ function keepFileKey() {
 export const currentAccount = () => account;
 export const can = (permission: string, value = account) => value.permissions.includes(permission);
 
-export function useAccount() {
-  const [value, setValue] = useState(account);
-  useEffect(() => {
-    listeners.add(setValue);
-    setValue(account);
-    return () => { listeners.delete(setValue); };
-  }, []);
-  return value;
-}
+// The account, re-rendering the component whenever it changes (sign-in, sign-out, a new file key).
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+export const useAccount = () => useSyncExternalStore(subscribe, currentAccount);
 
 // Asks the hub who this browser is (on start, and after the hub address changes).
 export async function refreshAccount() {
-  if (!hubSettings().url) { set({ user: null, permissions: [], settings: null, checked: true }); return account; }
+  if (!hubSettings().url) {
+    set({ user: null, permissions: [], settings: null, checked: true });
+    return account;
+  }
   try {
     const me = await hubCall<Omit<Account, 'checked' | 'fileKeyAt'>>('me');
     if (!me.user && hubSettings().token) await forgetSession(); // the session ended
@@ -86,7 +108,13 @@ async function startOver() {
 
 async function signedIn(reply: { token: string } & Omit<Account, 'checked' | 'fileKeyAt'>) {
   saveHubSettings({ token: reply.token });
-  set({ user: reply.user, permissions: reply.permissions, settings: reply.settings, permissionNames: reply.permissionNames, checked: true });
+  set({
+    user: reply.user,
+    permissions: reply.permissions,
+    settings: reply.settings,
+    permissionNames: reply.permissionNames,
+    checked: true
+  });
   await startOver();
 }
 
@@ -100,7 +128,11 @@ export async function signUp(username: string, password: string, displayName: st
 
 // Signs out here (and on the hub). Changes not yet sent are this person's, so they go too.
 export async function signOut() {
-  try { await hubCall('logout', {}); } catch { /* signed out here regardless */ }
+  try {
+    await hubCall('logout', {});
+  } catch {
+    /* signed out here regardless */
+  }
   await forgetSession();
 }
 

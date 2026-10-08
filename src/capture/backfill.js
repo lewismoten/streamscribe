@@ -12,7 +12,14 @@ export async function captureInitialBackfill(segments, capture, knownKeys, conte
   }
 
   capture.initialBackfillCompleted = true;
-  return await downloadPriorSegments(segments[0], initialBackfillMaxSegments, capture, knownKeys, context, 'startup backfill');
+  return await downloadPriorSegments(
+    segments[0],
+    initialBackfillMaxSegments,
+    capture,
+    knownKeys,
+    context,
+    'startup backfill'
+  );
 }
 
 // Recovers the segments between the last one captured and `segments[0]`, as far back as the server still has
@@ -24,7 +31,14 @@ export async function captureGapBackfill(segments, capture, knownKeys, context) 
     return 0;
   }
   const missingCount = first.sequence - lastSeen - 1;
-  return await downloadPriorSegments(first, Math.min(missingCount, initialBackfillMaxSegments), capture, knownKeys, context, `gap backfill (${missingCount} missing)`);
+  return await downloadPriorSegments(
+    first,
+    Math.min(missingCount, initialBackfillMaxSegments),
+    capture,
+    knownKeys,
+    context,
+    `gap backfill (${missingCount} missing)`
+  );
 }
 
 // Downloads up to `maxSegments` segments before `first`, newest first, stopping at the first 404, then
@@ -59,7 +73,9 @@ export async function downloadPriorSegments(first, maxSegments, capture, knownKe
   }
 
   if (recovered.length > 0) {
-    console.log(`[live ${formatCaptureLabel(capture)}] ${label}: recovered ${recovered.length} segment${recovered.length === 1 ? '' : 's'}`);
+    console.log(
+      `[live ${formatCaptureLabel(capture)}] ${label}: recovered ${recovered.length} segment${recovered.length === 1 ? '' : 's'}`
+    );
   }
   return retainedCount;
 }
@@ -76,7 +92,11 @@ export async function downloadTrailingSegments(nextSegment, current, capture, co
       continue;
     }
     try {
-      const download = await downloadSegment(segment, capture, { ...context, maxRetries: 0, rateProfile: 'liveBackfill' });
+      const download = await downloadSegment(segment, capture, {
+        ...context,
+        maxRetries: 0,
+        rateProfile: 'liveBackfill'
+      });
       await processDownloadedSegment(segment, download, capture, knownKeys);
       recovered += 1;
     } catch (error) {
@@ -87,7 +107,9 @@ export async function downloadTrailingSegments(nextSegment, current, capture, co
     }
   }
   if (recovered > 0) {
-    console.log(`[live ${formatCaptureLabel(capture)}] end of stream ${current.identifier}: recovered ${recovered} trailing segment${recovered === 1 ? '' : 's'}`);
+    console.log(
+      `[live ${formatCaptureLabel(capture)}] end of stream ${current.identifier}: recovered ${recovered} trailing segment${recovered === 1 ? '' : 's'}`
+    );
   }
 }
 

@@ -3,7 +3,13 @@ import path from 'path';
 import { SOURCES, TRANSCRIPTION } from '../config/runtime-config.js';
 import { loadJson, writeJson } from '../util/fs-utils.js';
 import { colorize } from '../util/cli.js';
-import { applyCorrections, formatPosition, loadCorrections, renderFinalTranscript, saveCorrections } from './transcript.js';
+import {
+  applyCorrections,
+  formatPosition,
+  loadCorrections,
+  renderFinalTranscript,
+  saveCorrections
+} from './transcript.js';
 
 // Manages transcript corrections and line edits, and rebuilds final transcripts without re-running Whisper.
 //   npm run transcript-corrections -- list
@@ -72,12 +78,14 @@ function parseArgs(args) {
 
 async function loadFileCorrections() {
   const file = await loadJson(TRANSCRIPTION.correctionsFile, {});
-  return { ...(file.corrections || {}) };
+  return { ...file.corrections };
 }
 
 async function listCorrections() {
   const corrections = await loadCorrections();
-  const entries = Object.entries(corrections).sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+  const entries = Object.entries(corrections).sort(([left], [right]) =>
+    left.localeCompare(right, undefined, { sensitivity: 'base' })
+  );
   console.log(`${entries.length} correction${entries.length === 1 ? '' : 's'} (${TRANSCRIPTION.correctionsFile}):`);
   const width = Math.max(0, ...entries.map(([heard]) => heard.length));
   for (const [heard, fixed] of entries) {
@@ -113,7 +121,10 @@ async function findSessions(sessionOption) {
 
 function listDirs(root) {
   try {
-    return fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name));
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name));
   } catch {
     return [];
   }
@@ -127,7 +138,9 @@ async function rebuild(sessions) {
   for (const sessionDir of sessions) {
     const result = await renderFinalTranscript(sessionDir);
     if (result) {
-      console.log(colorize(`  rebuilt ${path.relative(process.cwd(), result.base)}.txt (${result.lines.length} lines)`, 'dim'));
+      console.log(
+        colorize(`  rebuilt ${path.relative(process.cwd(), result.base)}.txt (${result.lines.length} lines)`, 'dim')
+      );
     }
   }
 }
@@ -162,7 +175,9 @@ async function findPhrase(phrase, sessions) {
 // Replaces (or with --clear, restores) the line nearest a video position in one session.
 async function editLine(text, flags) {
   if (!flags.at || (!text && !flags.clear)) {
-    throw new Error('Usage: npm run transcript-corrections -- edit [--session <folder>] --at HH:MM:SS "replacement text"  (or --clear)');
+    throw new Error(
+      'Usage: npm run transcript-corrections -- edit [--session <folder>] --at HH:MM:SS "replacement text"  (or --clear)'
+    );
   }
   const [sessionDir] = await findSessions(flags.session);
   if (!sessionDir) {
@@ -170,7 +185,11 @@ async function editLine(text, flags) {
   }
   const raw = await loadJson(path.join(sessionDir, 'transcripts', 'raw.json'));
   const target = parsePosition(flags.at);
-  const line = (raw?.lines || []).reduce((best, item) => (!best || Math.abs(item.startSeconds - target) < Math.abs(best.startSeconds - target) ? item : best), null);
+  const line = (raw?.lines || []).reduce(
+    (best, item) =>
+      !best || Math.abs(item.startSeconds - target) < Math.abs(best.startSeconds - target) ? item : best,
+    null
+  );
   if (!line) {
     throw new Error(`No transcript lines in ${sessionDir}`);
   }
@@ -193,11 +212,12 @@ function parsePosition(value) {
   if (parts.some((part) => !Number.isFinite(part))) {
     throw new Error(`Invalid position "${value}" (use HH:MM:SS, MM:SS, or seconds)`);
   }
-  return parts.reduce((total, part) => (total * 60) + part, 0);
+  return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
 // Started by bin/transcript-corrections.js.
-export const run = () => main().catch((error) => {
-  console.error(colorize(error.message || String(error), 'red'));
-  process.exit(1);
-});
+export const run = () =>
+  main().catch((error) => {
+    console.error(colorize(error.message || String(error), 'red'));
+    process.exit(1);
+  });

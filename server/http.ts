@@ -3,19 +3,39 @@ import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8', '.css': 'text/css; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
-  '.srt': 'text/plain; charset=utf-8', '.vtt': 'text/vtt; charset=utf-8', '.pdf': 'application/pdf', '.mp4': 'video/mp4',
-  '.webm': 'video/webm', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m3u8': 'application/vnd.apple.mpegurl',
-  '.ts': 'video/mp2t', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.svg': 'image/svg+xml',
-  '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2'
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.srt': 'text/plain; charset=utf-8',
+  '.vtt': 'text/vtt; charset=utf-8',
+  '.pdf': 'application/pdf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.m4a': 'audio/mp4',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.m3u8': 'application/vnd.apple.mpegurl',
+  '.ts': 'video/mp2t',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2'
 };
 
-export const contentTypeFor = (filePath: string): string => TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+export const contentTypeFor = (filePath: string): string =>
+  TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
 
 // Playlists, pages, and data change while a session is captured, so browsers and players always ask again; segments
 // and images never change once written.
-const freshness = (filePath: string): Record<string, string> => (/\.(m3u8|json|html)$/i.test(filePath) ? { 'cache-control': 'no-cache' } : {});
+const freshness = (filePath: string): Record<string, string> =>
+  /\.(m3u8|json|html)$/i.test(filePath) ? { 'cache-control': 'no-cache' } : {};
 
 function parseRange(value: string, totalSize: number): { start: number; end: number } | null {
   const match = value.match(/^bytes=(\d*)-(\d*)$/i);
@@ -49,15 +69,29 @@ export function sendFile(request: IncomingMessage, response: ServerResponse, fil
       return;
     }
     response.writeHead(206, {
-      'accept-ranges': 'bytes', 'content-length': range.end - range.start + 1, 'content-range': `bytes ${range.start}-${range.end}/${totalSize}`,
-      'content-type': contentType, ...freshness(filePath)
+      'accept-ranges': 'bytes',
+      'content-length': range.end - range.start + 1,
+      'content-range': `bytes ${range.start}-${range.end}/${totalSize}`,
+      'content-type': contentType,
+      ...freshness(filePath)
     });
-    if (method === 'HEAD') { response.end(); return; }
+    if (method === 'HEAD') {
+      response.end();
+      return;
+    }
     fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(response);
     return;
   }
-  response.writeHead(200, { 'accept-ranges': 'bytes', 'content-length': totalSize, 'content-type': contentType, ...freshness(filePath) });
-  if (method === 'HEAD') { response.end(); return; }
+  response.writeHead(200, {
+    'accept-ranges': 'bytes',
+    'content-length': totalSize,
+    'content-type': contentType,
+    ...freshness(filePath)
+  });
+  if (method === 'HEAD') {
+    response.end();
+    return;
+  }
   fs.createReadStream(filePath).pipe(response);
 }
 

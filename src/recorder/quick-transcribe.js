@@ -44,7 +44,12 @@ export async function quickTranscribe(recording, source, client, { flush = false
       partIndex: index,
       from: fresh[0].videoStart,
       to: lastItem.videoStart + lastItem.durationSeconds,
-      lines: result.lines.map((line) => ({ start: line.startSeconds, end: line.endSeconds, text: line.text, clockTime: line.clockTime || '' }))
+      lines: result.lines.map((line) => ({
+        start: line.startSeconds,
+        end: line.endSeconds,
+        text: line.text,
+        clockTime: line.clockTime || ''
+      }))
     });
     recording.quick[name] = lastItem.sequence;
     recording.quickSeq += 1;

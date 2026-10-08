@@ -81,7 +81,9 @@ export function segmentUrl(url, sequence, filePrefix = '') {
 }
 
 export function cleanTitle(title) {
-  return String(title || '').replace(/\s*\|\s*Swagit.*$/i, '').trim();
+  return String(title || '')
+    .replace(/\s*\|\s*Swagit.*$/i, '')
+    .trim();
 }
 
 // Whether a segment is the silent standby slide: digital silence, and in three frames the black rails and seal of the
@@ -105,25 +107,52 @@ export async function classifySegment(filePath, durationSeconds, { readMaxVolume
 
 async function readStandbySignature(filePath, durationSeconds) {
   // Four rail corners, four black points outside the seal, and four non-black points inside the seal.
-  const railPoints = [[0.02, 0.02], [0.20, 0.02], [0.02, 0.98], [0.20, 0.98]];
-  const outsideSealPoints = [[0.015, 0.50], [0.215, 0.50], [0.12, 0.30], [0.12, 0.70]];
-  const insideSealPoints = [[0.12, 0.45], [0.12, 0.55], [0.075, 0.50], [0.165, 0.50]];
+  const railPoints = [
+    [0.02, 0.02],
+    [0.2, 0.02],
+    [0.02, 0.98],
+    [0.2, 0.98]
+  ];
+  const outsideSealPoints = [
+    [0.015, 0.5],
+    [0.215, 0.5],
+    [0.12, 0.3],
+    [0.12, 0.7]
+  ];
+  const insideSealPoints = [
+    [0.12, 0.45],
+    [0.12, 0.55],
+    [0.075, 0.5],
+    [0.165, 0.5]
+  ];
   const width = 320;
   const height = 180;
   const frameSize = width * height * 3;
   try {
     const duration = Math.max(1, Number(durationSeconds || 10));
-    const { stdout } = await execFileAsync(TOOLS.ffmpeg, [
-      '-hide_banner', '-loglevel', 'error', '-i', filePath,
-      '-vf', `fps=3/${duration},scale=${width}:${height}:flags=area,format=rgb24`, '-f', 'rawvideo', '-'
-    ], { encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 });
+    const { stdout } = await execFileAsync(
+      TOOLS.ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-i',
+        filePath,
+        '-vf',
+        `fps=3/${duration},scale=${width}:${height}:flags=area,format=rgb24`,
+        '-f',
+        'rawvideo',
+        '-'
+      ],
+      { encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 }
+    );
     const data = Buffer.from(stdout || '');
     const samples = [];
     for (let offset = 0; offset + frameSize <= data.length && samples.length < 3; offset += frameSize) {
       const luminance = ([xRatio, yRatio]) => {
         const x = Math.min(width - 1, Math.max(0, Math.round(xRatio * (width - 1))));
         const y = Math.min(height - 1, Math.max(0, Math.round(yRatio * (height - 1))));
-        const pixel = offset + ((y * width + x) * 3);
+        const pixel = offset + (y * width + x) * 3;
         return Math.round((data[pixel] + data[pixel + 1] + data[pixel + 2]) / 3);
       };
       const blackPointValues = [...railPoints, ...outsideSealPoints].map(luminance);
@@ -132,7 +161,9 @@ async function readStandbySignature(filePath, durationSeconds) {
         sample: ['start', 'middle', 'end'][samples.length],
         blackPointValues,
         sealPointValues,
-        matches: blackPointValues.every((value) => value < blackBelow) && sealPointValues.every((value) => value >= sealAtLeast)
+        matches:
+          blackPointValues.every((value) => value < blackBelow) &&
+          sealPointValues.every((value) => value >= sealAtLeast)
       });
     }
     return { samples, allSamplesMatch: samples.length === 3 && samples.every((sample) => sample.matches) };

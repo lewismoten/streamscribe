@@ -19,22 +19,30 @@ const maxPromptCharacters = 650;
 //                tokens up with the audio (it needs flash attention off).
 export function runWhisper(wavPath, outputBase, options, temperature = 0) {
   const args = [
-    '-m', options.model,
+    '-m',
+    options.model,
     ...(options.keepContext ? [] : ['-mc', '0']),
-    '-tp', String(temperature),
-    '-f', wavPath,
-    '-l', options.language,
-    '-t', String(Math.max(4, Math.min(8, os.cpus().length))),
-    '-bs', String(options.beamSize || 5),
+    '-tp',
+    String(temperature),
+    '-f',
+    wavPath,
+    '-l',
+    options.language,
+    '-t',
+    String(Math.max(4, Math.min(8, os.cpus().length))),
+    '-bs',
+    String(options.beamSize || 5),
     // options.noDtw: whisper.cpp 1.9's alignment can fail an assertion on a window with very few tokens; callers retry
     // without it, keeping Whisper's own token times.
     ...(options.words ? ['-ojf', ...(options.noDtw ? [] : ['-nfa', ...dtwPreset(options.model)])] : ['-oj']),
-    '-of', outputBase,
+    '-of',
+    outputBase,
     '-pp',
     // With -mc 0, whisper.cpp effectively ignores the prompt (tested Oct. 2026: identical output with and
     // without it, even with --carry-initial-prompt). It is kept for the record; transcript corrections are
     // what reliably fix names.
-    '--prompt', options.prompt
+    '--prompt',
+    options.prompt
   ];
   if (options.vadModel) {
     args.push('--vad', '-vm', options.vadModel);
@@ -57,17 +65,47 @@ export function runWhisper(wavPath, outputBase, options, temperature = 0) {
     };
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);
-    child.on('error', (error) => reject(error.code === 'ENOENT'
-      ? new Error(`${TOOLS.whisperCpp} not found; install whisper.cpp (brew install whisper-cpp) or set tools.whisperCpp`)
-      : error));
-    child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`whisper.cpp exited with code ${code}: ${stderrTail.trim().split('\n').slice(-3).join(' | ')}`))));
+    child.on('error', (error) =>
+      reject(
+        error.code === 'ENOENT'
+          ? new Error(
+              `${TOOLS.whisperCpp} not found; install whisper.cpp (brew install whisper-cpp) or set tools.whisperCpp`
+            )
+          : error
+      )
+    );
+    child.on('close', (code) =>
+      code === 0
+        ? resolve()
+        : reject(
+            new Error(`whisper.cpp exited with code ${code}: ${stderrTail.trim().split('\n').slice(-3).join(' | ')}`)
+          )
+    );
   });
 }
 
 // whisper.cpp's alignment heads preset for a model file (ggml-large-v3.bin -> large.v3), or none if it has no preset.
 function dtwPreset(model) {
-  const name = String(model).split('/').pop().replace(/^ggml-/, '').replace(/\.bin$/, '').replace(/-q\d.*$/, '');
-  const presets = ['tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large.v1', 'large.v2', 'large.v3', 'large.v3.turbo'];
+  const name = String(model)
+    .split('/')
+    .pop()
+    .replace(/^ggml-/, '')
+    .replace(/\.bin$/, '')
+    .replace(/-q\d.*$/, '');
+  const presets = [
+    'tiny',
+    'tiny.en',
+    'base',
+    'base.en',
+    'small',
+    'small.en',
+    'medium',
+    'medium.en',
+    'large.v1',
+    'large.v2',
+    'large.v3',
+    'large.v3.turbo'
+  ];
   const preset = name.replace(/-/g, '.');
   return presets.includes(preset) ? ['-dtw', preset] : [];
 }
@@ -83,11 +121,16 @@ export function segmentWords(item) {
     const from = Number(token.t_dtw) >= 0 ? Number(token.t_dtw) * 10 : Number(token.offsets?.from || 0);
     const to = Number(token.offsets?.to || from);
     if (words.length === 0 || /^\s/.test(text)) words.push([from, to, text.trim()]);
-    else { words[words.length - 1][2] += text; words[words.length - 1][1] = Math.max(words[words.length - 1][1], to); }
+    else {
+      words[words.length - 1][2] += text;
+      words[words.length - 1][1] = Math.max(words[words.length - 1][1], to);
+    }
   }
   // A word lasts until the next one starts (the last one, until the segment ends).
   const end = Number(item.offsets?.to || 0);
-  return words.filter((word) => word[2]).map((word, index, list) => [word[0], Math.max(word[0], list[index + 1]?.[0] ?? Math.max(word[1], end)), word[2]]);
+  return words
+    .filter((word) => word[2])
+    .map((word, index, list) => [word[0], Math.max(word[0], list[index + 1]?.[0] ?? Math.max(word[1], end)), word[2]]);
 }
 
 export function longestRepeat(lines) {
@@ -105,11 +148,15 @@ export function collapseRepeats(lines) {
 }
 
 export async function assertWhisperModels(options) {
-  if (!await fileExists(options.model)) {
-    throw new Error(`whisper.cpp model not found: ${options.model}. Download one from https://huggingface.co/ggerganov/whisper.cpp (ggml-large-v3.bin is the most accurate) or set transcription.whisperCppModel.`);
+  if (!(await fileExists(options.model))) {
+    throw new Error(
+      `whisper.cpp model not found: ${options.model}. Download one from https://huggingface.co/ggerganov/whisper.cpp (ggml-large-v3.bin is the most accurate) or set transcription.whisperCppModel.`
+    );
   }
-  if (options.vadModel && !await fileExists(options.vadModel)) {
-    console.warn(`VAD model not found (${options.vadModel}); continuing without VAD. Long silences may produce repeated text.`);
+  if (options.vadModel && !(await fileExists(options.vadModel))) {
+    console.warn(
+      `VAD model not found (${options.vadModel}); continuing without VAD. Long silences may produce repeated text.`
+    );
     options.vadModel = '';
   }
 }
@@ -132,7 +179,9 @@ export function buildVocabularyPrompt() {
     included += 1;
   }
   if (included < TRANSCRIPTION.vocabulary.length) {
-    console.log(`Prompt includes ${included} of ${TRANSCRIPTION.vocabulary.length} vocabulary terms (Whisper's prompt limit); use transcription.corrections for the rest.`);
+    console.log(
+      `Prompt includes ${included} of ${TRANSCRIPTION.vocabulary.length} vocabulary terms (Whisper's prompt limit); use transcription.corrections for the rest.`
+    );
   }
   return `${prompt}.`;
 }

@@ -29,7 +29,7 @@ export async function findSessions(source) {
       const manifestPath = path.join(sessionDir, 'segments.jsonl');
       const sessionPath = path.join(sessionDir, 'session.json');
       const session = await loadJson(sessionPath);
-      if (await fileExists(manifestPath) && /\/live\//i.test(String(session?.hlsUrl || ''))) {
+      if ((await fileExists(manifestPath)) && /\/live\//i.test(String(session?.hlsUrl || ''))) {
         sessions.push({ captureId: captureDirectory.name, sessionDir, manifestPath });
       }
     }
