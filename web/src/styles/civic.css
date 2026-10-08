@@ -174,3 +174,36 @@ label.block textarea,
   font: inherit;
   font-size: 0.8rem;
 }
+.election-rows {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+.election-rows li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.race-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.race-entries {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.race-entries li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+}
+.race-entries li.won a {
+  font-weight: 700;
+}
+.race-form .race-entries input {
+  font: inherit;
+  flex: 1 1 180px;
+}

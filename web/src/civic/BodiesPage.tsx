@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { shownName } from '../people/usePeople.ts';
-import ElectionForm from './ElectionForm.tsx';
-import ElectionList from './ElectionList.tsx';
 import { BodyForm, OrganizationForm } from './OrgBodyForms.tsx';
 import { byBodyOrder } from './parts.tsx';
 import {
@@ -12,19 +10,17 @@ import {
   personKeyOf,
   SELECTIONS,
   type Body,
-  type Election,
   type Organization
 } from './types.ts';
 import { useCivic } from './useCivic.ts';
 
 type Editing =
   | { type: 'organization'; id: string | null; value?: Organization }
-  | { type: 'body'; id: string | null; value: Partial<Body> }
-  | { type: 'election'; id: string | null; value: Partial<Election> };
+  | { type: 'body'; id: string | null; value: Partial<Body> };
 
 // Public bodies, by the organization they belong to (a county, a town, a school division, a nonprofit): each with
-// how its members are chosen, how many serve now, and its officers; committees under the body they belong to; and
-// each organization's elections, with who ran.
+// how its members are chosen, how many serve now, and its officers; committees under the body they belong to.
+// Elections have a page of their own (ElectionsPage).
 export default function BodiesPage() {
   const civic = useCivic();
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -84,9 +80,6 @@ export default function BodiesPage() {
       {editing?.type === 'body' && (
         <BodyForm id={editing.id} value={editing.value} organizations={organizations} bodies={bodies} onDone={done} />
       )}
-      {editing?.type === 'election' && (
-        <ElectionForm id={editing.id} value={editing.value} organizations={organizations} onDone={done} />
-      )}
       {organizations.length === 0 && (
         <p className="empty">
           {civic.editor
@@ -118,15 +111,6 @@ export default function BodiesPage() {
                     onClick={() => setEditing({ type: 'body', id: null, value: { organizationId: organization.id } })}
                   >
                     ＋ Body
-                  </button>
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() =>
-                      setEditing({ type: 'election', id: null, value: { organizationId: organization.id } })
-                    }
-                  >
-                    ＋ Election
                   </button>
                 </>
               )}
@@ -162,11 +146,6 @@ export default function BodiesPage() {
                 );
               })}
             </ul>
-            <ElectionList
-              organizationId={organization.id}
-              civic={civic}
-              onChange={civic.editor ? (id, value) => setEditing({ type: 'election', id, value }) : null}
-            />
           </section>
         );
       })}

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { putRecord, removeRecord } from '../data/useRecords.ts';
 import { FormButtons } from './OrgBodyForms.tsx';
-import { ELECTION_KINDS, type Election, type ElectionKind, type Organization } from './types.ts';
+import { ELECTION_KINDS, takesOfficeOn, type Election, type ElectionKind, type Organization } from './types.ts';
 
 // Adding or changing an election: its day, a name, and what kind it is. Candidates' terms (and the terms of those
 // who won) point at it.
@@ -25,7 +25,10 @@ export default function ElectionForm({
   });
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    const election = { ...form, name: form.name.trim() || ELECTION_KINDS[form.kind] };
+    const election = {
+      ...form,
+      name: form.name.trim() || `${ELECTION_KINDS[form.kind]} ${form.date.slice(0, 4)}`.trim()
+    };
     await putRecord('elections', id || `${form.organizationId}-${form.date}-${form.kind}`, election);
     onDone(`Saved ${election.name}`);
   };
@@ -81,6 +84,16 @@ export default function ElectionForm({
             onChange={(event) => setForm({ ...form, name: event.target.value })}
             placeholder={`${ELECTION_KINDS[form.kind]} ${form.date.slice(0, 4)}`.trim()}
           />
+        </label>
+        <label>
+          Those elected take office
+          <input
+            type="date"
+            value={form.takesOffice || ''}
+            onChange={(event) => setForm({ ...form, takesOffice: event.target.value })}
+            placeholder={takesOfficeOn(form)}
+          />
+          <span className="small">Blank: January 1 after the election</span>
         </label>
         <label>
           Note

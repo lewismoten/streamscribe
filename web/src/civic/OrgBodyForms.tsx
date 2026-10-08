@@ -234,6 +234,17 @@ export function BodyForm({
         />
       </label>
       <label className="block">
+        Elected seats last (years)
+        <input
+          type="number"
+          min={1}
+          max={12}
+          value={form.termYears || ''}
+          onChange={(event) => setForm({ ...form, termYears: Number(event.target.value) || undefined })}
+          placeholder="4"
+        />
+      </label>
+      <label className="block">
         Its offices, one per line (held by members, usually a year at a time)
         <textarea
           rows={3}

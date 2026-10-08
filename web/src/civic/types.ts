@@ -37,6 +37,8 @@ export interface Body {
   meetings: MeetingMatch[];
   // What its members are called (such as Supervisor): the title new members' terms get.
   memberTitle?: string;
+  // How many years an elected seat lasts (such as 4): winners' terms run that long from taking office.
+  termYears?: number;
   // The body's offices, such as Chair and Vice Chair; officer terms hold them, usually a year at a time.
   offices?: string[];
   website?: string;
@@ -49,6 +51,8 @@ export interface Election {
   name: string;
   organizationId: string;
   kind: ElectionKind;
+  // When those elected take office (default: January 1 after the election).
+  takesOffice?: string;
   note?: string;
 }
 
@@ -138,6 +142,14 @@ export function electionOf(elections: { id: string; data: Election }[] | null, t
   const found = term.electionId ? elections?.find((item) => item.id === term.electionId)?.data : undefined;
   if (found) return found;
   return term.election ? { date: term.election, name: 'Election', organizationId: '', kind: 'other' as const } : null;
+}
+export const takesOfficeOn = (election: Election) =>
+  election.takesOffice || (election.date ? `${Number(election.date.slice(0, 4)) + 1}-01-01` : '');
+// The last day of a term that starts on a day and lasts some years: the day before the same date that many years on.
+export function termEnd(start: string, years: number) {
+  const [year, month, day] = start.split('-').map(Number);
+  const end = new Date(Date.UTC(year + years, month - 1, day - 1));
+  return end.toISOString().slice(0, 10);
 }
 export const electionLabel = (election: Election) => `${election.name}, ${shortDate(election.date)}`;
 
