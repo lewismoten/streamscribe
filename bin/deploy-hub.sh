@@ -25,7 +25,7 @@ fi
 $SSH "$REMOTE" "mkdir -p '$DEPLOY_PATH/hub'"
 RSYNC=(rsync --recursive --links --checksum --compress --delete --itemize-changes --exclude .DS_Store -e "$SSH")
 echo "Web app → $REMOTE:$DEPLOY_PATH/"
-"${RSYNC[@]}" $DRY_RUN --exclude '/hub/' --exclude '/.well-known/' --exclude '/cgi-bin/' --exclude '/.htaccess' web/dist-deploy/ "$REMOTE:$DEPLOY_PATH/"
+"${RSYNC[@]}" $DRY_RUN --exclude '/hub/' --exclude '/.well-known/' --exclude '/cgi-bin/' --exclude '/.htaccess' --exclude '/.user.ini' --exclude '/php.ini' web/dist-deploy/ "$REMOTE:$DEPLOY_PATH/"
 echo "Hub → $REMOTE:$DEPLOY_PATH/hub/"
 "${RSYNC[@]}" $DRY_RUN --exclude '/config.php' --exclude '/data/' --exclude '/media/' hub-php/ "$REMOTE:$DEPLOY_PATH/hub/"
 

@@ -22,7 +22,7 @@ GitHub Pages can publish the same web app too. It keeps its data in each visitor
 
 You need SSH access, PHP 8 with `pdo_sqlite` on the command line and the web server, HTTPS, and `rsync` (most hosts have it).
 
-1. **Pick a folder only for streamscribe**, such as `public_html/meetings`, because deploys delete anything else in it (except `.well-known/`, `cgi-bin/` and `.htaccess`). Add an SSH key for deploying (see On your machine below).
+1. **Pick a folder only for streamscribe**, such as `public_html/meetings`, because deploys delete anything else in it (except `.well-known/`, `cgi-bin/`, `.htaccess`, `.user.ini` and `php.ini`). Add an SSH key for deploying (see On your machine below).
 2. **Make the hub's settings.** Run the first deploy (it stops at "No config.php yet"), or make the folder `hub/` yourself, then:
 
    ```bash
