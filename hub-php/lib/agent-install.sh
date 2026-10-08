@@ -56,9 +56,12 @@ note "${FREE_GB} GB free in $HOME"
 case "$(uname -m)" in armv6l|armv7l) warn "This is a 32-bit system; Node.js 24 may not install. A 64-bit OS (Raspberry Pi 4 or 5) is best." ;; esac
 # A Raspberry Pi that is short of power can lose its network or reset partway through an install.
 if command -v vcgencmd >/dev/null; then
-  THROTTLED=$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2 || echo 0x0)
-  if [ "$((THROTTLED & 0x1))" -ne 0 ]; then warn "Under-voltage right now ($THROTTLED): use the official power supply; the install may stop or the Pi reset."
-  elif [ "$((THROTTLED & 0x10000))" -ne 0 ]; then warn "This Pi has had under-voltage since it started ($THROTTLED): check the power supply."
+  # (On some systems, Ubuntu among them, reading it needs permission: try without, then with sudo if it won't ask.)
+  THROTTLED=$(vcgencmd get_throttled 2>/dev/null | sed -n 's/^throttled=//p' || true)
+  if [ -z "$THROTTLED" ]; then THROTTLED=$($SUDO -n vcgencmd get_throttled 2>/dev/null | sed -n 's/^throttled=//p' || true); fi
+  if ! [[ "$THROTTLED" =~ ^0x[0-9a-fA-F]+$ ]]; then note "Power: couldn't check (vcgencmd needs permission here)"
+  elif (( THROTTLED & 0x1 )); then warn "Under-voltage right now ($THROTTLED): use the official power supply; the install may stop or the Pi reset."
+  elif (( THROTTLED & 0x10000 )); then warn "This Pi has had under-voltage since it started ($THROTTLED): check the power supply."
   else note "Power: OK"; fi
 fi
 # Interrupted package installs (a reset, a lost connection) are finished first.
@@ -70,7 +73,9 @@ fi
 
 step "Installing ffmpeg and tools (this can take several minutes on a Raspberry Pi)"
 $APT update
-$APT install -y ca-certificates curl ffmpeg tar
+# Without recommended extras: ffmpeg would otherwise bring desktop packages (icons, sound, GTK) a headless machine
+# doesn't need.
+$APT install -y --no-install-recommends ca-certificates curl ffmpeg tar
 note "$(ffmpeg -version | head -1)"
 
 step "Installing Node.js 24"
@@ -80,7 +85,7 @@ if [ "$NODE_MAJOR" -lt 24 ]; then
   note "Adding the NodeSource package source"
   if [ -n "$SUDO" ]; then curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
   else curl -fsSL https://deb.nodesource.com/setup_24.x | bash -; fi
-  $APT install -y nodejs
+  $APT install -y --no-install-recommends nodejs
 else
   note "Already installed"
 fi
