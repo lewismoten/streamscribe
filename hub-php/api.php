@@ -25,9 +25,13 @@
 //   GET  users (review or manage.users), POST users/update {id, groupId, trusted, disabled, displayName, password},
 //   POST users/delete {id}, GET groups, POST groups/save {id?, name, permissions}, POST groups/delete {id, moveTo},
 //   POST hub-settings {registration, defaultGroupId, newUsersTrusted}   (manage.users)
+// Setting up (lib/setup-routes.php): POST setup {username, password, displayName, name} makes the first admin while
+//   the hub has no accounts; GET hub-config, POST hub-config {settings}, GET keys, POST keys/create {scope, name},
+//   POST keys/revoke {id}   (manage.users)
 // Reading needs nothing; writing needs a key (lib/auth.php) or a signed-in person whose group allows it.
 declare(strict_types=1);
 require __DIR__ . '/lib/collections.php';
+require __DIR__ . '/lib/config.php';
 require __DIR__ . '/lib/db.php';
 require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/lib/cors.php';
@@ -83,23 +87,23 @@ function hub_write_rule(array $viewer, string $collection, string $id, $record, 
   return ['owner' => 0, 'layer' => 'shared'];
 }
 
-$configFile = __DIR__ . '/config.php';
-if (!is_file($configFile)) hub_fail(500, 'The hub is not set up: copy config.example.php to config.php');
-$config = require $configFile;
-hub_cors($config);
 set_exception_handler(function (Throwable $error) { hub_fail(500, 'Server error: ' . $error->getMessage()); });
+// Where files live (config.php, optional), then the settings kept in the database (lib/config.php).
+$config = hub_load_config();
+$db = hub_db($config);
+$config = hub_apply_settings($config, $db);
+hub_cors($config);
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $route = trim((string)($_SERVER['PATH_INFO'] ?? ($_GET['r'] ?? '')), '/');
-$db = hub_db($config);
 $viewer = hub_viewer($config, $db);
 // A browser whose session ended hears so (instead of quietly getting what anyone gets), except where that's moot.
-if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'logout', 'me', 'live', 'groups'], true) && strpos($route, 'podcast') !== 0 && strpos($route, 'file/') !== 0 && strpos($route, 'agent-') !== 0) {
+if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'setup', 'logout', 'me', 'live', 'groups'], true) && strpos($route, 'podcast') !== 0 && strpos($route, 'file/') !== 0 && strpos($route, 'agent-') !== 0) {
   hub_fail(401, 'Signed out (the session ended); sign in again');
 }
 
 if ($method === 'GET' && ($route === 'info' || $route === '')) {
-  hub_send(200, ['name' => $config['name'] ?? 'streamscribe hub', 'rev' => (int)hub_meta($db, 'rev'), 'time' => hub_now()]);
+  hub_send(200, ['name' => $config['name'], 'rev' => (int)hub_meta($db, 'rev'), 'time' => hub_now()]);
 }
 
 if ($method === 'GET' && $route === 'changes') {
@@ -227,7 +231,7 @@ if ($method === 'POST' && ($route === 'media' || $route === 'live-thumbnail')) {
   $types = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
   $type = (string)($_GET['type'] ?? 'image/jpeg');
   if (!isset($types[$type])) hub_fail(415, 'JPEG, PNG, or WebP images only');
-  $limit = (int)($config['max_media_bytes'] ?? 4194304);
+  $limit = (int)$config['max_media_bytes'];
   $bytes = file_get_contents('php://input', false, null, 0, $limit + 1);
   if ($bytes === false || $bytes === '') hub_fail(400, 'No file sent');
   if (strlen($bytes) > $limit) hub_fail(413, 'File too large');
@@ -266,6 +270,7 @@ if (($method === 'GET' || $method === 'HEAD') && preg_match('#^file/private/(.+)
   hub_stream_file($file, 'private, max-age=3600');
 }
 
+require __DIR__ . '/lib/setup-routes.php';
 require __DIR__ . '/lib/account-routes.php';
 require __DIR__ . '/lib/publish-routes.php';
 require __DIR__ . '/lib/people-routes.php';

@@ -17,6 +17,7 @@ import AccountsPage from './pages/AccountsPage.tsx';
 import PeoplePage from './people/PeoplePage.tsx';
 import PersonPage from './people/PersonPage.tsx';
 import AgentsPage from './pages/AgentsPage.tsx';
+import SetupPage from './pages/SetupPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
 import { setPreviewing } from './data/preview.ts';
@@ -78,7 +79,9 @@ export default function App() {
         {local && <SearchBox />}
       </header>
       <main className="page">
-        {mode !== 'checking' && (
+        {/* A new hub with no accounts yet: its first visitor makes the admin. */}
+        {account.needsSetup && <SetupPage />}
+        {mode !== 'checking' && !account.needsSetup && (
           <Routes>
             {local ? (
               <Route path="/" element={<Library config={config} />} />

@@ -88,3 +88,15 @@ CREATE TABLE IF NOT EXISTS enrollments (
   expires_at INTEGER NOT NULL,
   used_at TEXT
 );
+
+-- Keys for scripts and recorders set up by hand (agents added in the web app have their own, in agents): only each
+-- key's SHA-256 hash, its scope ('editor' or 'recorder'), and a name for who made a change. Made in the web app
+-- (Accounts → Keys) or with tools/new-key.php.
+CREATE TABLE IF NOT EXISTS keys (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  key_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  revoked INTEGER NOT NULL DEFAULT 0
+);

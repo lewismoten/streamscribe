@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Puts the hub and the web app on a server over SSH, sending only files that changed (rsync, by checksum):
 #   DEPLOY_PATH/        the web app (index.html, assets/), set to use the hub beside it
-#   DEPLOY_PATH/hub/    the hub (hub-php/); its config.php, data/, and media/ on the server are never touched
+#   DEPLOY_PATH/hub/    the hub (hub-php/); its data/, media/, and config.php (optional) on the server are never
+#                       touched
 # then brings the hub's database up to date (tools/migrate.php). GitHub Actions runs it (.github/workflows/
 # deploy-hub.yml); to run it from your machine, put the settings in deploy.local.env (see docs/hub/deploy.md):
 #   npm run deploy:hub [-- --dry-run]

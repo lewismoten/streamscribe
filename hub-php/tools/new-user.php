@@ -1,7 +1,9 @@
 <?php
 // Makes an account from the command line, such as the first admin (run once over SSH after installing):
 //   php tools/new-user.php USERNAME [--admin | --group NAME] [--name "Display name"] [--config path/to/config.php]
+// (Usually not needed: the first admin can be made in the web app, the first time it's opened.)
 // Asks for the password (or reads it from STREAMSCRIBE_PASSWORD). An existing username gets the new password and group.
+require __DIR__ . '/../lib/config.php';
 require __DIR__ . '/../lib/db.php';
 require __DIR__ . '/../lib/auth.php';
 require __DIR__ . '/../lib/permissions.php';
@@ -12,7 +14,7 @@ $args = array_slice($argv, 1);
 $username = '';
 $group = null;
 $name = '';
-$configFile = __DIR__ . '/../config.php';
+$configFile = null;
 for ($i = 0; $i < count($args); $i++) {
   if ($args[$i] === '--admin') $group = 'Admin';
   elseif ($args[$i] === '--group') $group = $args[++$i] ?? '';
@@ -21,7 +23,7 @@ for ($i = 0; $i < count($args); $i++) {
   else $username = $args[$i];
 }
 if (!hub_valid_username($username)) hub_fail(1, "Usage: php tools/new-user.php USERNAME [--admin | --group NAME] [--name \"Display name\"]\n(usernames are 3 to 40 letters, digits, dots, dashes, or underscores)");
-$db = hub_db(require $configFile);
+$db = hub_db(hub_load_config($configFile));
 $groupId = null;
 if ($group !== null) {
   $statement = $db->prepare('SELECT id FROM groups WHERE name = ?');

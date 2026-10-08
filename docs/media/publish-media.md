@@ -46,18 +46,6 @@ The settings are under `recorder.media` in `config.local.js`: `height`, `fps`, `
 
 ## The podcast
 
-The podcast lists published clips, not full meetings: see ../hub/hub.md, Publishing. To list it in Apple Podcasts, Spotify and others, add a cover image and contact email in the hub's `config.php`:
-
-```php
-'podcasts' => [
-  'warren-county-va' => [
-    'title' => 'Warren County Board of Supervisors: clips',
-    'description' => 'Clips from public meetings, from an independent archive.',
-    'author' => 'Your name',
-    'email' => 'you@example.com',
-    'image' => 'https://streamscribe.lewismoten.com/hub/media/podcast-cover.jpg',   // square JPEG or PNG, 1400–3000 px
-  ],
-],
-```
+The podcast lists published clips, not full meetings: see ../hub/hub.md, Publishing. To list it in Apple Podcasts, Spotify and others, give it a title, a cover image (a square JPEG or PNG, 1400 to 3000 px) and a contact email under Accounts → Hub settings, Podcasts of published clips.
 
 Put the cover image in the hub's `media/` folder, because deploys replace the website folder.

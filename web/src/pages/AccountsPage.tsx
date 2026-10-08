@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { can, refreshAccount, useAccount, type User } from '../data/account.ts';
 import { hubCall } from '../data/hub.ts';
+import HubSettings from './HubSettings.tsx';
 
 // People and groups on the hub. Admins (manage.users) change anyone's group, turn accounts off, remove them, and set
 // what each group may do and who new sign-ups are. Reviewers (review) mark people trusted or not: an untrusted
@@ -298,6 +299,7 @@ export default function AccountsPage() {
               </label>
             </div>
           )}
+          <HubSettings />
         </>
       )}
     </section>

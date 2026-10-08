@@ -110,3 +110,8 @@ table.permissions th {
   margin-right: 6px;
   vertical-align: middle;
 }
+
+output.block {
+  display: block;
+  margin-top: 0.5rem;
+}

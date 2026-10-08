@@ -20,6 +20,24 @@ import {
 
 startTestHub();
 
+test('first run: the first visitor makes the admin; then setup is closed', { skip: external }, async () => {
+  assert.equal((await json('me', null, null, 'GET')).needsSetup, true);
+  assert.equal((await json('register', { username: 'early', password: 'password123' })).status, 409, 'no sign-ups yet');
+  assert.equal((await json('setup', { username: 'x', password: 'password123' })).status, 400);
+  const admin = await json('setup', {
+    username: 'boss',
+    password: 'password123',
+    displayName: 'Boss',
+    name: 'Town hub'
+  });
+  assert.equal(admin.status, 200);
+  assert.equal(admin.user.group, 'Admin');
+  assert.equal(admin.needsSetup, false);
+  assert.equal((await json('info', null, null, 'GET')).name, 'Town hub');
+  assert.equal((await json('me', null, null, 'GET')).needsSetup, false);
+  assert.equal((await json('setup', { username: 'sneaky', password: 'password123' })).status, 409);
+});
+
 test('accounts: sign up, sign in, wrong passwords, sessions', { skip: external }, async () => {
   const signedUp = await json('register', { username: 'jane', password: 'password123', displayName: 'Jane Doe' });
   assert.equal(signedUp.status, 200);

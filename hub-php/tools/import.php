@@ -4,6 +4,7 @@
 // the old hub's media/ folder (published files) and its private folder (private_dir: meetings' pictures, audio, and
 // video) too, keeping their paths, so they land where the records expect.
 //   php tools/import.php export.json [path/to/config.php]
+require __DIR__ . '/../lib/config.php';
 require __DIR__ . '/../lib/db.php';
 require __DIR__ . '/../lib/collections.php';
 if (!isset($argv[1])) {
@@ -15,7 +16,7 @@ if (!$export) {
   fwrite(STDERR, "Couldn't read $argv[1] as JSON\n");
   exit(1);
 }
-$config = require ($argv[2] ?? __DIR__ . '/../config.php');
+$config = hub_load_config($argv[2] ?? null);
 $db = hub_db($config);
 $items = array_merge($export->records ?? [], $export->pending ?? []);
 $counts = hub_write($db, function (PDO $db) use ($items) {

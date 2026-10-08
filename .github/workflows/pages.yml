@@ -1,8 +1,8 @@
 # Publishes the web app to GitHub Pages, for any fork of this repository. Two ways it can work:
 #   - on its own: each visitor's browser keeps its own data (IndexedDB); nothing is shared. This is the default.
 #   - with a hub: set the PAGES_HUB_URL variable to a hub's api.php address (such as
-#     https://streamscribe.lewismoten.com/hub/api.php), and the site syncs with it; the hub's config.php must list
-#     https://<owner>.github.io in allowed_origins.
+#     https://streamscribe.lewismoten.com/hub/api.php), and the site syncs with it; an admin adds
+#     https://<owner>.github.io under Accounts → Hub settings ("Other sites that may use this hub").
 # Visitors can point the site at another hub, or none, under Settings either way. To use it: in the repository's
 # Settings → Pages choose "GitHub Actions" as the source, then run this workflow from the Actions tab; set the
 # PAGES_ON_PUSH variable to true to publish on every push to main. See docs/hub/deploy.md.

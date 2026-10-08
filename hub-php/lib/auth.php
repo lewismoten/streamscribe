@@ -1,6 +1,7 @@
 <?php
 // Keys: sent as X-Streamscribe-Key; the hub keeps only their SHA-256 hashes, each with a scope ('editor' or 'recorder')
-// and a name (who made a change): in config.php, or (agents added in the web app) in the agents table.
+// and a name (who made a change): in the keys table (or an older config.php's 'keys'), or (agents added in the web
+// app) in the agents table.
 function hub_caller(array $config): ?array {
   $key = $_SERVER['HTTP_X_STREAMSCRIBE_KEY'] ?? '';
   if ($key === '' && function_exists('getallheaders')) {
@@ -12,6 +13,10 @@ function hub_caller(array $config): ?array {
     if (hash_equals(strtolower($entry['hash']), $hash)) return ['scope' => $entry['scope'], 'name' => $entry['name'] ?? $entry['scope']];
   }
   if (!empty($config['database'])) {
+    $statement = hub_db($config)->prepare('SELECT name, scope FROM keys WHERE key_hash = ? AND revoked = 0');
+    $statement->execute([$hash]);
+    $entry = $statement->fetch();
+    if ($entry) return ['scope' => $entry['scope'], 'name' => $entry['name']];
     $statement = hub_db($config)->prepare('SELECT id, name FROM agents WHERE key_hash = ? AND revoked = 0');
     $statement->execute([$hash]);
     $agent = $statement->fetch();

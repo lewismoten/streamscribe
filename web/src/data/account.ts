@@ -30,6 +30,8 @@ export interface Account {
   permissionNames: Record<string, string>;
   checked: boolean;
   fileKeyAt: number;
+  // A new hub with no accounts: the web app asks for its first admin.
+  needsSetup: boolean;
   // Whether the person signed in is an admin (who may preview the public view), and whether they are previewing it:
   // then pages see a signed-out account with no permissions.
   admin: boolean;
@@ -43,6 +45,7 @@ let account: Account = {
   permissionNames: {},
   checked: false,
   fileKeyAt: 0,
+  needsSetup: false,
   admin: false,
   previewing: false
 };
@@ -111,7 +114,7 @@ export async function refreshAccount() {
     return account;
   }
   try {
-    const me = await hubCall<Omit<Account, 'checked' | 'fileKeyAt'>>('me');
+    const me = await hubCall<Omit<Account, 'checked' | 'fileKeyAt' | 'admin' | 'previewing'>>('me');
     if (!me.user && hubSettings().token) await forgetSession(); // the session ended
     set({ ...me, checked: true });
   } catch {
@@ -125,13 +128,14 @@ async function startOver() {
   syncNow();
 }
 
-async function signedIn(reply: { token: string } & Omit<Account, 'checked' | 'fileKeyAt'>) {
+async function signedIn(reply: { token: string } & Omit<Account, 'checked' | 'fileKeyAt' | 'admin' | 'previewing'>) {
   saveHubSettings({ token: reply.token });
   set({
     user: reply.user,
     permissions: reply.permissions,
     settings: reply.settings,
     permissionNames: reply.permissionNames,
+    needsSetup: false,
     checked: true
   });
   await startOver();
@@ -139,6 +143,11 @@ async function signedIn(reply: { token: string } & Omit<Account, 'checked' | 'fi
 
 export async function signIn(username: string, password: string) {
   await signedIn(await hubCall('login', { username, password }));
+}
+
+// The first admin of a new hub (only while it has no accounts), and the hub's name.
+export async function setUp(username: string, password: string, displayName: string, name: string) {
+  await signedIn(await hubCall('setup', { username, password, displayName, name }));
 }
 
 export async function signUp(username: string, password: string, displayName: string) {

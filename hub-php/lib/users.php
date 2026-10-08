@@ -159,9 +159,14 @@ function hub_new_session(PDO $db, int $userId): string {
   return $token;
 }
 
-// Whoever is signed in, with their group's permissions and the hub's sign-up settings: what the web app shows.
+function hub_user_count(PDO $db): int {
+  return (int)$db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+}
+
+// Whoever is signed in, with their group's permissions and the hub's sign-up settings: what the web app shows. A new
+// hub with no accounts yet says so (needsSetup), and the web app offers to make its first admin.
 function hub_me(PDO $db, array $viewer): array {
   $settings = ['registration' => hub_meta($db, 'registration'), 'defaultGroupId' => (int)hub_meta($db, 'default_group_id'), 'newUsersTrusted' => hub_meta($db, 'new_users_trusted') !== '0'];
-  if ($viewer['kind'] !== 'user') return ['user' => null, 'permissions' => $viewer['permissions'], 'settings' => $settings, 'permissionNames' => PERMISSIONS];
-  return ['user' => hub_user_out($viewer['user'], hub_groups($db)), 'permissions' => $viewer['permissions'], 'settings' => $settings, 'permissionNames' => PERMISSIONS];
+  $user = $viewer['kind'] === 'user' ? hub_user_out($viewer['user'], hub_groups($db)) : null;
+  return ['user' => $user, 'permissions' => $viewer['permissions'], 'settings' => $settings, 'permissionNames' => PERMISSIONS, 'needsSetup' => !$user && hub_user_count($db) === 0];
 }

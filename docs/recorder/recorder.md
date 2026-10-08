@@ -13,7 +13,7 @@ The easiest way, on a Raspberry Pi or another Debian or Ubuntu machine, is the o
 1. Set up the hub ([hub/hub.md](../hub/hub.md)) and make a key for this recorder, on the hub's server:
 
    ```bash
-   php tools/new-key.php recorder "Office Mac"
+   php tools/new-key.php recorder "Office Mac"   # or Accounts → Keys in the web app
    ```
 
 2. In `config.local.js`, add the sources to record (see `config.example.js`) and a `recorder` section:

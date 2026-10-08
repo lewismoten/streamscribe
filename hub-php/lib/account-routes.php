@@ -11,6 +11,7 @@ if ($method === 'POST' && $route === 'register') {
   if (!hub_valid_username($username)) hub_fail(400, 'Usernames are 3 to 40 letters, digits, dots, dashes, or underscores');
   if (strlen($password) < 8) hub_fail(400, 'Passwords need at least 8 characters');
   $token = hub_write($db, function (PDO $db) use ($username, $password, $input) {
+    if (hub_user_count($db) === 0) hub_fail(409, 'This hub has no admin yet: the first account is made with setup');
     $statement = $db->prepare('SELECT 1 FROM users WHERE username = ?');
     $statement->execute([$username]);
     if ($statement->fetchColumn()) hub_fail(409, 'That username is taken');

@@ -9,21 +9,20 @@ The site is an independent archive. Its meetings are private: recordings, transc
 You need PHP 8 with `pdo_sqlite`, which most hosts have, and HTTPS. [deploy.md](deploy.md) covers it: the deploy script puts the hub and the web app on your server together and keeps them up to date from GitHub Actions. By hand, it comes down to:
 
 1. **Upload** `hub-php/` (to `https://example.com/hub/`, say).
-2. **Configure:** copy `config.example.php` to `config.php` and edit it. It documents every setting.
-3. **Make the admin:** `php tools/new-user.php YOUR-NAME --admin`.
-4. **Check:** open `…/api.php/info`.
+2. **Make the admin:** open the web app (or `…/api.php/info` to check first). A hub with no accounts asks its first visitor for a username and password, and that account is the admin, so do this right after uploading.
+3. **Settings:** under Accounts (admins): the hub's name, other sites allowed to use it from a browser (GitHub Pages), public addresses, upload and clip limits, podcast details, and keys. They're kept in the database (`hub-php/lib/config.php` lists them). No config file is needed: the database goes in `data/` and published files in `media/` beside `api.php`. An optional `config.php` (from `config.example.php`) only says where files live; settings an older `config.php` holds keep working until an admin saves them in the web app.
 
 Recorders and the web app use `https://example.com/hub/api.php` as the hub address. It needs no URL rewriting: routes are `api.php/changes`, `api.php/records` and so on, or `api.php?r=changes` where a host doesn't pass the path through.
 
-**Keys** are for recorders and scripts: the Agents page makes them for agents it installs. Otherwise, `php tools/new-key.php recorder "Office Mac"` (or `editor "Import script"`) prints a key once, plus the line for `keys` in `config.php`; the hub keeps only its hash. People don't use keys: they sign in. More hub tools, run in `hub-php/` on the server:
+**Keys** are for recorders and scripts: the Agents page makes them for agents it installs. Otherwise, make one under Accounts → Keys, or with `php tools/new-key.php recorder "Office Mac"` (or `editor "Import script"`). Either shows the key once; the hub keeps only its hash, in the database. People don't use keys: they sign in. More hub tools, run in `hub-php/` on the server:
 
-| Tool                                                             | What it does                                           |
-| ---------------------------------------------------------------- | ------------------------------------------------------ |
-| `tools/migrate.php`                                              | brings the database up to date (deploys run it)        |
-| `tools/new-user.php NAME [--admin \| --group NAME] [--name "…"]` | makes an account, or resets its password               |
-| `tools/new-key.php recorder\|editor "Name"`                      | makes a key                                            |
-| `tools/import.php export.json`                                   | loads an export into the hub (see Moving to a new hub) |
-| `tools/purge-deleted.php config.php 90`                          | clears old deletion markers (see Upkeep)               |
+| Tool                                                             | What it does                                                |
+| ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| `tools/migrate.php`                                              | brings the database up to date (deploys run it)             |
+| `tools/new-user.php NAME [--admin \| --group NAME] [--name "…"]` | makes an account (such as an admin), or resets its password |
+| `tools/new-key.php recorder\|editor "Name"`                      | makes a key                                                 |
+| `tools/import.php export.json`                                   | loads an export into the hub (see Moving to a new hub)      |
+| `tools/purge-deleted.php 90`                                     | clears old deletion markers (see Upkeep)                    |
 
 ## What's stored
 
@@ -98,7 +97,7 @@ The recorder's own review page still edits the shared marks directly; people's l
 
 ## Private files
 
-The meetings' files live outside the web folder: in `private_dir` in `config.php`, by default a folder named `private` beside the database.
+The meetings' files live outside the web folder: in `private_dir` (`config.php`, optional), by default a folder named `private` beside the database.
 
 - **Audio and silent video:** `npm run publish-media`, or an agent's encode job.
 - **Stills and live pictures:** recorders.
@@ -168,7 +167,7 @@ How agents share the work:
 
 **Adding an agent.** On the Agents page, an admin gets a one-line install command for a Raspberry Pi or another Debian or Ubuntu machine ([../recorder/recorder.md](../recorder/recorder.md#installing-an-agent-raspberry-pi-debian-ubuntu)).
 
-- **The key:** installing trades the command's one-time token for the agent's own key. The hub keeps only its hash, in its database, beside any keys in `config.php`.
+- **The key:** installing trades the command's one-time token for the agent's own key. The hub keeps only its hash, in its database, beside the keys made under Accounts.
 - **Revoking:** Revoke stops a key at once.
 - **The agent's code:** deploys put it in `hub/agent/`. It downloads only with an install token or an agent's key.
 
@@ -232,7 +231,7 @@ The web app also runs without a recorder behind it, from any static host. Each b
 - **On the hub's server:** `bin/deploy-hub.sh` puts the site beside the hub, already pointed at it ([deploy.md](deploy.md)).
 - **GitHub Pages:** `.github/workflows/pages.yml` builds and publishes it ([deploy.md](deploy.md)).
 - **Elsewhere:** build with `VITE_BASE=/folder/ VITE_ROUTER=hash VITE_HUB_URL=https://example.com/streamscribe/api.php npm run build` and copy `web/dist` there.
-- **Connecting:** add the site's address to `allowed_origins` in the hub's `config.php`. Build it with the hub's address (the `PAGES_HUB_URL` variable, see deploy.md), or enter the address under Settings (ending in `api.php`). Reading needs nothing more. To change things, sign in (Account). The session stays in that browser only.
+- **Connecting:** add the site's address under Accounts → Hub settings ("Other sites that may use this hub"). Build it with the hub's address (the `PAGES_HUB_URL` variable, see deploy.md), or enter the address under Settings (ending in `api.php`). Reading needs nothing more. To change things, sign in (Account). The session stays in that browser only.
 - **Offline:** changes made while the hub can't be reached wait in the browser and go on the next sync. If someone else changed the same schedule meanwhile, the two are merged; where both changed the same field, the browser's change wins.
 - **Marks:** signed in, click a word of the final transcript to correct it or to say who is speaking from there (adding someone new if needed). Chapter files and official sources are edited on the meeting page. Chapters themselves, votes, and the rest are edited on a recorder's review page, next to the video; the site shows them.
 - **Refused changes:** a change the hub won't take (a group or key that can't write it, a record over 256 KB) is dropped and listed under Settings, so it doesn't hold up the rest.
@@ -243,7 +242,7 @@ The web app also runs without a recorder behind it, from any static host. Each b
 Settings → Export saves everything the browser holds as JSON. To fill a new hub with it:
 
 ```bash
-php tools/import.php streamscribe-2026-10-08.json config.php
+php tools/import.php streamscribe-2026-10-08.json
 ```
 
 Then copy the old hub's `media/` folder (published files) and its private folder (`private_dir`, by default `private/` beside the database: meetings' pictures, audio, and video) across, keeping their paths, so the records find them. Accounts and groups aren't in the export: copy the old hub's database file instead to keep them. Importing from Settings instead only brings what that browser may write (with an editor key: schedules, sources and settings), not what recorders made. When a browser switches to a different hub address, it drops its copy of the old hub and syncs the new one from the start.
@@ -253,7 +252,7 @@ Then copy the old hub's `media/` folder (published files) and its private folder
 Deleted records stay in the database as markers, so every client learns about the deletion. To clear old ones now and then, from cron for example:
 
 ```bash
-php tools/purge-deleted.php config.php 90
+php tools/purge-deleted.php 90
 ```
 
 That clears deletions older than 90 days. A client that last synced before then is told to sync again from the start, and does so automatically.

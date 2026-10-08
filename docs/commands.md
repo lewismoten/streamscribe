@@ -29,5 +29,5 @@ Each command is `npm run <command>` (add options after `--`, as in `npm run capt
 | [`classify-swagit-standby`](capture/classify-swagit-standby.md)     | Finds Swagit standby-slide segments (Swagit sources only)                                                     |
 | `simulate-hls`                                                      | Serves a saved session as a simulated live stream, for testing                                                |
 | [`recorder`](recorder/recorder.md)                                  | Runs the recorder (agent): records scheduled meetings, does work from the hub's queue                         |
-| `hub:dev`                                                           | Runs the hub locally with `php -S` (needs `hub-php/config.php`)                                               |
+| `hub:dev`                                                           | Runs the hub locally with `php -S` (its database in `hub-php/data/`)                                          |
 | `check`, `lint`, `format`, `typecheck`, `test`, `test:recorder`     | Checking a change (see [development.md](development.md))                                                      |
