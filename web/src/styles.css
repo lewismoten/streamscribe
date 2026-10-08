@@ -177,3 +177,26 @@ table.permissions th { white-space: nowrap; }
 .small { font-size: 0.85rem; }
 .still-button { flex: none; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 6px; }
 .still-button:hover img { outline: 2px solid var(--accent); }
+.transcript .lines { position: relative; scroll-padding-top: 12px; }
+.word.speaking { background: var(--mark); border-radius: 3px; }
+
+/* Published (public) pages */
+.publication { max-width: 900px; }
+.publication .player video { width: 100%; border-radius: 6px; background: #000; }
+.publication .player audio { width: 100%; }
+.publication .body { font-size: 1.05rem; line-height: 1.6; margin: 12px 0 18px; }
+.publication .transcript .lines { max-height: 60vh; }
+.publish textarea { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
+.publish .range { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.publish .range input { width: 6.5em; }
+.published-list { margin: 8px 0 0; padding-left: 18px; }
+
+/* Agents and their work */
+.agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.agent .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; background: var(--muted); vertical-align: middle; }
+.agent.online .dot { background: var(--pass); }
+.agent code { font-size: 0.8rem; color: var(--muted); }
+.progress { display: grid; gap: 3px; min-width: 160px; }
+.progress-bar { height: 8px; background: var(--code); border-radius: 4px; overflow: hidden; }
+.progress-bar span { display: block; height: 100%; background: var(--accent); transition: width 0.5s; }
+table.jobs td { font-size: 0.9rem; }

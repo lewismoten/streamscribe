@@ -14,12 +14,15 @@ import LivePage from './pages/LivePage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import AccountPage from './pages/AccountPage.tsx';
 import PeoplePage from './pages/PeoplePage.tsx';
+import AgentsPage from './pages/AgentsPage.tsx';
+import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
 
 // Two ways to run: served by a recorder's streamscribe server (its library of local recordings, search, and capture,
-// plus the hub pages), or as a static site such as GitHub Pages or the hub's own server (the hub pages only: meetings,
-// live, schedules, people, and settings, kept in this browser and synced with the hub). Signed out, the hub pages are
-// read-only; signing in (Account) allows what the person's group may do.
+// plus the hub pages), or as a static site such as GitHub Pages or the hub's own server (the hub pages only, kept in
+// this browser and synced with the hub). It's an independent archive: what's published (notes, transcripts, clips)
+// is for everyone; meetings themselves are private, for groups that may see them (Meetings, Live, Agents). Signing
+// in (Account) allows what the person's group may do.
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
   const [mode, setMode] = useState<'checking' | 'local' | 'static'>('checking');
@@ -32,6 +35,8 @@ export default function App() {
     startSyncing(30);
   }, []);
   const local = mode === 'local' && config;
+  // Meetings are private (view.meetings); what's published is for everyone.
+  const viewer = can('view.meetings', account);
 
   return (
     <>
@@ -41,8 +46,10 @@ export default function App() {
           {local && <NavLink to="/" end>Library</NavLink>}
           {local && <NavLink to="/search">Search</NavLink>}
           {local && <NavLink to="/capture">Capture</NavLink>}
-          <NavLink to={local ? '/meetings' : '/'} end={!local}>Meetings</NavLink>
-          <NavLink to="/live">Live</NavLink>
+          <NavLink to={local ? '/published' : '/'} end={!local}>Published</NavLink>
+          {(local || viewer) && <NavLink to="/meetings">Meetings</NavLink>}
+          {viewer && <NavLink to="/live">Live</NavLink>}
+          {viewer && <NavLink to="/agents">Agents</NavLink>}
           <NavLink to="/schedules">Schedules</NavLink>
           {(can('manage.users', account) || can('review', account)) && <NavLink to="/people">People</NavLink>}
           <NavLink to="/settings">Settings</NavLink>
@@ -53,7 +60,10 @@ export default function App() {
       <main className="page">
         {mode !== 'checking' && (
           <Routes>
-            {local ? <Route path="/" element={<Library config={config} />} /> : <Route path="/" element={<MeetingsPage />} />}
+            {local ? <Route path="/" element={<Library config={config} />} /> : <Route path="/" element={<PublishedList />} />}
+            <Route path="/published" element={<PublishedList />} />
+            <Route path="/published/:id" element={<PublicationPage />} />
+            <Route path="/agents" element={<AgentsPage />} />
             {local && <Route path="/recordings/:id" element={<RecordingPage />} />}
             {local && <Route path="/search" element={<SearchPage config={config} />} />}
             {local && <Route path="/capture" element={<CapturePage />} />}

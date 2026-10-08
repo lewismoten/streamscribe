@@ -38,7 +38,7 @@ function hub_viewer(array $config, PDO $db): array {
   $key = hub_caller($config);
   if ($key) {
     // Editor keys act as editors of shared records; recorder keys as recorders.
-    $permissions = $key['scope'] === 'editor' ? ['edit.schedules', 'edit.sources'] : [];
+    $permissions = $key['scope'] === 'editor' ? ['edit.schedules', 'edit.sources', 'view.meetings', 'publish'] : [];
     return ['kind' => 'key', 'scope' => $key['scope'], 'user' => null, 'permissions' => $permissions, 'name' => $key['name']];
   }
   $token = hub_header('X-Streamscribe-Token');
@@ -71,9 +71,11 @@ function hub_require_permission(array $viewer, string $permission): void {
   if (!hub_can($viewer, $permission)) hub_fail(403, 'Your group can\'t do that');
 }
 
-// Whether the viewer may see a record. Layers: a contribution while its owner is trusted, and always to its owner
+// Whether the viewer may see a record. Meetings only with view.meetings. Layers: a contribution while its owner is trusted, and always to its owner
 // and to reviewers; a private layer only to its owner.
 function hub_visible(array $row, array $viewer, array $people): bool {
+  // Meetings are private: only for keys and people who may see them.
+  if (in_array($row['collection'], PRIVATE_COLLECTIONS, true) && $viewer['kind'] !== 'key' && !hub_can($viewer, 'view.meetings')) return false;
   $layer = $row['layer'] ?? 'shared';
   if ($layer === 'shared') return true;
   $owner = (int)$row['owner'];

@@ -7,3 +7,10 @@ RedirectMatch 403 ^.*/(lib|tools|data)/
 # Some hosts drop the custom key header unless it is passed through explicitly.
 SetEnvIf X-Streamscribe-Key "(.*)" HTTP_X_STREAMSCRIBE_KEY=$1
 SetEnvIf X-Streamscribe-Token "(.*)" HTTP_X_STREAMSCRIBE_TOKEN=$1
+
+# Published files are public: other sites showing them (GitHub Pages) may fetch their transcripts.
+<IfModule mod_headers.c>
+  <FilesMatch "^(transcript\.json|transcript\.txt|captions\.srt)$">
+    Header set Access-Control-Allow-Origin "*"
+  </FilesMatch>
+</IfModule>

@@ -14,6 +14,9 @@ import { claim, hub, hubConfigured, reportLive, uploadLiveThumbnail } from './hu
 import { quickTranscribe } from './quick-transcribe.js';
 import { publishRecording, recordingParts } from './publish.js';
 import { syncMarks } from './marks.js';
+import { jobRunner } from './jobs.js';
+import { localRecordings } from './publish-library.js';
+import { hubFiles } from './hub-files.js';
 import { runCommand } from '../util/process.js';
 import { TOOLS } from '../config/runtime-config.js';
 
@@ -60,7 +63,8 @@ export async function main() {
   log(`Recorder ${RECORDER.id} (${RECORDER.name}) for ${handled.map((source) => source.key).join(', ') || 'no sources'}; hub ${RECORDER.hubUrl || 'not set (schedules from the local copy only)'}`);
   if (!hubConfigured()) log('No hub configured (recorder.hubUrl and recorder.key in config.local.js): recording from local schedules only');
 
-  const timers = { sync: 0, heartbeat: 0, thumbnail: 0, quick: 0, marks: 0, register: 0 };
+  const timers = { sync: 0, heartbeat: 0, thumbnail: 0, quick: 0, marks: 0, register: 0, jobs: 0 };
+  const jobs = jobRunner({ client, findRecording, log });
   let busy = false;
   let stopping = false;
   let publishing = null;
@@ -97,6 +101,7 @@ export async function main() {
     for (let waited = 0; waited < tickSeconds * 1000 && !stopping; waited += 250) await new Promise((resolve) => setTimeout(resolve, 250));
   }
   log('Recorder stopping (captures it started keep running; starting the recorder again picks them up)');
+  await jobs.stop();
   if (publishing) { log('Waiting for publishing to finish'); await publishing; }
   await save();
   store.close();
@@ -214,6 +219,11 @@ export async function main() {
         .then(async () => {
           await putRecording(finished);
           log(`Published ${finished.title}: ${finished.parts.length} part${finished.parts.length === 1 ? '' : 's'}, ${finished.final.stills.length} stills`);
+          // Its private audio and video come next, as a job for this agent (shown with the hub's work queue).
+          if (hubFiles().configured && !(await client.get('jobs', `encode-${finished.id}`))) {
+            await client.put('jobs', `encode-${finished.id}`, { type: 'encode', status: 'queued', title: `Audio and video: ${finished.title}`, recordingId: finished.id,
+              forAgent: RECORDER.id, progress: 0, message: '', createdAt: new Date().toISOString(), createdBy: RECORDER.name });
+          }
           if (hubConfigured()) await client.sync().catch(() => {});
         })
         .catch((error) => {
@@ -229,6 +239,32 @@ export async function main() {
       timers.marks = now + RECORDER.pollSeconds * 1000;
       await syncMarks(state, client);
     }
+
+    // 7. Work from the hub's queue (jobs.js): clips to cut, recordings to encode.
+    if (hubConfigured() && now >= timers.jobs) {
+      timers.jobs = now + 10000;
+      try {
+        await jobs.tick();
+      } catch (error) {
+        log(`Jobs: ${error.message}`);
+      }
+    }
+  }
+
+  // A recording this agent has (one it recorded, or one in the local library), as the parts publish-media takes,
+  // and the folder of one part. Null when it isn't here.
+  function findRecording(recordingId, partName) {
+    let items = [];
+    const own = Object.values(state.recordings).find((recording) => recording.id === recordingId && recording.parts?.length);
+    const ownSource = own && SOURCES.find((item) => item.key === own.sourceKey);
+    if (own && ownSource) {
+      items = own.parts.map((part) => ({ row: { started_at: own.startedAt }, dir: path.join(ownSource.storageDir, part.dir), id: own.id,
+        part: { index: part.index, name: part.name, dir: part.dir, seconds: part.seconds }, title: own.title, source: ownSource }));
+    } else {
+      try { items = localRecordings({ all: true }).filter((item) => item.id === recordingId); } catch { items = []; }
+    }
+    const item = partName ? items.find((entry) => entry.part.name === partName) : items[0];
+    return item ? { dir: item.dir, items } : null;
   }
 
   async function startRecording(occurrence, source, previous) {
@@ -341,9 +377,12 @@ export async function main() {
 
   function liveStatus(active) {
     const recording = active[0];
+    const job = jobs.status();
     return {
-      state: recording ? 'recording' : 'idle',
+      state: recording ? 'recording' : job ? 'working' : 'idle',
+      agentId: RECORDER.id,
       name: RECORDER.name,
+      job,
       version,
       freeGb: freeGigabytes(),
       clockSkewSeconds: hub.clockSkewSeconds,

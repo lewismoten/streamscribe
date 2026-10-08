@@ -48,6 +48,13 @@ Every few seconds it:
 - **A capture started by hand:** if one is already running for the source, from a terminal say, the recorder uses it rather than starting another.
 - **Low disk:** with less free space than `minFreeGb`, it doesn't start a meeting and reports why.
 
+## Agent work
+
+The recorder is also an agent: it takes work from the hub's queue, cutting published clips and encoding recordings' audio and video, and reports progress on the hub's Agents page. See ../hub/hub.md, Agents and their work.
+- **Name it.** Give each machine a short `recorder.id` (such as `mac1`) and a `recorder.name` (such as `Office Mac`).
+- **Let it upload.** Give it the deploy settings (`deploy.local.env` with an SSH key the server accepts), since results are uploaded over SSH.
+- **Keep it running.** It only works while `npm run recorder` is running; see below.
+
 ## Keeping it running (macOS)
 
 A launchd agent starts the recorder at login, restarts it if it stops, and keeps the Mac from sleeping while it runs. Save it as `~/Library/LaunchAgents/com.streamscribe.recorder.plist`, with the paths changed to yours:

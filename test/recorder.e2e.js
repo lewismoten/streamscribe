@@ -40,7 +40,8 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
   const processes = [];
   const logs = {};
   const start = (name, command, args, env = {}) => {
-    const child = spawn(command, args, { cwd: repo, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    // (No deploy settings: nothing this test runs may upload to a real server.)
+    const child = spawn(command, args, { cwd: repo, env: { ...process.env, STREAMSCRIBE_DEPLOY_ENV: '', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
     logs[name] = logs[name] || '';
     fs.mkdirSync(path.join(dir, 'logs'), { recursive: true });
     const onData = (chunk) => { logs[name] += chunk; fs.appendFileSync(path.join(dir, 'logs', `${name}.log`), chunk); };
@@ -99,6 +100,12 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
       return file;
     };
     const mainConfig = writeConfig('main-recorder');
+    // The main recorder uploads (as an agent) to this test's hub folder, over a stand-in for ssh that runs commands here.
+    const fakeBin = path.join(dir, 'fakebin');
+    fs.mkdirSync(fakeBin, { recursive: true });
+    fs.writeFileSync(path.join(fakeBin, 'ssh'), '#!/usr/bin/env bash\nwhile [ $# -gt 0 ]; do case "$1" in -p|-o|-i|-l) shift 2;; -*) shift;; *) break;; esac; done\nshift\nexec bash -c "$*"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(dir, 'deploy.env'), `DEPLOY_HOST=test\nDEPLOY_USER=test\nDEPLOY_PATH=${dir}\n`);
+    const agentEnv = { STREAMSCRIBE_CONFIG: mainConfig, STREAMSCRIBE_DEPLOY_ENV: path.join(dir, 'deploy.env'), PATH: `${fakeBin}:${process.env.PATH}` };
     const backupConfig = writeConfig('backup-recorder');
 
     // A one-minute meeting starting at the next whole minute at least 50 seconds away, with a 9-second lead.
@@ -110,7 +117,7 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
 
     // Both recorders; the schedule prefers the main one, so the backup waits for the scheduled start and finds the
     // meeting taken.
-    let mainRecorder = start('main', process.execPath, ['bin/recorder.js', '--tick-seconds', '1'], { STREAMSCRIBE_CONFIG: mainConfig });
+    let mainRecorder = start('main', process.execPath, ['bin/recorder.js', '--tick-seconds', '1'], agentEnv);
     await sleep(4000);
     start('backup', process.execPath, ['bin/recorder.js', '--tick-seconds', '1'], { STREAMSCRIBE_CONFIG: backupConfig });
 
@@ -122,12 +129,12 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
     // While it records: a restart of the recorder, and the hub down for 20 seconds.
     const liveSeen = [];
     const watch = setInterval(async () => {
-      try { const live = await (await fetch(`${hubUrl}/live`)).json(); liveSeen.push(...live.recorders.map((item) => item.status?.state + ':' + item.recorderId)); } catch { /* hub down */ }
+      try { const live = await (await fetch(`${hubUrl}/live`, { headers: { 'x-streamscribe-key': editorKey } })).json(); liveSeen.push(...live.recorders.map((item) => item.status?.state + ':' + item.recorderId)); } catch { /* hub down */ }
     }, 2000);
     await sleep(Math.max(0, startAt + 15000 - Date.now()));
     mainRecorder.kill('SIGINT');
     await sleep(3000);
-    mainRecorder = start('main', process.execPath, ['bin/recorder.js', '--tick-seconds', '1'], { STREAMSCRIBE_CONFIG: mainConfig });
+    mainRecorder = start('main', process.execPath, ['bin/recorder.js', '--tick-seconds', '1'], agentEnv);
     await sleep(Math.max(0, startAt + 35000 - Date.now()));
     hubProcess.kill();
     await sleep(20000);
@@ -135,7 +142,7 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
 
     // Wait for the recording to be published.
     const readAll = async () => {
-      const client = new SyncClient({ store: new MemoryStore(), hubUrl });
+      const client = new SyncClient({ store: new MemoryStore(), hubUrl, key: editorKey }); // meetings are private: keys see them
       await client.pull();
       return client;
     };
@@ -160,7 +167,9 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
 
     // Live reports, the live picture, quick and final transcripts (quick chunks numbered without gaps), stills.
     assert.ok(liveSeen.includes('recording:main-recorder'), 'no live status while recording');
-    assert.ok(fs.existsSync(path.join(dir, 'hub', 'media', 'live', 'main-recorder.jpg')), 'no live picture');
+    // Meetings' pictures are private: outside the web folder (beside the database).
+    const privateDir = path.join(dir, 'hub-data', 'private');
+    assert.ok(fs.existsSync(path.join(privateDir, 'live', 'main-recorder.jpg')), 'no live picture');
     const hubCopy = await readAll();
     const chunks = (await hubCopy.list('transcript_chunks')).filter((record) => record.data.recordingId === recording.id);
     const quick = chunks.filter((record) => record.data.kind === 'quick').map((record) => Number(record.id.split('-').at(-1))).sort((a, b) => a - b);
@@ -169,7 +178,8 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
     assert.ok(chunks.some((record) => record.data.kind === 'final' && record.data.lines.length), 'no final transcript');
     const stills = (await hubCopy.list('stills')).filter((record) => record.data.recordingId === recording.id);
     assert.ok(stills.length >= 1, 'no stills');
-    assert.ok(fs.existsSync(path.join(dir, 'hub', stills[0].data.path)), 'still picture missing on the hub');
+    assert.match(stills[0].data.path, /^private\//);
+    assert.ok(fs.existsSync(path.join(privateDir, stills[0].data.path.slice('private/'.length))), 'still picture missing on the hub');
 
     // Marks: the title card's chapters reached the hub; a chapter added on the hub reaches the local file.
     const part = recording.data.parts[0];
@@ -191,6 +201,34 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
       if (local?.items?.some((item) => item.id === 'e2e-added')) break;
     }
     assert.ok(local?.items?.some((item) => item.id === 'e2e-added'), 'the chapter added on the hub did not reach the local file');
+
+    // Agents' work. The recorder queued its own job for the meeting's private audio and video; and a clip published on
+    // the hub is cut by the agent and uploaded to the public folder.
+    const published = await (await fetch(`${hubUrl}/publish`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-streamscribe-key': editorKey },
+      body: JSON.stringify({ title: 'E2E clip', body: 'Notes about it.', recordingId: recording.id, part: part.name, from: 2, to: 14, clip: true, transcript: true,
+        lines: [{ start: 3, end: 6, speaker: 'Someone', text: 'Hello there.' }] }) })).json();
+    assert.equal(published.publication?.clip?.status, 'queued', JSON.stringify(published));
+    let jobs = [];
+    let clip = null;
+    for (let i = 0; i < 120; i += 1) {
+      await sleep(5000);
+      const copy = await readAll();
+      jobs = (await copy.list('jobs')).map((record) => ({ id: record.id, ...record.data }));
+      clip = (await copy.get('publications', published.id))?.data?.clip;
+      if (jobs.length >= 2 && jobs.every((job) => ['done', 'failed'].includes(job.status))) break;
+    }
+    assert.deepEqual(jobs.map((job) => `${job.type}:${job.status}`).sort(), ['clip:done', 'encode:done'], `jobs: ${JSON.stringify(jobs)}\nmain recorder said:\n${logs.main.slice(-2000)}`);
+    assert.ok(jobs.every((job) => job.agent === 'main-recorder' && job.progress === 1));
+    const media = (await (await readAll()).get('media', `${recording.id}:${part.name}`))?.data;
+    assert.match(media.audio.path, /^private\/recordings\//);
+    assert.ok(fs.existsSync(path.join(privateDir, media.audio.path.slice('private/'.length))), 'private audio not uploaded');
+    assert.ok(fs.existsSync(path.join(privateDir, media.video.path.slice('private/'.length))), 'private video not uploaded');
+    assert.equal(clip.status, 'ready');
+    const clipFile = path.join(dir, 'hub', clip.video.path);
+    assert.ok(fs.existsSync(clipFile) && fs.existsSync(path.join(dir, 'hub', clip.audio.path)), 'clip files not in the public folder');
+    const clipSeconds = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', clipFile]).toString());
+    assert.ok(Math.abs(clipSeconds - 12) < 0.3, `clip is ${clipSeconds}s, expected 12`);
+    assert.equal((await fetch(hubUrl.replace('api.php', clip.video.path))).status, 200, 'the clip is public');
   } finally {
     for (const child of processes) child.kill('SIGINT');
     // Captures run detached; stop any the recorders left (they stop them themselves when a meeting ends).

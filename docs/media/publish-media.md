@@ -1,6 +1,6 @@
 # publish-media
 
-Makes light copies of recordings for the hub's website, sends them to the server, and lists them on the hub. Each meeting page gets a player, and each source gets a podcast feed.
+Makes light copies of recordings for the hub, sends them to the server's private folder, and lists them on the hub. Meetings are private, so only signed-in people who may see meetings can play or download them. On each meeting page they get a player. Agents run the same thing as an `encode` job ([../hub/hub.md](../hub/hub.md), Agents and their work). To share part of a meeting with everyone, publish it as a clip.
 
 ```bash
 npm run publish-media -- --dry-run      # what it would do
@@ -24,15 +24,14 @@ For each part of a recording, in `{part}/published/`:
 So a 4-hour meeting comes to about 180 MB, compared with about 3.6 GB captured.
 
 - **Audio.** Loudness is evened out to −16 LUFS, the podcast norm, in two passes, with rumble below 80 Hz removed. Quiet and loud speakers come out closer together.
-- **The podcast.** The same audio file is the podcast episode, so each recording's audio is stored once.
-- **Timing.** A file's time is the recording's position: moments that weren't captured are silence and black. Transcript times, chapters and podcast chapters line up exactly.
+- **Timing.** A file's time is the recording's position: moments that weren't captured are silence and black. Transcript times and chapters line up exactly.
 - **When files are remade.** Only when the recording's segments or the settings change (`published/manifest.json` records both), or with `--force`.
 
 Encoding a 4-hour meeting takes about 15 minutes on an Apple Silicon Mac, most of it decoding the audio segment by segment. Each segment lands exactly at its position, padded or trimmed by a fraction of a second where its audio or video runs short of its stated length.
 
 ## On the hub
 
-- **Where files go.** They land in the hub's `media/recordings/<recording>/<part>/`, named by their content (`audio-<hash>.m4a`). A new encoding gets a new address, and the old file is removed.
+- **Where files go.** They land in the hub's private folder, under `recordings/<recording>/<part>/`, named by their content (`audio-<hash>.m4a`). They're served only with a signature (see ../hub/hub.md, Private files). A new encoding gets a new address, and the old file is removed.
 - **What the hub records.** Each part gets a `media` record: the paths, sizes, length, title and source.
 - **Seeking.** The files have their index at the front, and the server answers byte-range requests. A player jumping around a 4-hour meeting fetches only what it plays.
 - **How long video stays.** Video is removed from the hub once a recording is older than `recorder.media.keepVideoDays` (365): the file is deleted and the record says so. Audio and stills stay. The local copies in `published/` are kept.
@@ -47,23 +46,18 @@ The settings are under `recorder.media` in `config.local.js`: `height`, `fps`, `
 
 ## The podcast
 
-Each source with published audio has a feed: `https://<site>/hub/api.php/podcast/<source key>.xml`. Meetings links to it with 🎧 Podcast.
-
-- **Episodes.** Each episode is one recording part, newest first. Its notes list the chapters and link to the meeting page.
-- **Chapters.** Apps that support Podcasting 2.0 chapters (`podcast:chapters`) get them from the agenda.
-
-To list the podcast in Apple Podcasts, Spotify and others, add a cover image and contact email in the hub's `config.php`:
+The podcast lists published clips, not full meetings: see ../hub/hub.md, Publishing. To list it in Apple Podcasts, Spotify and others, add a cover image and contact email in the hub's `config.php`:
 
 ```php
 'podcasts' => [
   'warren-county-va' => [
-    'title' => 'Warren County Board of Supervisors',
-    'description' => 'Meetings of the Warren County, Virginia, Board of Supervisors.',
+    'title' => 'Warren County Board of Supervisors: clips',
+    'description' => 'Clips from public meetings, from an independent archive.',
     'author' => 'Your name',
     'email' => 'you@example.com',
-    'image' => 'https://streamscribe.lewismoten.com/podcast-cover.jpg',   // square JPEG or PNG, 1400–3000 px
+    'image' => 'https://streamscribe.lewismoten.com/hub/media/podcast-cover.jpg',   // square JPEG or PNG, 1400–3000 px
   ],
 ],
 ```
 
-If the cover image lives in the website's folder, put it in `hub/media/` instead, because deploys replace the website folder.
+Put the cover image in the hub's `media/` folder, because deploys replace the website folder.

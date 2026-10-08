@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { hubCall, hubSettings, saveHubSettings } from './hub.ts';
+import { hubCall, hubSettings, saveHubSettings, setFileKey } from './hub.ts';
 import { idbStore } from './idb-store.ts';
 import { syncNow } from './sync.ts';
 
@@ -24,13 +24,33 @@ export interface Account {
   settings: HubSignupSettings | null;
   permissionNames: Record<string, string>;
   checked: boolean;
+  fileKeyAt: number;
 }
 
-let account: Account = { user: null, permissions: [], settings: null, permissionNames: {}, checked: false };
+let account: Account = { user: null, permissions: [], settings: null, permissionNames: {}, checked: false, fileKeyAt: 0 };
 const listeners = new Set<(value: Account) => void>();
 function set(value: Partial<Account>) {
   account = { ...account, ...value };
   for (const listener of listeners) listener(account);
+  keepFileKey();
+}
+
+// The signature for meetings' private files (see hub.ts), for viewers who may see meetings: fetched on sign-in and
+// renewed every few hours (it lasts 12). Pages showing private pictures and media re-render when it arrives.
+let fileKeyTimer: number | null = null;
+function keepFileKey() {
+  const wanted = account.permissions.includes('view.meetings');
+  if (!wanted) {
+    setFileKey(null);
+    if (fileKeyTimer) { clearInterval(fileKeyTimer); fileKeyTimer = null; }
+    return;
+  }
+  if (fileKeyTimer) return;
+  const fetchKey = () => hubCall<{ e: number; s: string }>('file-key')
+    .then((key) => { setFileKey(key); set({ fileKeyAt: Date.now() }); })
+    .catch(() => { /* tried again later */ });
+  fileKeyTimer = window.setInterval(fetchKey, 4 * 3600 * 1000);
+  fetchKey();
 }
 
 export const currentAccount = () => account;
@@ -50,7 +70,7 @@ export function useAccount() {
 export async function refreshAccount() {
   if (!hubSettings().url) { set({ user: null, permissions: [], settings: null, checked: true }); return account; }
   try {
-    const me = await hubCall<Omit<Account, 'checked'>>('me');
+    const me = await hubCall<Omit<Account, 'checked' | 'fileKeyAt'>>('me');
     if (!me.user && hubSettings().token) await forgetSession(); // the session ended
     set({ ...me, checked: true });
   } catch {
@@ -64,7 +84,7 @@ async function startOver() {
   syncNow();
 }
 
-async function signedIn(reply: { token: string } & Omit<Account, 'checked'>) {
+async function signedIn(reply: { token: string } & Omit<Account, 'checked' | 'fileKeyAt'>) {
   saveHubSettings({ token: reply.token });
   set({ user: reply.user, permissions: reply.permissions, settings: reply.settings, permissionNames: reply.permissionNames, checked: true });
   await startOver();

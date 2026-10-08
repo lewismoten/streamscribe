@@ -118,7 +118,7 @@ test('empty objects and arrays come back exactly as sent', async () => {
   const data = { views: [], sceneViews: {}, nested: { empty: {}, list: [{}] } };
   const reply = await (await post('records', { records: [{ collection: 'marks', id: 'rec-1:views', data, base_rev: 0 }] }, editorKey)).json();
   assert.deepEqual(reply.results[0].record.data, data);
-  const changes = await (await fetch(`${hub}/changes?since=0&limit=1000`)).json();
+  const changes = await (await fetch(`${hub}/changes?since=0&limit=1000`, { headers: { 'x-streamscribe-key': editorKey } })).json();
   assert.deepEqual(changes.records.find((record) => record.id === 'rec-1:views').data, data);
 });
 
@@ -139,20 +139,33 @@ test('only one recorder holds an occurrence', async () => {
   assert.equal((await claim('mac-1')).granted, true); // renewing
 });
 
-test('live status, live thumbnail, and media stored by hash', async () => {
+test('live status, live thumbnail, and pictures: private, stored by hash, served with an expiring signature', async () => {
   assert.equal((await post('live', { recorderId: 'mac-1', status: { state: 'recording', position: 600 } }, recorderKey)).status, 200);
-  const live = await (await fetch(`${hub}/live`)).json();
+  assert.equal((await fetch(`${hub}/live`)).status, 401, 'what is being recorded is private');
+  const live = await (await fetch(`${hub}/live`, { headers: { 'x-streamscribe-key': recorderKey } })).json();
   assert.equal(live.recorders[0].status.state, 'recording');
   const picture = Buffer.from(`not really a picture ${Date.now()}`);
   const hash = sha(picture);
   const upload = (query, bytes) => fetch(`${hub}/media?${query}`, { method: 'POST', headers: { 'x-streamscribe-key': recorderKey, 'content-type': 'image/jpeg' }, body: bytes });
   const first = await (await upload(`sha256=${hash}&type=image/jpeg`, picture)).json();
   assert.equal(first.exists, false);
+  assert.match(first.path, /^private\/stills\//);
   assert.equal((await (await upload(`sha256=${hash}&type=image/jpeg`, picture)).json()).exists, true);
   assert.equal((await upload(`sha256=${'0'.repeat(64)}&type=image/jpeg`, picture)).status, 400);
-  assert.equal((await fetch(hub.replace('api.php', first.path))).status, 200);
+  assert.notEqual((await fetch(hub.replace('api.php', first.path))).status, 200, 'not in the web folder');
+  assert.equal((await fetch(`${hub}/file-key`)).status, 401);
+  const key = await (await fetch(`${hub}/file-key`, { headers: { 'x-streamscribe-key': recorderKey } })).json();
+  assert.equal((await fetch(`${hub}/file/${first.path}`)).status, 403, 'no signature, no file');
+  assert.equal((await fetch(`${hub}/file/${first.path}?e=${key.e}&s=${'0'.repeat(64)}`)).status, 403);
+  const whole = await fetch(`${hub}/file/${first.path}?e=${key.e}&s=${key.s}`);
+  assert.equal(whole.status, 200);
+  assert.equal(Buffer.from(await whole.arrayBuffer()).toString(), picture.toString());
+  const part = await fetch(`${hub}/file/${first.path}?e=${key.e}&s=${key.s}`, { headers: { range: 'bytes=4-9' } });
+  assert.equal(part.status, 206);
+  assert.equal(await part.text(), picture.toString().slice(4, 10));
+  assert.equal((await fetch(`${hub}/file/private/../config.php?e=${key.e}&s=${key.s}`)).status, 404);
   const thumb = await fetch(`${hub}/live-thumbnail?recorder=mac-1&type=image/jpeg`, { method: 'POST', headers: { 'x-streamscribe-key': recorderKey }, body: picture });
-  assert.equal((await thumb.json()).path, 'media/live/mac-1.jpg');
+  assert.equal((await thumb.json()).path, 'private/live/mac-1.jpg');
 });
 
 test('browsers on allowed sites may call the API', async () => {
@@ -215,6 +228,8 @@ const signIn = async (username, password = 'password123') => (await json('login'
 const idOf = async (username) => (await json('login', { username, password: 'password123' })).user.id;
 const person = (token) => new SyncClient({ store: new MemoryStore(), hubUrl: hub, token });
 const anyone = async () => { const reader = client(); await reader.pull(); return reader; };
+// A signed-in Member who may see meetings (the layers and trust tests make Members able to).
+const watcher = async () => { const reader = person(await signIn('watcher')); await reader.pull(); return reader; };
 const seen = async (reader, id) => (await reader.list('marks')).find((record) => record.id === id);
 
 test('accounts: sign up, sign in, wrong passwords, sessions', { skip: !dir }, async () => {
@@ -239,6 +254,9 @@ test('accounts: sign up, sign in, wrong passwords, sessions', { skip: !dir }, as
 test('layers: public contributions, private changes, and who may write what', { skip: !dir }, async () => {
   await runTool('new-user.php', ['boss', '--admin'], { STREAMSCRIBE_PASSWORD: 'password123' });
   await json('register', { username: 'mallory', password: 'password123' });
+  await json('register', { username: 'watcher', password: 'password123' });
+  // Meetings (and their marks) are private: Members may see them here, for these tests.
+  await json('groups/save', { id: 4, name: 'Member', permissions: ['contribute.transcript', 'contribute.speakers', 'view.meetings'] }, await signIn('boss'));
   const jane = person(await signIn('jane'));
   const mallory = person(await signIn('mallory'));
   const j = await idOf('jane');
@@ -252,7 +270,8 @@ test('layers: public contributions, private changes, and who may write what', { 
   assert.deepEqual(sent.refused, []);
   assert.equal((await jane.store.getRecord('marks', `rx:p:word-edits~${j}`)).layer, 'contribution');
   assert.equal((await jane.store.getRecord('marks', `rx:p:views~${j}`)).layer, 'private');
-  const reader = await anyone();
+  assert.equal(await seen(await anyone(), 'rx:p:word-edits'), undefined, 'marks are private: not for anyone signed out');
+  const reader = await watcher();
   assert.ok(await seen(reader, `rx:p:word-edits~${j}`), 'contributions are public');
   assert.equal((await seen(reader, `rx:p:word-edits~${j}`)).owner_name, 'Jane Doe');
   assert.equal(await seen(reader, `rx:p:views~${j}`), undefined, 'private layers are not');
@@ -272,7 +291,7 @@ test('trust: hiding someone\'s changes, reviewers, and the admin\'s tools', { sk
   const [m, b] = [await idOf('mallory'), await idOf('boss')];
   await mallory.put('marks', `rx:p:word-edits~${m}`, { base: { edits: [] }, value: { edits: [{ transcript: 'latest', line: 2, index: 0, original: 'a', text: 'spam' }] } });
   await mallory.sync();
-  const reader = await anyone();
+  const reader = await watcher();
   assert.ok(await seen(reader, `rx:p:word-edits~${m}`));
   // Members can't see the people list; the admin can, and marks Mallory untrusted.
   assert.equal((await json('users', null, await signIn('jane'), 'GET')).status, 403);
@@ -322,22 +341,89 @@ test('trust: hiding someone\'s changes, reviewers, and the admin\'s tools', { sk
   assert.equal(await seen(bossClient, `rx:p:word-edits~${m}`), undefined);
 });
 
-test('podcast: a feed per source from published audio, with chapters from the agenda', async () => {
+test('meetings are private; publishing notes, transcripts, and clips (cut by an agent); the podcast of clips', { skip: !dir }, async () => {
+  const boss = await signIn('boss');
   const recorder = client(recorderKey);
-  await recorder.put('media', 'rp1:part one', { recordingId: 'rp1', part: 'part one', partIndex: 0, title: 'Council & friends', sourceKey: 'town', sourceName: 'Town', recordedAt: '2026-10-06T22:00:00Z', seconds: 3725,
-    audio: { path: 'media/recordings/rp1/part-one/audio-abc.m4a', bytes: 12345, type: 'audio/mp4' }, video: null });
-  await recorder.put('marks', 'rp1:part one:agenda', { items: [{ id: 'b', at: 600, title: 'Budget' }, { id: 'a', at: 0, title: 'Call to order' }] });
+  await recorder.put('recordings', 'rp1', { title: 'Council meeting', sourceKey: 'town', sourceName: 'Town', startedAt: '2026-10-06T22:00:00Z', officialUrl: 'https://example.com/videos/1', parts: [{ index: 0, name: 'part one' }] });
+  await recorder.put('media', 'rp1:part one', { recordingId: 'rp1', part: 'part one', partIndex: 0, title: 'Council meeting', sourceKey: 'town', seconds: 3725, audio: { path: 'private/recordings/rp1/a.m4a', bytes: 1, type: 'audio/mp4' }, video: null });
   await recorder.sync();
+  const signedOut = client();
+  await signedOut.pull();
+  assert.equal((await signedOut.list('recordings')).length, 0, 'meetings are not for anyone signed out');
+  assert.equal((await signedOut.list('media')).length, 0);
+  assert.equal((await json('publish', { title: 'x', body: 'y' })).status, 401);
+  assert.equal((await json('publish', { title: 'x', body: 'y' }, await signIn('jane'))).status, 403, 'publishing takes the publish permission');
+
+  // Notes on their own; a transcript excerpt; a clip.
+  const note = await json('publish', { title: 'What happened', body: 'A summary of the meeting.', recordingId: 'rp1', part: 'part one' }, boss);
+  assert.equal(note.status, 200);
+  assert.equal(note.publication.kind, 'note');
+  assert.equal(note.publication.officialUrl, 'https://example.com/videos/1');
+  const lines = [{ start: 590, end: 595, speaker: 'Before', text: 'not in it' }, { start: 600, end: 604, speaker: 'Pat Lee', text: 'Next, the budget.' }, { start: 605, end: 610, speaker: 'Sam', text: 'Thank you & good evening.' }];
+  const excerpt = await json('publish', { title: 'Budget talk', transcript: true, recordingId: 'rp1', part: 'part one', from: 600, to: 660, lines, chapters: [{ at: 600, title: 'Budget' }] }, boss);
+  assert.equal(excerpt.publication.transcript.lines, 2);
+  const text = await (await fetch(hub.replace('api.php', excerpt.publication.transcript.text))).text();
+  assert.match(text, /Pat Lee:\n\[00:00:00\] Next, the budget\./);
+  assert.doesNotMatch(text, /not in it/);
+  const clip = await json('publish', { title: 'Budget clip', clip: true, transcript: true, recordingId: 'rp1', part: 'part one', from: 600, to: 660, lines, chapters: [{ at: 610, title: 'Budget' }] }, boss);
+  assert.equal(clip.publication.clip.status, 'queued');
+  await signedOut.pull();
+  assert.deepEqual((await signedOut.list('publications')).map((record) => record.data.title).sort(), ['Budget clip', 'Budget talk', 'What happened'], 'publications are for everyone');
+  assert.equal((await signedOut.list('jobs')).length, 0, 'the work queue is private');
+
+  // An agent takes the job: claims it, then marks the clip ready (it uploads the files over SSH).
+  await recorder.pull();
+  const job = await recorder.get('jobs', `clip-${clip.id}`);
+  assert.equal(job.data.status, 'queued');
+  assert.equal((await (await post('claim', { occurrenceKey: `job:${job.id}`, recorderId: 'mac-1', ttlSeconds: 60 }, recorderKey)).json()).granted, true);
+  assert.equal((await (await post('claim', { occurrenceKey: `job:${job.id}`, recorderId: 'mac-2', ttlSeconds: 60 }, recorderKey)).json()).granted, false, 'one agent per job');
+  const published = await recorder.get('publications', clip.id);
+  await recorder.put('publications', clip.id, { ...published.data, clip: { ...published.data.clip, status: 'ready', audio: { path: `media/published/${clip.id}/clip-abc.m4a`, bytes: 12345, type: 'audio/mp4' } } });
+  await recorder.put('jobs', job.id, { ...job.data, status: 'done', progress: 1 });
+  await recorder.sync();
+
+  // The podcast lists published clips only.
   const response = await fetch(`${hub}/podcast/town.xml`);
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /rss\+xml/);
   const feed = await response.text();
-  assert.match(feed, /<title>Town meetings<\/title>/);
-  assert.match(feed, /<title>Council &amp; friends<\/title>/);
-  assert.match(feed, /<enclosure url="http:\/\/127\.0\.0\.1:\d+\/media\/recordings\/rp1\/part-one\/audio-abc\.m4a" length="12345" type="audio\/mp4"\/>/);
-  assert.match(feed, /<itunes:duration>1:02:05<\/itunes:duration>/);
-  assert.match(feed, /0:00:00 Call to order\n0:10:00 Budget/);
+  assert.match(feed, /<title>Town: clips<\/title>/);
+  assert.match(feed, /<title>Budget clip<\/title>/);
+  assert.doesNotMatch(feed, /Budget talk|What happened/);
+  assert.match(feed, new RegExp(`<enclosure url="http://127\\.0\\.0\\.1:\\d+/media/published/${clip.id}/clip-abc\\.m4a" length="12345" type="audio/mp4"/>`));
+  assert.match(feed, /<itunes:duration>0:01:00<\/itunes:duration>/);
+  assert.match(feed, /Official recording: https:\/\/example\.com\/videos\/1/);
   const chapters = await (await fetch(feed.match(/podcast:chapters url="([^"]+)"/)[1])).json();
-  assert.deepEqual(chapters.chapters.map((chapter) => chapter.title), ['Call to order', 'Budget']);
+  assert.deepEqual(chapters.chapters, [{ startTime: 10, title: 'Budget' }]);
   assert.equal((await fetch(`${hub}/podcast/nowhere.xml`)).status, 404);
+
+  // Unpublishing removes it and its files.
+  assert.equal((await json('unpublish', { id: excerpt.id }, boss)).ok, true);
+  assert.equal((await fetch(hub.replace('api.php', excerpt.publication.transcript.text))).status, 404);
+  await signedOut.pull();
+  assert.equal((await signedOut.list('publications')).length, 2);
+});
+
+test('upgrading: meeting files already in the web folder move to the private folder, and their records follow', { skip: !dir }, async () => {
+  const media = path.join(dir, 'media');
+  const hash = 'ab'.padEnd(64, '0');
+  fs.mkdirSync(path.join(media, 'ab', '00'), { recursive: true });
+  fs.writeFileSync(path.join(media, 'ab', '00', `${hash}.jpg`), 'still');
+  fs.mkdirSync(path.join(media, 'recordings', 'old1', 'p'), { recursive: true });
+  fs.writeFileSync(path.join(media, 'recordings', 'old1', 'p', 'audio.m4a'), 'audio');
+  const recorder = client(recorderKey);
+  await recorder.put('stills', 'old1:0-0', { recordingId: 'old1', part: 'p', position: 0, path: `media/ab/00/${hash}.jpg` });
+  await recorder.put('media', 'old1:p', { recordingId: 'old1', part: 'p', audio: { path: 'media/recordings/old1/p/audio.m4a' }, video: null });
+  await recorder.sync();
+  await new Promise((resolve, reject) => {
+    const child = spawn('php', [path.join(dir, 'tools', 'migrate.php'), path.join(dir, 'config.php')], { stdio: 'ignore' });
+    child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`migrate exited ${code}`))));
+  });
+  const privateDir = path.join(dir, 'data', 'private');
+  assert.ok(fs.existsSync(path.join(privateDir, 'stills', 'ab', '00', `${hash}.jpg`)));
+  assert.ok(fs.existsSync(path.join(privateDir, 'recordings', 'old1', 'p', 'audio.m4a')));
+  assert.ok(!fs.existsSync(path.join(media, 'recordings', 'old1')));
+  await recorder.pull();
+  assert.equal((await recorder.get('stills', 'old1:0-0')).data.path, `private/stills/ab/00/${hash}.jpg`);
+  assert.equal((await recorder.get('media', 'old1:p')).data.audio.path, 'private/recordings/old1/p/audio.m4a');
 });

@@ -2,7 +2,7 @@
 
 The hub is a small PHP API with a SQLite database (`hub-php/`). Recorders report to it: what they're recording, live thumbnails and quick transcripts, then the final transcript and stills. The web app syncs with it, whether it's served by a recorder, by the hub's own server, or by a static host such as GitHub Pages. Video stays on the recorders.
 
-Anyone can read the hub. People sign in to change things, and what their changes may do depends on their group (see People, groups, and layers below). Recorders and scripts use keys.
+The site is an independent archive. Its meetings are private: recordings, transcripts, stills, marks, the live view, and the audio and video files are visible only to signed-in people whose group may see meetings. What you publish is for everyone: notes, summaries, transcript excerpts and clips. Each links to the official recording when one is known. People sign in to change things, and their group decides what their changes may do (see People, groups, and layers below). Recorders and scripts use keys.
 
 ## Install on shared hosting
 
@@ -40,7 +40,7 @@ Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, o
 | `marks` | review marks: speakers, chapters, votes, views, boosts, meeting name, word edits, playlist, people | editors, recorders |
 | `settings` | public settings (never secrets) | editors |
 
-Anyone can read. Writing needs a key (the `X-Streamscribe-Key` header) or a signed-in person (the `X-Streamscribe-Token` header, which the web app sends) whose group allows it.
+Anyone can read schedules, sources, settings, recorders, and publications. Meetings (`recordings`, `transcript_chunks`, `stills`, `media`, `marks`) and the work queue (`jobs`) go only to keys and to people whose group may see meetings. Everyone else's browser gets them as deleted. Writing needs a key (the `X-Streamscribe-Key` header) or a signed-in person (the `X-Streamscribe-Token` header, which the web app sends) whose group allows it.
 
 ## People, groups, and layers
 
@@ -58,7 +58,11 @@ Anyone can read. Writing needs a key (the `X-Streamscribe-Key` header) or a sign
 | Edit schedules | ✓ | ✓ | | | |
 | Edit sources and site settings | ✓ | ✓ | | | |
 | Review people (see untrusted changes, mark people trusted or not) | ✓ | ✓ | | | |
+| See full meetings (private) | ✓ | | | | |
+| Publish clips and transcripts | ✓ | | | | |
 | Manage people and groups | ✓ | | | | |
+
+Only Admin sees full meetings at first. Tick "See full meetings" for any group that should see them. Without it, the other permissions (correcting words, speakers) have nothing to act on.
 
 Admin always has every permission and can't be removed, and the last admin can't be demoted or turned off. Other groups can be renamed, removed (their people move to a group you choose), or added. New accounts join Member and are trusted; both are settings on the People page.
 
@@ -85,6 +89,49 @@ The recorder's own review page still edits the shared marks directly; people's l
 - Every batch of changes has an `op_id`, so a retried batch gets the same answer instead of being applied twice.
 - Transcript chunks and stills have fixed ids, so sending one again does nothing.
 - Pictures are stored under their SHA-256 hash, so uploading one again is skipped.
+
+## Private files
+
+The meetings' files live outside the web folder: in `private_dir` in `config.php`, by default a folder named `private` beside the database.
+- **Audio and silent video:** `npm run publish-media`, or an agent's encode job.
+- **Stills and live pictures:** recorders.
+
+They're served only through `api.php/file/private/…`, with a signature that expires after 12 hours. Browsers of people who may see meetings fetch it from `GET file-key` and add it to each file's address. The hub answers byte-range requests, so a player fetches only what it plays.
+
+Hubs from before meetings were private had these files in `media/`. The first deploy after the upgrade moves them, through `tools/migrate.php`. Their records then point at the new place, and browsers that may no longer see them drop them.
+
+## Publishing
+
+On a meeting page, people whose group may publish see a Publish panel:
+- **Title, and notes or a summary.** Notes can stand alone.
+- **A stretch of the meeting.** Pick it with From/To, "now" (the player's time), "whole meeting", or one of your playlist clips.
+- **Transcript of that stretch.** It goes out as shown: corrections applied, speaker names in.
+- **Clip.** The stretch's video and audio.
+
+What happens next:
+- **Text and transcript.** The hub saves them at once as public files in `media/published/<id>/`: `transcript.json`, `transcript.txt`, `captions.srt`, and a cover picture from the meeting's stills. The publication carries the link to the official recording.
+- **Clip.** It's queued as a job, and an agent with the video cuts it: an MP4 with sound at 720p, 30 fps, plus the sound alone as M4A. The agent uploads both to that folder. Until then the publication's page says the clip is being prepared.
+- **The Published page.** It lists everything for everyone, and each item has its own page.
+- **Unpublishing.** Its page has Unpublish, which removes the publication and its files.
+- **The podcast.** `api.php/podcast/<source>.xml` lists published clips, with chapters and captions. Full meetings never appear in it.
+
+## Agents and their work
+
+The hub only keeps the queue. Agents do the work: the recorder service (`npm run recorder`) on machines that have the video. Each agent has a short id and a name (`recorder.id`, `recorder.name` in its `config.local.js`), and reports every few seconds.
+
+The Agents page, for people who may see meetings, shows:
+- **Each agent:** online or not, last heard from, version, free disk, and what it's recording or working on.
+- **The queue:** jobs in progress (with progress bars), waiting, and recently finished or failed. People who may publish can Cancel or Retry a job.
+
+Job types:
+- **`clip`:** cut a published clip, upload it, and mark it ready.
+- **`encode`:** make and upload a recording's private audio and silent video. A recorder queues one for itself after each meeting it records. The meeting page's "Make audio and video for the hub" queues one for a recording that has none.
+
+How agents share the work:
+- **Picking jobs.** An idle agent takes the oldest queued job it can do: it must have that recording, and a job meant for a particular agent waits for that one.
+- **Claiming.** It claims the job on the hub, so no other agent takes it, and renews the claim while it works. It writes its progress into the job.
+- **Stopping.** Cancelling stops the job. An agent that shuts down mid-job puts the job back in the queue.
+- **Uploads.** Agents upload over SSH with the deploy settings (`deploy.local.env`, see deploy.md), so each agent machine needs those and an SSH key the server accepts.
 
 ## Schedules
 

@@ -1,5 +1,7 @@
 # streamscribe
 
+![Stream Scribe: Capture. Search. Research.](docs/streamscribe.jpg)
+
 Capture public meeting livestreams, fill the gaps from the official archive, transcribe them locally with Whisper, and review them on a page with speakers, chapters, votes, audio boosts, a magnifier, and clips. Everything runs on your own machine.
 
 It keeps the whole meeting, including the parts an official archive sometimes leaves out: the live capture is the primary record, and the archived copy only fills what the capture missed.
@@ -29,7 +31,7 @@ Edit `config.local.js` first: add a `sources` entry for each stream (its live `.
 - **Search:** finds words in every transcript at once, matching word forms ("budget" also finds "budgets" and "budgeted"); use quotes for an exact phrase. Results are grouped by recording, and each line opens the review page at that moment.
 - **Capture:** starts and stops the live capture of each source. Each capture runs as its own process, so restarting the server doesn't interrupt it. A thumbnail watcher keeps the review page current while it records, so you can watch and scrub it live. The page shows the capture's log and its newest recording, and won't start a second capture beside one already running, including one started from a terminal.
 - **Review page:** the existing per-recording page, with the player, transcript, speakers, chapters, votes, boosts, clips, and the magnifier. 🏠 returns to the library.
-- **Meetings, Live, Schedules, People, Account, Settings:** the hub's side, once a hub is set under Settings. Meetings lists what recorders recorded, each with its stills and transcript. Live shows each recorder's latest picture and quick transcript while a meeting runs. Schedules sets when meetings happen, one-off or repeating (every Tuesday 6–10 pm, the first Tuesday of each month), with a preview of the coming dates. Anyone can read them; people sign in to correct transcripts and say who is speaking, and their group decides whether others see those changes (People, for admins, manages people and groups). These pages also work as a static site, on the hub's own server or GitHub Pages (docs/hub/hub.md).
+- **Published, Meetings, Live, Agents, Schedules, People, Account, Settings:** the hub's side, once a hub is set under Settings. It's an independent archive: meetings are private (recordings, transcripts, stills, the live view, audio and video), for signed-in people whose group may see them. **Published** is for everyone: notes, summaries, transcript excerpts, and clips you publish from a meeting page, each linking to the official recording, plus a podcast of the clips. **Agents** shows your recorders, online or not, and the work queued for them (cutting clips, encoding), with progress. Schedules sets when meetings happen, one-off or repeating. These pages also work as a static site, on the hub's own server or GitHub Pages (docs/hub/hub.md).
 
 ### Recorders and the hub
 

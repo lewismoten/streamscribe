@@ -23,11 +23,35 @@ const readJson = (file) => {
 };
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
+// Session folders that recorders here recorded: they reach the hub as those recordings (publish.js), not again from
+// the library.
+function recorderFolders() {
+  const folders = new Set();
+  if (!fs.existsSync(STATE_ROOT)) return folders;
+  for (const file of fs.readdirSync(STATE_ROOT).filter((name) => /^recorder-.+\.sqlite$/.test(name))) {
+    try {
+      const db = new DatabaseSync(path.join(STATE_ROOT, file), { readOnly: true });
+      try {
+        const row = db.prepare("SELECT value FROM meta WHERE name = 'recorder'").get();
+        for (const recording of Object.values(JSON.parse(row?.value || '{}').recordings || {})) {
+          const source = SOURCES.find((item) => item.key === recording.sourceKey);
+          for (const part of recording.parts || []) if (source) folders.add(`${source.key}:${part.dir}`);
+        }
+      } finally {
+        db.close();
+      }
+    } catch { /* not readable now: nothing skipped */ }
+  }
+  return folders;
+}
+
 export function libraryRecordings({ all = false, only = null } = {}) {
   const db = new DatabaseSync(path.join(DATA_ROOT, 'streamscribe.db'), { readOnly: true });
+  const recorded = recorderFolders();
   try {
     return db.prepare('SELECT * FROM recordings WHERE missing = 0 ORDER BY started_at').all().filter((row) => {
       if (only !== null) return row.id === only;
+      if (recorded.has(`${row.source_key}:${row.dir}`)) return false;
       if (row.kind === 'archive' || row.duration_seconds < 300) return false;
       if (row.part_of_dir && !all) return false;
       const source = SOURCES.find((item) => item.key === row.source_key);
@@ -49,7 +73,12 @@ export function localRecordings(options = {}) {
     const part = { index: 0, name: path.basename(row.dir), dir: row.dir, seconds: Math.round(row.duration_seconds) };
     const title = row.title || readJson(path.join(dir, 'meeting-info.json'))?.name
       || `${source.name}, ${new Date(row.started_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
-    return [{ row, source, dir, id, part, title }];
+    // The official recording, where known: a built meeting's archive page (meeting.json), the meeting a capture was
+    // joined into, or a link set on the meeting page (meeting-info.json).
+    const officialUrl = readJson(path.join(dir, 'meeting.json'))?.url
+      || (row.part_of_dir ? readJson(path.join(source.storageDir, row.part_of_dir, 'meeting.json'))?.url : null)
+      || readJson(path.join(dir, 'meeting-info.json'))?.officialUrl || null;
+    return [{ row, source, dir, id, part, title, officialUrl }];
   });
 }
 
@@ -69,7 +98,7 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
   try {
     await client.pull();
     const sources = new Set();
-    for (const { row, source, dir, id, part, title } of localRecordings({ all, only })) {
+    for (const { row, source, dir, id, part, title, officialUrl } of localRecordings({ all, only })) {
       sources.add(source);
       log(`${title} (${row.kind} ${row.id}, ${Math.round(row.duration_seconds / 60)} min) → ${id}`);
 
@@ -106,7 +135,7 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
       }
 
       await put('recordings', id, {
-        occurrenceKey: '', scheduleId: '', title, sourceKey: source.key, sourceName: source.name, recorderId: RECORDER.id, status: 'done', imported: true,
+        occurrenceKey: '', scheduleId: '', title, sourceKey: source.key, sourceName: source.name, officialUrl, recorderId: RECORDER.id, status: 'done', imported: true,
         kind: row.kind, scheduledStart: row.started_at, scheduledEnd: row.ended_at, startedAt: row.started_at, stoppedAt: row.ended_at,
         stopReason: null, durationSeconds: Math.round(row.duration_seconds), parts: [part]
       }, 'recordings');

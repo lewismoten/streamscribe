@@ -10,5 +10,7 @@ const COLLECTIONS = [
   'media' => ['writers' => ['recorder', 'editor'], 'mode' => 'mutable'],
   'marks' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'settings' => ['writers' => ['editor'], 'mode' => 'mutable'],
+  'publications' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
+  'jobs' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
 ];
 const MAX_RECORD_BYTES = 262144;

@@ -15,7 +15,9 @@ export const COLLECTIONS = {
   stills: { writers: ['recorder'], mode: 'immutable', doc: 'Pictures from a recording (by media hash), for viewing without the video.' },
   media: { writers: ['recorder', 'editor'], mode: 'mutable', doc: 'A recording part\'s published audio (also the podcast episode) and silent low-resolution video, as files on the hub (see src/media/publish-media.js).' },
   marks: { writers: ['editor', 'recorder'], mode: 'mutable', doc: 'Review marks of a recording, one record per kind: speakers, agenda, votes, views, audio-boosts, meeting-info, word-edits, playlist; and people per source.' },
-  settings: { writers: ['editor'], mode: 'mutable', doc: 'Public settings (never secrets).' }
+  settings: { writers: ['editor'], mode: 'mutable', doc: 'Public settings (never secrets).' },
+  publications: { writers: ['editor', 'recorder'], mode: 'mutable', doc: 'Clips and transcripts published for everyone (meetings themselves are private): title, range, and public files (see hub-php/lib/publish-routes.php).' },
+  jobs: { writers: ['editor', 'recorder'], mode: 'mutable', doc: 'Work for agents (recorders): cutting a published clip, encoding a recording\'s audio and video. Status, agent, progress (see src/recorder/jobs.js).' }
 };
 
 export const MAX_RECORD_BYTES = 256 * 1024;

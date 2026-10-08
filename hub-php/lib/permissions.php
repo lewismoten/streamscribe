@@ -4,6 +4,9 @@
 //                   permission, the same change is kept for that person only.
 //   edit.*          changing shared records directly (schedules; sources and settings)
 //   review          seeing untrusted people's contributions, and marking people trusted or not
+//   view.meetings   seeing full meetings, which are private: recordings, transcripts, stills, marks, the live view,
+//                   and the audio and video files
+//   publish         publishing clips and transcripts (or parts of them) for everyone
 //   manage.users    people and groups: adding, removing, and what each group may do
 const PERMISSIONS = [
   'contribute.transcript' => 'Correct transcript words',
@@ -14,6 +17,8 @@ const PERMISSIONS = [
   'edit.schedules' => 'Edit schedules',
   'edit.sources' => 'Edit sources and site settings',
   'review' => 'Review people: see untrusted changes, mark people trusted or not',
+  'view.meetings' => 'See full meetings (private: recordings, transcripts, the live view)',
+  'publish' => 'Publish clips and transcripts',
   'manage.users' => 'Manage people and groups',
 ];
 const ADMIN_GROUP = 1;
@@ -31,8 +36,14 @@ const MARK_PERMISSIONS = [
   'playlist' => 'contribute.other',
 ];
 
+// Collections of meetings, which only viewers with view.meetings (and keys) see. Everyone sees schedules, sources,
+// settings, recorders, and publications.
+const PRIVATE_COLLECTIONS = ['recordings', 'transcript_chunks', 'stills', 'media', 'marks', 'jobs'];
+
 // Shared collections a person may change directly, and the permission it takes.
 const EDIT_PERMISSIONS = [
+  'publications' => 'publish',
+  'jobs' => 'publish',
   'schedules' => 'edit.schedules',
   'sources' => 'edit.sources',
   'settings' => 'edit.sources',

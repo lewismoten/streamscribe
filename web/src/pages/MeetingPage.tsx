@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { layerData, layerId, stackMarks } from '../../../src/sync/layers.js';
 import { MARK_PERMISSIONS } from '../../../src/sync/permissions.js';
@@ -8,7 +8,7 @@ import { syncNow } from '../data/sync.ts';
 import { clock, duration } from '../format.ts';
 import { dateTime, mediaUrlOf, STATUS_LABEL, type RecordingData } from './MeetingsPage.tsx';
 import MediaPlayer, { type MediaData, type PlayerControl } from '../MediaPlayer.tsx';
-import { hubSettings } from '../data/hub.ts';
+import PublishPanel, { type PublishLine } from '../PublishPanel.tsx';
 
 // One meeting from the hub: its stills, chapters, votes, and transcript (the final one when it's ready, the quick
 // one while recording), with the word corrections and speakers everyone may see. Signed in, a click on a word of the
@@ -157,20 +157,68 @@ export default function MeetingPage() {
   // to the part's player first.
   const playAt = (part: string, seconds: number) => {
     if (!media.some((item) => item.part === part)) return;
+    setFollowing(true);
     if (playing?.part === part && player.current) { player.current.playFrom(seconds); return; }
     setPartShown(part);
     setSeek({ time: seconds, n: Date.now() });
   };
   const playingPart = playing?.part;
+  // Following along: the line being spoken is highlighted and scrolled near the top of the transcript (level with the
+  // player), and its word being spoken is marked. Scrolling the transcript yourself stops the following until
+  // "Follow along" (or a click on a time) turns it back on.
+  const list = useRef<HTMLOListElement>(null);
+  const [following, setFollowing] = useState(true);
+  const playerTime = useRef(0);
   const onTime = useCallback((seconds: number) => {
+    playerTime.current = seconds;
     let current = '';
     for (const line of lines) if (line.part === playingPart && line.start <= seconds + 0.2) current = `${line.part}-${line.start}`;
     setNowLine((previous) => (previous === current ? previous : current));
+    // The word: marked straight in the page (re-rendering the whole transcript several times a second would be slow).
+    const root = list.current;
+    if (!root) return;
+    let word: Element | null = null;
+    for (const button of root.querySelectorAll('li.now [data-at]')) if (Number((button as HTMLElement).dataset.at) <= seconds + 0.05) word = button;
+    const previous = root.querySelector('.speaking');
+    if (previous !== word) {
+      previous?.classList.remove('speaking');
+      word?.classList.add('speaking');
+    }
   }, [lines, playingPart]);
+  useEffect(() => {
+    const root = list.current;
+    const line = root?.querySelector('li.now') as HTMLElement | null;
+    if (!root || !line || !following) return;
+    root.scrollTo({ top: Math.max(0, line.offsetTop - 12), behavior: 'smooth' });
+  }, [nowLine, following]);
+  const followAgain = () => setFollowing(true);
 
+  if (account.checked && !can('view.meetings', account)) {
+    return <p className="empty">Meetings are private. {account.user ? 'Your group can\'t see them.' : <><Link to="/account">Sign in</Link> if you may see them.</>} <Link to="/">See what's published</Link></p>;
+  }
   if (!recordings) return <p className="empty">Loading…</p>;
   if (!recording) return <p>No such meeting on the hub. <Link to="/meetings">All meetings</Link></p>;
   const data = recording.data;
+  // The official recording: from the recorder (a built meeting's archive page), or set here (meeting-info, a mark).
+  const infoId = `${id}:${data.parts?.[0]?.name || ''}:meeting-info`;
+  const officialUrl = (markData<{ officialUrl?: string }>(infoId)?.officialUrl) || data.officialUrl || '';
+  const editOfficial = async () => {
+    const value = prompt('Address of the official recording (the source\'s own archive page):', officialUrl);
+    if (value === null) return;
+    await save(infoId, { ...(markData<Record<string, unknown>>(infoId) || {}), officialUrl: value.trim() }, value.trim() ? 'Official recording link saved' : 'Official recording link removed');
+  };
+  // The transcript as shown (corrections, speaker names), for publishing.
+  const linesFor = (part: string): PublishLine[] => lines.filter((line) => line.part === part).map((line) => ({
+    start: line.start, end: line.end,
+    speaker: speakersAt(part, line.start + 0.01).map((speaker) => personName(peopleMap.get(speaker), speaker)).join(', '),
+    text: line.words.map((word) => word.shown).filter(Boolean).join(' ')
+  }));
+  const firstPart = data.parts?.[0]?.name || lines[0]?.part || '';
+  const encodeQueued = async () => {
+    await putRecord('jobs', `encode-${id}`, { type: 'encode', status: 'queued', title: `Audio and video: ${data.title}`, recordingId: id, progress: 0, message: '', agent: null, createdAt: new Date().toISOString(), createdBy: account.user?.displayName || account.user?.username || '' });
+    setStatus('Queued for an agent (see Agents)');
+    syncNow();
+  };
   return (
     <article className="recording">
       <header className="recording-head">
@@ -190,6 +238,11 @@ export default function MeetingPage() {
               : <><Link to="/account">Sign in</Link> to correct the transcript or say who is speaking.</>}
             {' '}{(mediaRecords || []).some((record) => record.data.recordingId === id) ? `The full-quality video is on ${data.recorderId}.` : `The video is on ${data.recorderId}.`}
           </p>
+          <p className="small">
+            {officialUrl ? <a href={officialUrl} rel="noopener noreferrer">Official recording ↗</a> : <span className="muted">No official recording linked.</span>}
+            {can('contribute.chapters', account) && <button type="button" className="link-button" onClick={editOfficial}>{officialUrl ? 'change' : 'add a link'}</button>}
+            {!media.length && can('publish', account) && <button type="button" className="link-button" onClick={encodeQueued}>Make audio and video for the hub</button>}
+          </p>
         </div>
       </header>
       {pictures.length > 0 && (
@@ -208,8 +261,12 @@ export default function MeetingPage() {
               )}
               <MediaPlayer key={playing.part} media={playing} seek={seek} control={player}
                 stills={pictures.filter((still) => still.data.part === playing.part).map((still) => ({ position: still.data.position, path: still.data.path }))} onTime={onTime} />
-              <p className="muted small"><a href={`${hubSettings().url}/podcast/${encodeURIComponent(playing.sourceKey)}.xml`}>🎧 Podcast feed</a> for {playing.sourceName || playing.sourceKey} meetings</p>
             </div>
+          )}
+          {can('publish', account) && (
+            <PublishPanel recordingId={id} part={playing?.part || firstPart} seconds={playing?.seconds || data.durationSeconds || 0} playerTime={() => playerTime.current}
+              linesFor={linesFor} chapters={chapters.map((chapter) => ({ at: chapter.at, title: chapter.title }))}
+              clips={((markData<{ clips?: { title: string; from: number; to: number }[] }>(`${id}:${playing?.part || firstPart}:playlist`))?.clips) || []} />
           )}
           {chapters.length > 0 && (
             <section className="panel"><h2>Chapters</h2>
@@ -226,10 +283,12 @@ export default function MeetingPage() {
           <div className="panel-head">
             <h2>Transcript{kind === 'quick' ? ' (quick, while recording)' : ''}</h2>
             <input type="search" placeholder="Find in this transcript" value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Find in this transcript" />
+            {playing && !following && nowLine && <button type="button" className="button" onClick={followAgain}>↓ Follow along</button>}
           </div>
           {status && <p className="note" role="status">{status}</p>}
           {lines.length === 0 ? <p className="muted">No transcript yet.</p> : (
-            <ol className="lines">{shown.map((line, lineIndex) => {
+            <ol className="lines" ref={list} onWheel={() => setFollowing(false)} onTouchMove={() => setFollowing(false)}
+              onKeyDown={(event) => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) setFollowing(false); }}>{shown.map((line, lineIndex) => {
               let last = lineIndex > 0 ? speakersAt(shown[lineIndex - 1].part, shown[lineIndex - 1].end - 0.01).join() : '';
               return (
                 <li key={`${line.part}-${line.start}`} className={nowLine === `${line.part}-${line.start}` ? 'now' : undefined}>
@@ -243,7 +302,7 @@ export default function MeetingPage() {
                       <span key={word.index}>
                         {label && <strong className="speaker-label">{label}: </strong>}
                         {word.edit && word.shown === '' ? (editable && <button type="button" className="word deleted" title={`Deleted “${word.text}”${by ? ` by ${by}` : ''}`} onClick={() => setPicked(word)}>×</button>) : (
-                          <button type="button" className={`word${word.edit ? ' edited' : ''}`} disabled={!editable}
+                          <button type="button" className={`word${word.edit ? ' edited' : ''}`} disabled={!editable} data-at={word.at}
                             title={word.edit ? `Was “${word.text}”${by ? ` · corrected by ${by}` : ''}` : undefined} onClick={() => setPicked(word)}>{word.shown}</button>
                         )}{' '}
                         {picked && picked.part === word.part && picked.line === word.line && picked.index === word.index && (

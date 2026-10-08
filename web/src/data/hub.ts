@@ -35,9 +35,18 @@ export function saveHubSettings(settings: Partial<HubSettings>) {
   localStorage.setItem(KEY, JSON.stringify({ url: next.url.trim().replace(/\/+$/, ''), key: next.key.trim(), token: next.token }));
 }
 
-// The hub's folder (pictures are under it, at media/…): the API address without api.php.
+// The hub's folder (published files are under it, at media/…): the API address without api.php.
 export const hubBase = (url = hubSettings().url) => url.replace(/api\.php$/, '');
-export const mediaUrl = (path: string, url = hubSettings().url) => (path ? hubBase(url) + path : '');
+
+// Meetings' files are private (private/…): served through the API with a signature that expires, which viewers who
+// may see meetings get after signing in (account.ts keeps it fresh).
+let fileKey: { e: number; s: string } | null = null;
+export const setFileKey = (key: { e: number; s: string } | null) => { fileKey = key; };
+export const mediaUrl = (path: string, url = hubSettings().url) => {
+  if (!path) return '';
+  if (!path.startsWith('private/')) return hubBase(url) + path;
+  return fileKey ? `${url}/file/${path.split('/').map(encodeURIComponent).join('/')}?e=${fileKey.e}&s=${fileKey.s}` : '';
+};
 
 // A call to the hub's API with this browser's session or key. Throws the hub's message on failure.
 export async function hubCall<T = Record<string, unknown>>(route: string, body?: unknown): Promise<T> {

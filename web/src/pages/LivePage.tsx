@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { hubSettings, mediaUrl } from '../data/hub.ts';
+import { hubCall, hubSettings, mediaUrl } from '../data/hub.ts';
 import { startSyncing } from '../data/sync.ts';
 import { useRecords } from '../data/useRecords.ts';
+import { can, useAccount } from '../data/account.ts';
 import { clock, duration } from '../format.ts';
 
 // What the recorders are doing right now: each one's state, live picture, and the latest quick transcript, from the
@@ -22,18 +23,22 @@ export default function LivePage() {
   const [tick, setTick] = useState(0);
   const { records: chunks } = useRecords<Chunk>('transcript_chunks');
   const { url } = hubSettings();
+  // What's being recorded is private: for groups that may see meetings.
+  const account = useAccount();
+  const allowed = can('view.meetings', account);
   useEffect(() => {
-    if (!url) return;
+    if (!url || !allowed) return;
     startSyncing(10);
-    const load = () => fetch(`${url}/live`, { cache: 'no-store' }).then((response) => response.json())
+    const load = () => hubCall<{ recorders: LiveRecorder[] }>('live')
       .then((value) => { setRecorders(value.recorders || []); setError(''); setTick((count) => count + 1); })
       .catch((reason: Error) => setError(reason.message));
     load();
     const timer = setInterval(load, 10000);
     return () => { clearInterval(timer); startSyncing(30); };
-  }, [url]);
+  }, [url, allowed]);
 
   if (!url) return <p className="empty">Set the hub under <Link to="/settings">Settings</Link> to see recorders live.</p>;
+  if (account.checked && !allowed) return <p className="empty">Meetings are private, live ones too. {account.user ? 'Your group can\'t see them.' : <><Link to="/account">Sign in</Link> if you may see them.</>}</p>;
   return (
     <section>
       <div className="toolbar"><h1 className="grow">Live</h1>{error && <span className="error">Can't reach the hub: {error}</span>}</div>
@@ -53,7 +58,7 @@ export default function LivePage() {
             </div>
             {recording ? (
               <div className="live-body">
-                <img className="live-picture" src={`${mediaUrl(`media/live/${recorder.recorderId}.jpg`)}?t=${tick}`} alt="" />
+                <img className="live-picture" src={`${mediaUrl(`private/live/${recorder.recorderId}.jpg`)}&t=${tick}`} alt="" />
                 <div>
                   <h3><Link to={`/meetings/${recording.recordingId}`}>{recording.title}</Link></h3>
                   <p className="muted">Since {new Date(recording.startedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · {duration(recording.keptSeconds)} recorded · scheduled until {new Date(recording.scheduledEnd).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}{recording.lastSegmentAt ? ` · newest video ${ago(recording.lastSegmentAt)}` : ''}</p>

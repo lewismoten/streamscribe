@@ -9,6 +9,8 @@ export const PERMISSIONS = {
   'edit.schedules': 'Edit schedules',
   'edit.sources': 'Edit sources and site settings',
   review: 'Review people: see untrusted changes, mark people trusted or not',
+  'view.meetings': 'See full meetings (private: recordings, transcripts, the live view)',
+  publish: 'Publish clips and transcripts',
   'manage.users': 'Manage people and groups'
 };
 

@@ -7,10 +7,13 @@
 //   POST records   (key or sign-in)   { op_id, records: [{ collection, id, data, deleted, base_rev }] } → { results }
 //   POST claim     (recorder key)     { occurrenceKey, recorderId, ttlSeconds } → { granted, holder, leaseUntil }
 //   POST live      (recorder key)     { recorderId, status } — the recorder's current state (heartbeat)
-//   GET  live                         every recorder's latest state
+//   GET  live      (view.meetings)    every recorder's latest state
 //   POST live-thumbnail?recorder=ID   (recorder key) a JPEG, replacing that recorder's live picture
 //   POST media?sha256=HEX&type=image/jpeg   (key) a file stored by its hash; already there → { exists: true }
-// The podcast (lib/podcast-routes.php): GET podcast/<source key>.xml, GET podcast-chapters/<media id>.json
+// Private files (lib/files.php): GET file-key (view.meetings) → { e, s }; GET file/private/<path>?e=…&s=…
+// Publishing (lib/publish-routes.php): POST publish, POST unpublish (publish)
+// The podcast of published clips (lib/podcast-routes.php): GET podcast/<source key>.xml,
+//   GET podcast-chapters/<publication id>.json
 // People (lib/users.php):
 //   POST register {username, password, displayName}, POST login {username, password} → { token, ...me }
 //   POST logout, GET me, POST password {current, password}
@@ -25,6 +28,7 @@ require __DIR__ . '/lib/auth.php';
 require __DIR__ . '/lib/cors.php';
 require __DIR__ . '/lib/permissions.php';
 require __DIR__ . '/lib/users.php';
+require __DIR__ . '/lib/files.php';
 
 function hub_send(int $status, $value): void {
   http_response_code($status);
@@ -60,6 +64,7 @@ function hub_write_rule(array $viewer, string $collection, string $id, $record, 
     return ['owner' => 0, 'layer' => 'shared'];
   }
   $userId = $viewer['user']['id'];
+  if (in_array($collection, PRIVATE_COLLECTIONS, true) && !hub_can($viewer, 'view.meetings')) return ['error' => 'Meetings are private: your group can\'t see them'];
   if ($layered) {
     [$markId, $owner] = explode('~', $id, 2);
     if ($collection !== 'marks' || $markId === '' || $owner !== (string)$userId) return ['error' => 'You can only write your own layer of a mark (id ending in ~' . $userId . ')'];
@@ -84,7 +89,7 @@ $route = trim((string)($_SERVER['PATH_INFO'] ?? ($_GET['r'] ?? '')), '/');
 $db = hub_db($config);
 $viewer = hub_viewer($config, $db);
 // A browser whose session ended hears so (instead of quietly getting what anyone gets), except where that's moot.
-if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'logout', 'me', 'live', 'groups'], true) && strpos($route, 'podcast') !== 0) {
+if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'logout', 'me', 'live', 'groups'], true) && strpos($route, 'podcast') !== 0 && strpos($route, 'file/') !== 0) {
   hub_fail(401, 'Signed out (the session ended); sign in again');
 }
 
@@ -206,6 +211,8 @@ if ($method === 'POST' && $route === 'live') {
 }
 
 if ($method === 'GET' && $route === 'live') {
+  // What's being recorded is part of the meetings: private.
+  if ($viewer['kind'] !== 'key') hub_require_permission($viewer, 'view.meetings');
   $rows = $db->query('SELECT body, updated_at FROM live ORDER BY recorder_id')->fetchAll();
   hub_send(200, ['time' => hub_now(), 'recorders' => array_map(function ($row) { $entry = json_decode($row['body']); $entry->updatedAt = $row['updated_at']; return $entry; }, $rows)]);
 }
@@ -219,7 +226,8 @@ if ($method === 'POST' && ($route === 'media' || $route === 'live-thumbnail')) {
   $bytes = file_get_contents('php://input', false, null, 0, $limit + 1);
   if ($bytes === false || $bytes === '') hub_fail(400, 'No file sent');
   if (strlen($bytes) > $limit) hub_fail(413, 'File too large');
-  $mediaDir = rtrim($config['media_dir'], '/');
+  // Meetings' pictures are private (lib/files.php): stored outside the web folder, served through api.php/file/.
+  $mediaDir = hub_private_dir($config);
   if ($route === 'live-thumbnail') {
     $recorder = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($_GET['recorder'] ?? ''));
     if ($recorder === '') hub_fail(400, 'Expected recorder');
@@ -228,18 +236,33 @@ if ($method === 'POST' && ($route === 'media' || $route === 'live-thumbnail')) {
     $hash = strtolower((string)($_GET['sha256'] ?? ''));
     if (!preg_match('/^[a-f0-9]{64}$/', $hash)) hub_fail(400, 'Expected sha256');
     if (!hash_equals($hash, hash('sha256', $bytes))) hub_fail(400, 'The file does not match its sha256');
-    $relative = substr($hash, 0, 2) . '/' . substr($hash, 2, 2) . '/' . $hash . '.' . $types[$type];
-    if (is_file($mediaDir . '/' . $relative)) hub_send(200, ['path' => 'media/' . $relative, 'exists' => true]);
+    $relative = 'stills/' . substr($hash, 0, 2) . '/' . substr($hash, 2, 2) . '/' . $hash . '.' . $types[$type];
+    if (is_file($mediaDir . '/' . $relative)) hub_send(200, ['path' => 'private/' . $relative, 'exists' => true]);
   }
   $target = $mediaDir . '/' . $relative;
   if (!is_dir(dirname($target))) mkdir(dirname($target), 0775, true);
   $temporary = $target . '.' . getmypid() . '.tmp';
   file_put_contents($temporary, $bytes);
   rename($temporary, $target);
-  hub_send(200, ['path' => 'media/' . $relative, 'exists' => false]);
+  hub_send(200, ['path' => 'private/' . $relative, 'exists' => false]);
+}
+
+// Private files (lib/files.php): a signature for viewers who may see meetings, and the files themselves.
+if ($method === 'GET' && $route === 'file-key') {
+  if ($viewer['kind'] !== 'key') hub_require_permission($viewer, 'view.meetings');
+  hub_send(200, hub_file_key($db));
+}
+
+if (($method === 'GET' || $method === 'HEAD') && preg_match('#^file/private/(.+)$#', $route, $match)) {
+  if (!hub_file_key_valid($db, (string)($_GET['e'] ?? ''), (string)($_GET['s'] ?? ''))) hub_fail(403, 'This link has expired or is not valid; reload the page');
+  $root = realpath(hub_private_dir($config));
+  $file = $root ? realpath($root . '/' . $match[1]) : false;
+  if (!$file || strpos($file, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($file)) hub_fail(404, 'No such file');
+  hub_stream_file($file, 'private, max-age=3600');
 }
 
 require __DIR__ . '/lib/account-routes.php';
+require __DIR__ . '/lib/publish-routes.php';
 require __DIR__ . '/lib/podcast-routes.php';
 
 hub_fail(404, 'No such route: ' . $method . ' ' . $route);
