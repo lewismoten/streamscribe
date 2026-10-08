@@ -13,7 +13,9 @@ import SchedulesPage from './pages/SchedulesPage.tsx';
 import LivePage from './pages/LivePage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import AccountPage from './pages/AccountPage.tsx';
-import PeoplePage from './pages/PeoplePage.tsx';
+import AccountsPage from './pages/AccountsPage.tsx';
+import PeoplePage from './people/PeoplePage.tsx';
+import PersonPage from './people/PersonPage.tsx';
 import AgentsPage from './pages/AgentsPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
@@ -62,10 +64,11 @@ export default function App() {
             Published
           </NavLink>
           {(local || viewer) && <NavLink to="/meetings">Meetings</NavLink>}
+          {(local || viewer) && <NavLink to="/people">People</NavLink>}
           {viewer && <NavLink to="/live">Live</NavLink>}
           {viewer && <NavLink to="/agents">Agents</NavLink>}
           <NavLink to="/schedules">Schedules</NavLink>
-          {(can('manage.users', account) || can('review', account)) && <NavLink to="/people">People</NavLink>}
+          {(can('manage.users', account) || can('review', account)) && <NavLink to="/accounts">Accounts</NavLink>}
           <NavLink to="/settings">Settings</NavLink>
           <NavLink to="/account" className="account-link">
             {account.user ? `👤 ${account.user.displayName || account.user.username}` : 'Sign in'}
@@ -96,7 +99,9 @@ export default function App() {
             />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/account" element={<AccountPage />} />
+            <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/people" element={<PeoplePage />} />
+            <Route path="/people/:source/:id" element={<PersonPage />} />
             <Route
               path="*"
               element={

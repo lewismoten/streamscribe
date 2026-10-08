@@ -49,7 +49,7 @@ Anyone can read schedules, sources, settings, recorders, and publications. Meeti
 
 **Accounts.** Anyone can make an account in the web app (Account, at the top right), unless an admin closes sign-ups. Passwords are stored as PHP password hashes; after 10 wrong passwords in 15 minutes from one address or for one username, sign-ins wait. A sign-in lasts 30 days from the last visit.
 
-**Groups.** Every person is in one group, and the group's permissions say what their changes may do. Admins change them on the People page (only admins and reviewers see it).
+**Groups.** Every person is in one group, and the group's permissions say what their changes may do. Admins change them on the Accounts page (only admins and reviewers see it).
 
 | Permission                                                        | Admin | Editor | Reporter | Member | Limited |
 | ----------------------------------------------------------------- | ----- | ------ | -------- | ------ | ------- |
@@ -67,7 +67,7 @@ Anyone can read schedules, sources, settings, recorders, and publications. Meeti
 
 Only Admin sees full meetings at first. Tick "See full meetings" for any group that should see them. Without it, the other permissions (correcting words, speakers) have nothing to act on.
 
-Admin always has every permission and can't be removed, and the last admin can't be demoted or turned off. Other groups can be renamed, removed (their people move to a group you choose), or added. New accounts join Member and are trusted; both are settings on the People page.
+Admin always has every permission and can't be removed, and the last admin can't be demoted or turned off. Other groups can be renamed, removed (their people move to a group you choose), or added. New accounts join Member and are trusted; both are settings on the Accounts page.
 
 **Layers.** A signed-in person's changes to a meeting don't overwrite anything. Each person's changes to a mark (the word corrections of one recording, its speakers, a source's people) are a record of their own, `<mark id>~<user id>`, holding what they saw without their changes and with them. What each person sees is built in the browser (`src/sync/layers.js`):
 
@@ -82,7 +82,7 @@ Each layer carries only what that person changed, so removing it removes only th
 
 - **Public layers.** If the person's group has the permission for that kind of change (correcting words, say), their layer is public: everyone sees it, while the person is trusted.
 - **Private layers.** If not, the same change is kept for them alone, and the page says so ("only you see this").
-- **Untrusted people.** Unticking Trusted on the People page hides all of someone's layers from everyone else straight away. On their next sync, other browsers drop them. Reviewers still see them, marked untrusted.
+- **Untrusted people.** Unticking Trusted on the Accounts page hides all of someone's layers from everyone else straight away. On their next sync, other browsers drop them. Reviewers still see them, marked untrusted.
 - **Removed accounts.** Removing someone removes their layers.
 
 The recorder's own review page still edits the shared marks directly; people's layers show in the web app, on top of them.
@@ -171,6 +171,10 @@ How agents share the work:
 - **Revoking:** Revoke stops a key at once.
 - **The agent's code:** deploys put it in `hub/agent/`. It downloads only with an install token or an agent's key.
 
+## People
+
+The People page lists the people in meetings: each source's roster from the review page (names, roles, groups), with photos (`publish-library` sends them, to the private folder) and what each has said. Speaking time and appearances come from the meetings' speaker marks, counting each turn until the next one. A person's page lists their meetings, each linked to the moment they first spoke (`/meetings/<id>?part=…&t=…` opens a meeting there). Speaker names in transcripts link to their person. Like the meetings, it's only for people whose group may see meetings.
+
 ## Schedules
 
 A schedule says when a meeting happens, in its own time zone, so a 6 pm meeting stays at 6 pm when daylight saving changes:
@@ -207,7 +211,7 @@ Recorders and the web app work out the dates (`src/sync/recurrence.js`); the hub
 The web app also runs without a recorder behind it, from any static host. Each browser keeps its own copy in IndexedDB and syncs with a hub every 30 seconds (every 10 on the live and agents pages).
 
 - **Signed out:** Published, Schedules, Settings and Account.
-- **Signed in:** whatever your group allows. That's Meetings, Live and Agents with "See full meetings", People for reviewers and admins.
+- **Signed in:** whatever your group allows. That's Meetings, People, Live and Agents with "See full meetings", and Accounts for reviewers and admins.
 - **Without any hub:** the browser keeps everything to itself. Schedules work, and Export/Import under Settings moves its data. Nothing is shared and nobody signs in.
 
 - **On the hub's server:** `bin/deploy-hub.sh` puts the site beside the hub, already pointed at it ([deploy.md](deploy.md)).

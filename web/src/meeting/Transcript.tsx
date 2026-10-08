@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useState, type Ref } from 'react';
 import TimeLink from './TimeLink.tsx';
 import WordEditor from './WordEditor.tsx';
@@ -14,6 +15,7 @@ export default function Transcript({
   editable,
   people,
   nameOf,
+  personHref,
   speakersAt,
   correctedBy,
   canPlay,
@@ -33,6 +35,8 @@ export default function Transcript({
   editable: boolean;
   people: Person[];
   nameOf: (speaker: string) => string;
+  // Where a speaker's own page is (the People directory), when there's one.
+  personHref?: (speaker: string) => string | null;
   speakersAt: (part: string, seconds: number) => string[];
   correctedBy: (word: Word) => string;
   canPlay: (part: string) => boolean;
@@ -105,12 +109,25 @@ export default function Transcript({
                 <span className="words">
                   {line.words.map((word) => {
                     const speakers = speakersAt(line.part, word.at);
-                    const label = speakers.join() !== last ? speakers.map(nameOf).join(', ') : '';
+                    const changed = speakers.join() !== last;
                     last = speakers.join();
                     const by = word.edit ? correctedBy(word) : '';
                     return (
                       <span key={word.index}>
-                        {label && <strong className="speaker-label">{label}: </strong>}
+                        {changed && speakers.length > 0 && (
+                          <strong className="speaker-label">
+                            {speakers.map((speaker, index) => {
+                              const href = personHref?.(speaker);
+                              return (
+                                <span key={speaker}>
+                                  {index > 0 && ', '}
+                                  {href ? <Link to={href}>{nameOf(speaker)}</Link> : nameOf(speaker)}
+                                </span>
+                              );
+                            })}
+                            :{' '}
+                          </strong>
+                        )}
                         {word.edit && word.shown === '' ? (
                           editable && (
                             <button

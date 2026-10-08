@@ -8,6 +8,7 @@ export interface RecordingData {
   occurrenceKey: string;
   title: string;
   sourceKey: string;
+  sourceName?: string;
   recorderId: string;
   status: 'recording' | 'publishing' | 'done' | 'failed' | 'skipped';
   scheduledStart: string;

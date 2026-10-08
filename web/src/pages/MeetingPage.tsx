@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { can, useAccount } from '../data/account.ts';
 import { putRecord, useRecords } from '../data/useRecords.ts';
 import { syncNow } from '../data/sync.ts';
@@ -97,6 +97,21 @@ export default function MeetingPage() {
     setPartShown(part);
     setSeek((previous) => ({ time: seconds, n: (previous?.n || 0) + 1 }));
   };
+
+  // Opened at a moment (?part=…&t=…, from a person's page): go there once, when the meeting's media is known.
+  const [params] = useSearchParams();
+  const startAt = params.get('t');
+  const startPart = params.get('part');
+  const started = useRef(false);
+  const firstMediaPart = media[0]?.part;
+  const hasStartPart = Boolean(startPart && media.some((item) => item.part === startPart));
+  useEffect(() => {
+    if (started.current || startAt === null || !firstMediaPart) return;
+    started.current = true;
+    // oxlint-disable-next-line react/set-state-in-effect -- following the address once the synced media arrives
+    setPartShown(hasStartPart && startPart ? startPart : firstMediaPart);
+    setSeek((previous) => ({ time: Number(startAt), n: (previous?.n || 0) + 1 }));
+  }, [firstMediaPart, hasStartPart, startAt, startPart]);
 
   if (account.checked && !can('view.meetings', account)) {
     return (
@@ -284,6 +299,11 @@ export default function MeetingPage() {
           editable={editable}
           people={people}
           nameOf={nameOf}
+          personHref={(speaker) =>
+            peopleMap.has(speaker)
+              ? `/people/${encodeURIComponent(data.sourceKey)}/${encodeURIComponent(speaker)}`
+              : null
+          }
           speakersAt={speakersAt}
           correctedBy={(word) => correctedBy(stacks, id, word)}
           canPlay={canPlay}

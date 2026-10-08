@@ -228,7 +228,26 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
     }
     for (const source of sources) {
       const people = readJson(path.join(source.storageDir, 'people', 'people.json'));
-      if (people) await put('marks', `${source.key}:people`, people, 'marks');
+      if (!people) continue;
+      await put('marks', `${source.key}:people`, people, 'marks');
+      // Their photos (face crops from meetings, so private like the meetings) in a record of their own, which the
+      // review page's saves of the roster never touch: { photos: { personId: { path, version } } }.
+      const photosId = `${source.key}:people-photos`;
+      const known = (await client.get('marks', photosId))?.data?.photos || {};
+      const photos = {};
+      for (const person of people.people || []) {
+        const file = person.photo && path.join(source.storageDir, 'people', person.photo);
+        if (!file || !fs.existsSync(file)) continue;
+        const version = person.photoVersion || 0;
+        if (known[person.id]?.version === version && known[person.id]?.path) {
+          photos[person.id] = known[person.id];
+          continue;
+        }
+        if (dryRun) continue;
+        const type = /\.png$/i.test(file) ? 'image/png' : /\.webp$/i.test(file) ? 'image/webp' : 'image/jpeg';
+        photos[person.id] = { path: (await uploadMedia(file, type)).path, version };
+      }
+      await put('marks', photosId, { photos }, 'marks');
     }
     if (!dryRun) {
       const { refused } = await client.sync();

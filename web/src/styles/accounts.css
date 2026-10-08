@@ -52,3 +52,50 @@ table.permissions th {
   border-color: var(--line);
   background: var(--card);
 }
+
+/* The People directory and a person's page. */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--code);
+  color: var(--muted);
+  font-weight: 600;
+}
+.people-group h2 {
+  margin: 18px 0 8px;
+}
+.people-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.person-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--fg);
+}
+.person-card:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+}
+.person-card > span {
+  display: grid;
+  gap: 2px;
+}
+.person-head {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 16px;
+}

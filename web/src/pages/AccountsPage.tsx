@@ -22,7 +22,7 @@ const fetchPeople = () => hubCall<{ users: Person[]; groups: Group[] }>('users')
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'never';
 
-export default function PeoplePage() {
+export default function AccountsPage() {
   const account = useAccount();
   const [people, setPeople] = useState<Person[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -100,7 +100,7 @@ export default function PeoplePage() {
   return (
     <section>
       <div className="toolbar">
-        <h1 className="grow">People</h1>
+        <h1 className="grow">Accounts</h1>
       </div>
       {message && <p className="note">{message}</p>}
       <div className="panel table-scroll">
