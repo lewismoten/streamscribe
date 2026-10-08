@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { layerData, layerId, stackMarks } from '../../../src/sync/layers.js';
 import { MARK_PERMISSIONS } from '../../../src/sync/permissions.js';
@@ -7,7 +7,7 @@ import { putRecord, useRecords, type HubRecord } from '../data/useRecords.ts';
 import { syncNow } from '../data/sync.ts';
 import { clock, duration } from '../format.ts';
 import { dateTime, mediaUrlOf, STATUS_LABEL, type RecordingData } from './MeetingsPage.tsx';
-import MediaPlayer, { type MediaData } from '../MediaPlayer.tsx';
+import MediaPlayer, { type MediaData, type PlayerControl } from '../MediaPlayer.tsx';
 import { hubSettings } from '../data/hub.ts';
 
 // One meeting from the hub: its stills, chapters, votes, and transcript (the final one when it's ready, the quick
@@ -55,6 +55,7 @@ export default function MeetingPage() {
   const { records: mediaRecords } = useRecords<MediaData>('media');
   const [partShown, setPartShown] = useState('');
   const [seek, setSeek] = useState<{ time: number; n: number } | null>(null);
+  const player = useRef<PlayerControl>(null);
   const [nowLine, setNowLine] = useState('');
   const [status, setStatus] = useState('');
   const recording = recordings?.find((record) => record.id === id);
@@ -152,8 +153,11 @@ export default function MeetingPage() {
   // Published audio and video (npm run publish-media), per part; the player follows the transcript's clicks.
   const media = (mediaRecords || []).filter((record) => record.data.recordingId === id).map((record) => record.data).sort((a, b) => a.partIndex - b.partIndex);
   const playing = media.find((item) => item.part === partShown) || media[0];
+  // Plays from a time: right away in the player showing that part (inside the click, as Safari needs), or by switching
+  // to the part's player first.
   const playAt = (part: string, seconds: number) => {
     if (!media.some((item) => item.part === part)) return;
+    if (playing?.part === part && player.current) { player.current.playFrom(seconds); return; }
     setPartShown(part);
     setSeek({ time: seconds, n: Date.now() });
   };
@@ -189,7 +193,9 @@ export default function MeetingPage() {
         </div>
       </header>
       {pictures.length > 0 && (
-        <div className="stills">{pictures.map((still) => <img key={still.id} src={mediaUrlOf(still.data.path)} alt="" loading="lazy" title={clock(still.data.position)} />)}</div>
+        <div className="stills">{pictures.map((still) => media.some((item) => item.part === still.data.part)
+          ? <button key={still.id} type="button" className="still-button" title={`Play from ${clock(still.data.position)}`} onClick={() => playAt(still.data.part, still.data.position)}><img src={mediaUrlOf(still.data.path)} alt="" loading="lazy" /></button>
+          : <img key={still.id} src={mediaUrlOf(still.data.path)} alt="" loading="lazy" title={clock(still.data.position)} />)}</div>
       )}
       <div className="recording-columns">
         <div className="side">
@@ -200,7 +206,7 @@ export default function MeetingPage() {
                   {media.map((item) => <button key={item.part} type="button" className={item.part === playing.part ? 'on' : ''} onClick={() => setPartShown(item.part)}>Part {item.partIndex + 1}</button>)}
                 </span>
               )}
-              <MediaPlayer key={playing.part} media={playing} seek={seek}
+              <MediaPlayer key={playing.part} media={playing} seek={seek} control={player}
                 stills={pictures.filter((still) => still.data.part === playing.part).map((still) => ({ position: still.data.position, path: still.data.path }))} onTime={onTime} />
               <p className="muted small"><a href={`${hubSettings().url}/podcast/${encodeURIComponent(playing.sourceKey)}.xml`}>🎧 Podcast feed</a> for {playing.sourceName || playing.sourceKey} meetings</p>
             </div>

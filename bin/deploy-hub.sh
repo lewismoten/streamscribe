@@ -30,5 +30,19 @@ echo "Hub → $REMOTE:$DEPLOY_PATH/hub/"
 "${RSYNC[@]}" $DRY_RUN --exclude '/config.php' --exclude '/data/' --exclude '/media/' hub-php/ "$REMOTE:$DEPLOY_PATH/hub/"
 
 if [ -z "$DRY_RUN" ]; then
+  # Caching, in the site's .htaccess (beside the host's own settings there, which stay): browsers check index.html on
+  # every visit, so a deploy shows at once, and keep the content-named assets/ files for a year.
+  $SSH "$REMOTE" "f='$DEPLOY_PATH/.htaccess'; touch \"\$f\"; sed -i '/^# BEGIN streamscribe/,/^# END streamscribe/d' \"\$f\"; cat >> \"\$f\"" <<'HTACCESS'
+# BEGIN streamscribe (written by bin/deploy-hub.sh)
+<IfModule mod_headers.c>
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "^index-[A-Za-z0-9_-]{8}\.(js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+# END streamscribe
+HTACCESS
   $SSH "$REMOTE" "cd '$DEPLOY_PATH/hub' && ${REMOTE_PHP:-php} tools/migrate.php"
 fi

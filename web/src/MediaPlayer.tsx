@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { mediaUrl } from './data/hub.ts';
 import { clock } from './format.ts';
 
@@ -11,17 +11,21 @@ export interface MediaData {
   recordedAt: string; seconds: number; audio: MediaFile; video: MediaFile | null;
 }
 type Mode = 'video' | 'pictures';
+// For the page: jump to a time and play. Called straight from a click, since Safari only lets a page start playing
+// inside the click itself.
+export interface PlayerControl { playFrom: (seconds: number) => void }
 const MODE_KEY = 'streamscribe.playerMode';
 
 function savedMode(): Mode {
   try { return localStorage.getItem(MODE_KEY) === 'pictures' ? 'pictures' : 'video'; } catch { return 'video'; }
 }
 
-export default function MediaPlayer({ media, stills, seek, onTime }: {
+export default function MediaPlayer({ media, stills, seek, onTime, control }: {
   media: MediaData;
   stills: { position: number; path: string }[];
   seek: { time: number; n: number } | null;
   onTime: (seconds: number) => void;
+  control?: Ref<PlayerControl>;
 }) {
   const audio = useRef<HTMLAudioElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -60,12 +64,21 @@ export default function MediaPlayer({ media, stills, seek, onTime }: {
     };
   }, [shown, onTime]);
 
-  // A click on a transcript time: jump there and play.
-  useEffect(() => {
+  // Jumps there (picture and sound together) and plays.
+  const playFrom = (seconds: number) => {
     const sound = audio.current;
-    if (!seek || !sound) return;
-    sound.currentTime = Math.max(0, seek.time - 0.5);
-    sound.play().catch(() => { /* the browser wants a click on the player first */ });
+    if (!sound) return;
+    const target = Math.max(0, seconds - 0.5);
+    sound.currentTime = target;
+    if (video.current) video.current.currentTime = target;
+    setTime(target);
+    onTime(target);
+    sound.play().catch(() => { /* the browser wants a click on the player itself first */ });
+  };
+  useImperativeHandle(control, () => ({ playFrom }));
+  // A jump asked for before this player existed (a time in another part, which switches to it).
+  useEffect(() => {
+    if (seek) playFrom(seek.time);
   }, [seek]);
 
   const still = [...stills].reverse().find((item) => item.position <= time + 0.5) || stills[0];
