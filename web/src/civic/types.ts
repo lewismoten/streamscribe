@@ -64,6 +64,7 @@ export interface Term {
   endReason?: EndReason;
   electionId?: string; // candidates: the election they ran in; elected members: the one they won
   election?: string; // an election's date, from before elections were records of their own
+  electionNote?: string; // about this person in that election, such as "First woman elected Sheriff"
   result?: Result;
   note?: string;
 }

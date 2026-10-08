@@ -98,6 +98,7 @@ export default function TermForm({
     if (!ELECTED_KINDS.includes(term.kind) || !term.electionId) delete term.electionId;
     if (term.electionId) delete term.election;
     if (term.kind !== 'candidate') delete term.result;
+    if (!ELECTED_KINDS.includes(term.kind) || !term.electionNote?.trim()) delete term.electionNote;
     await putRecord('terms', id, term);
     // A public figure: listed publicly, if they aren't yet (their photo stays as chosen).
     const person = civic.people.get(personKey);
@@ -280,6 +281,16 @@ export default function TermForm({
                 </option>
               ))}
             </select>
+          </label>
+        )}
+        {ELECTED_KINDS.includes(form.kind) && (
+          <label>
+            Election note
+            <input
+              value={form.electionNote || ''}
+              onChange={(event) => change({ electionNote: event.target.value })}
+              placeholder="Such as: first woman elected Sheriff"
+            />
           </label>
         )}
         <label>

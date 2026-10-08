@@ -150,7 +150,8 @@ export default function BodyPage() {
                   details={[
                     district(term.data) && `${district(term.data)} District`,
                     kindTag(term.data),
-                    `since ${shortDate(term.data.start)}`
+                    `since ${shortDate(term.data.start)}`,
+                    term.data.electionNote
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -187,7 +188,8 @@ export default function BodyPage() {
                   title={term.data.title}
                   details={[
                     district(term.data) && `${district(term.data)} District`,
-                    electionOf(civic.elections, term.data) && electionLabel(electionOf(civic.elections, term.data)!)
+                    electionOf(civic.elections, term.data) && electionLabel(electionOf(civic.elections, term.data)!),
+                    term.data.electionNote
                   ]
                     .filter(Boolean)
                     .join(' · ')}

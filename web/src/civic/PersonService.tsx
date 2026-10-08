@@ -69,6 +69,7 @@ export default function PersonService({ person, civic }: { person: MeetingPerson
                       {kindTag(term.data) && term.data.kind !== 'candidate' && (
                         <span className="tag">{kindTag(term.data)}</span>
                       )}
+                      {term.data.electionNote && <span className="tag note-tag">{term.data.electionNote}</span>}
                       <span className="muted small">
                         {' '}
                         {[

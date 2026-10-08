@@ -4,7 +4,8 @@ import { personHref } from './parts.tsx';
 import { electionLabel, personKeyOf, RESULTS, type Election } from './types.ts';
 import type { Civic } from './useCivic.ts';
 
-// An organization's elections, newest first, each with who ran (and for what) and how it went.
+// An organization's elections, newest first, each with who ran (and for what), how it went, and notes about them
+// (such as "First woman elected Sheriff").
 export default function ElectionList({
   organizationId,
   civic,
@@ -23,12 +24,20 @@ export default function ElectionList({
       <h3>Elections</h3>
       <ul>
         {elections.map((election) => {
-          const ran = (civic.terms || []).filter(
-            (term) =>
-              term.data.electionId === election.id &&
-              term.data.kind === 'candidate' &&
-              civic.people.has(personKeyOf(term.data))
-          );
+          // Each person once: who ran (or was recorded as elected in it), for what, how it went, and any notes.
+          const ran = new Map<string, { title: string; result: string; notes: string[] }>();
+          for (const term of civic.terms || []) {
+            const data = term.data;
+            if (data.electionId !== election.id || !civic.people.has(personKeyOf(data))) continue;
+            if (data.kind !== 'candidate' && data.kind !== 'elected') continue;
+            const entry = ran.get(personKeyOf(data)) || { title: data.title, result: '', notes: [] };
+            if (data.kind === 'candidate') {
+              entry.title = data.title;
+              if (data.result) entry.result = RESULTS[data.result];
+            } else if (!entry.result) entry.result = 'Won';
+            if (data.electionNote && !entry.notes.includes(data.electionNote)) entry.notes.push(data.electionNote);
+            ran.set(personKeyOf(data), entry);
+          }
           return (
             <li key={election.id}>
               <strong>{electionLabel(election.data)}</strong>
@@ -38,14 +47,19 @@ export default function ElectionList({
                   Change
                 </button>
               )}
-              {ran.length > 0 && (
+              {ran.size > 0 && (
                 <ul className="small">
-                  {ran.map((term) => {
-                    const person = civic.people.get(personKeyOf(term.data))!;
+                  {[...ran].map(([key, entry]) => {
+                    const person = civic.people.get(key)!;
                     return (
-                      <li key={term.id}>
-                        <Link to={personHref(person)}>{shownName(person)}</Link> for {term.data.title}
-                        {term.data.result ? ` · ${RESULTS[term.data.result]}` : ''}
+                      <li key={key}>
+                        <Link to={personHref(person)}>{shownName(person)}</Link> for {entry.title}
+                        {entry.result ? ` · ${entry.result}` : ''}
+                        {entry.notes.map((note) => (
+                          <span key={note} className="tag">
+                            {note}
+                          </span>
+                        ))}
                       </li>
                     );
                   })}
