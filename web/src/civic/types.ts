@@ -5,7 +5,8 @@ import { dayKey } from '../format.ts';
 // (a board, a committee under it, its staff) says how its members are chosen and which sources' meetings are its
 // own; a term says who served on a body, as what, from when to when. A person holds many terms over the years:
 // appointed to a seat, then elected to it, Chair for a year, interim administrator between hires, or running for a
-// seat (a candidate) whether or not they win. People are the ones on each source's roster (see ../people).
+// seat (a candidate) whether or not they win. Elections are records of their own (collection elections), which
+// candidates' and elected members' terms point at. People are the ones on each source's roster (see ../people).
 
 export type OrganizationKind = 'county' | 'town' | 'city' | 'school-division' | 'nonprofit' | 'other';
 export interface District {
@@ -38,6 +39,15 @@ export interface Body {
   note?: string;
 }
 
+export type ElectionKind = 'general' | 'special' | 'primary' | 'other';
+export interface Election {
+  date: string; // YYYY-MM-DD
+  name: string;
+  organizationId: string;
+  kind: ElectionKind;
+  note?: string;
+}
+
 export type TermKind =
   'elected' | 'appointed' | 'citizen' | 'ex-officio' | 'officer' | 'staff' | 'interim' | 'candidate';
 export type EndReason = '' | 'term-ended' | 'resigned' | 'replaced' | 'removed' | 'died' | 'other';
@@ -52,7 +62,8 @@ export interface Term {
   start: string; // YYYY-MM-DD
   end?: string; // YYYY-MM-DD, inclusive; none while it lasts
   endReason?: EndReason;
-  election?: string; // candidates: the election's date
+  electionId?: string; // candidates: the election they ran in; elected members: the one they won
+  election?: string; // an election's date, from before elections were records of their own
   result?: Result;
   note?: string;
 }
@@ -109,6 +120,22 @@ export const END_REASONS: Record<EndReason, string> = {
   died: 'Died',
   other: 'Other'
 };
+export const ELECTION_KINDS: Record<ElectionKind, string> = {
+  general: 'General election',
+  special: 'Special election',
+  primary: 'Primary',
+  other: 'Election'
+};
+// Kinds of term that go with an election.
+export const ELECTED_KINDS: TermKind[] = ['elected', 'candidate'];
+// The election a term went with: its record, or the date given before elections were records.
+export function electionOf(elections: { id: string; data: Election }[] | null, term: Term) {
+  const found = term.electionId ? elections?.find((item) => item.id === term.electionId)?.data : undefined;
+  if (found) return found;
+  return term.election ? { date: term.election, name: 'Election', organizationId: '', kind: 'other' as const } : null;
+}
+export const electionLabel = (election: Election) => `${election.name}, ${shortDate(election.date)}`;
+
 export const RESULTS: Record<Result, string> = {
   '': 'Not decided yet',
   won: 'Won',

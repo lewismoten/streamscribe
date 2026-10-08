@@ -4,7 +4,7 @@ import { useRecords } from '../data/useRecords.ts';
 import { useDirectory } from '../people/directory.ts';
 import { publicPeople } from '../people/PeoplePage.tsx';
 import { usePeople, type MeetingPerson } from '../people/usePeople.ts';
-import type { Body, Organization, Term } from './types.ts';
+import type { Body, Election, Organization, Term } from './types.ts';
 
 // Public bodies, their organizations, and everyone's terms, with the people they're about: everyone on the rosters
 // for people who may see meetings, else the public directory (a term of someone not listed shows without a name).
@@ -14,6 +14,7 @@ export function useCivic() {
   const { records: organizations } = useRecords<Organization>('organizations');
   const { records: bodies } = useRecords<Body>('bodies');
   const { records: terms } = useRecords<Term>('terms');
+  const { records: elections } = useRecords<Election>('elections');
   const directories = useDirectory();
   const roster = usePeople();
   const people = useMemo(() => {
@@ -29,10 +30,11 @@ export function useCivic() {
     organizations,
     bodies,
     terms,
+    elections,
     people,
     directories,
     roster,
-    loading: !organizations || !bodies || !terms
+    loading: !organizations || !bodies || !terms || !elections
   };
 }
 export type Civic = ReturnType<typeof useCivic>;

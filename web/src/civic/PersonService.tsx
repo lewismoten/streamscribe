@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import type { MeetingPerson } from '../people/usePeople.ts';
 import { districtName, kindTag } from './parts.tsx';
 import TermForm from './TermForm.tsx';
-import { END_REASONS, isCurrent, personKeyOf, RESULTS, span, type Term } from './types.ts';
+import { electionLabel, electionOf, END_REASONS, isCurrent, personKeyOf, RESULTS, span, type Term } from './types.ts';
 import type { Civic } from './useCivic.ts';
 
 // A person's service on public bodies, body by body, newest first: each seat, office, staff position, and run for
@@ -56,6 +56,7 @@ export default function PersonService({ person, civic }: { person: MeetingPerson
                 .filter((term) => term.data.bodyId === bodyId)
                 .map((term) => {
                   const district = districtName(organization, term.data);
+                  const election = electionOf(civic.elections, term.data);
                   const ending =
                     term.data.kind === 'candidate'
                       ? term.data.result
@@ -70,7 +71,16 @@ export default function PersonService({ person, civic }: { person: MeetingPerson
                       )}
                       <span className="muted small">
                         {' '}
-                        {[district && `${district} District`, span(term.data), ending, term.data.note]
+                        {[
+                          district && `${district} District`,
+                          term.data.kind === 'candidate' ? '' : span(term.data),
+                          election &&
+                            (term.data.kind === 'candidate'
+                              ? electionLabel(election)
+                              : `elected in ${electionLabel(election)}`),
+                          ending,
+                          term.data.note
+                        ]
                           .filter(Boolean)
                           .join(' · ')}
                       </span>

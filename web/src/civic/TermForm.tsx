@@ -5,12 +5,16 @@ import { listedPerson, savePublic } from '../people/directory.ts';
 import { shownName } from '../people/usePeople.ts';
 import { FormButtons } from './OrgBodyForms.tsx';
 import {
+  ELECTED_KINDS,
+  ELECTION_KINDS,
+  electionLabel,
   END_REASONS,
   RESULTS,
   TERM_HELP,
   TERM_KINDS,
   TITLE_SUGGESTIONS,
   today,
+  type ElectionKind,
   type EndReason,
   type Result,
   type Term,
@@ -21,6 +25,10 @@ import type { Civic } from './useCivic.ts';
 // Adding or changing a term: who, on which body, as what (elected, appointed, Chair, interim staff, a candidate…),
 // in which district, from when to when, and why it ended. Someone with a term is a public figure: saving lists them
 // in the public directory (for people who may publish), so their name shows on the public pages too.
+//
+// An organization with no bodies yet (such as a sheriff's office, an office of one) can be chosen as the body: saving
+// makes it a body of its own. Candidates and elected members choose their election, or add a new one here.
+const NEW_ELECTION = '+new';
 export default function TermForm({
   id,
   value,
@@ -42,10 +50,19 @@ export default function TermForm({
     ...value
   });
   const [message, setMessage] = useState('');
+  const [newElection, setNewElection] = useState({ date: '', kind: 'general' as ElectionKind });
   const change = (patch: Partial<Term>) => setForm({ ...form, ...patch });
   const bodies = civic.bodies || [];
   const body = bodies.find((item) => item.id === form.bodyId);
-  const organization = civic.organizations?.find((item) => item.id === body?.data.organizationId);
+  const organizationId = form.bodyId.startsWith('org:') ? form.bodyId.slice(4) : body?.data.organizationId;
+  const organization = civic.organizations?.find((item) => item.id === organizationId);
+  const withBodies = (civic.organizations || []).filter((org) =>
+    bodies.some((item) => item.data.organizationId === org.id)
+  );
+  const withoutBodies = (civic.organizations || []).filter((org) => !withBodies.includes(org));
+  const elections = (civic.elections || [])
+    .filter((item) => !organizationId || item.data.organizationId === organizationId)
+    .sort((a, b) => b.data.date.localeCompare(a.data.date));
   const people = [...civic.people.values()].sort(
     (a, b) => a.sourceName.localeCompare(b.sourceName) || shownName(a).localeCompare(shownName(b))
   );
@@ -56,11 +73,31 @@ export default function TermForm({
     event.preventDefault();
     if (!personKey || !form.bodyId) return setMessage('Choose a person and a body');
     if (form.end && form.end < form.start) return setMessage('It ends before it starts');
+    if (form.electionId === NEW_ELECTION && !newElection.date) return setMessage("Give the new election's day");
     const term: Term = { ...form, title: form.title.trim() || TERM_KINDS[form.kind] };
-    if (term.kind !== 'candidate') {
-      delete term.election;
-      delete term.result;
+    // An organization chosen as the body becomes a body of its own (the office itself).
+    if (term.bodyId.startsWith('org:') && organization) {
+      term.bodyId = `${organization.id}-office`;
+      await putRecord('bodies', term.bodyId, {
+        organizationId: organization.id,
+        name: organization.data.name,
+        kind: 'other',
+        selection: organization.data.kind === 'nonprofit' ? 'self-selected' : 'elected',
+        meetings: []
+      });
     }
+    if (term.electionId === NEW_ELECTION && organization) {
+      term.electionId = `${organization.id}-${newElection.date}-${newElection.kind}`;
+      await putRecord('elections', term.electionId, {
+        date: newElection.date,
+        name: `${ELECTION_KINDS[newElection.kind]} ${newElection.date.slice(0, 4)}`,
+        organizationId: organization.id,
+        kind: newElection.kind
+      });
+    }
+    if (!ELECTED_KINDS.includes(term.kind) || !term.electionId) delete term.electionId;
+    if (term.electionId) delete term.election;
+    if (term.kind !== 'candidate') delete term.result;
     await putRecord('terms', id, term);
     // A public figure: listed publicly, if they aren't yet (their photo stays as chosen).
     const person = civic.people.get(personKey);
@@ -112,7 +149,12 @@ export default function TermForm({
           Body
           <select value={form.bodyId} onChange={(event) => change({ bodyId: event.target.value })} required>
             <option value="">Choose…</option>
-            {(civic.organizations || []).map((org) => (
+            {withoutBodies.map((org) => (
+              <option key={org.id} value={`org:${org.id}`}>
+                {org.data.name} (the office itself)
+              </option>
+            ))}
+            {withBodies.map((org) => (
               <optgroup key={org.id} label={org.data.name}>
                 {bodies
                   .filter((item) => item.data.organizationId === org.id)
@@ -188,27 +230,57 @@ export default function TermForm({
             </select>
           </label>
         )}
-        {form.kind === 'candidate' && (
+        {ELECTED_KINDS.includes(form.kind) && (
+          <label>
+            {form.kind === 'candidate' ? 'Running in' : 'Elected in'}
+            <select value={form.electionId || ''} onChange={(event) => change({ electionId: event.target.value })}>
+              <option value="">{form.election ? `An election on ${form.election}` : 'Not given'}</option>
+              {elections.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {electionLabel(item.data)}
+                </option>
+              ))}
+              {organization && <option value={NEW_ELECTION}>＋ A new election…</option>}
+            </select>
+          </label>
+        )}
+        {ELECTED_KINDS.includes(form.kind) && form.electionId === NEW_ELECTION && (
           <>
             <label>
-              Election day
+              New election's day
               <input
                 type="date"
-                value={form.election || ''}
-                onChange={(event) => change({ election: event.target.value })}
+                value={newElection.date}
+                onChange={(event) => setNewElection({ ...newElection, date: event.target.value })}
+                required
               />
             </label>
             <label>
-              Result
-              <select value={form.result || ''} onChange={(event) => change({ result: event.target.value as Result })}>
-                {Object.entries(RESULTS).map(([result, label]) => (
-                  <option key={result} value={result}>
+              Kind of election
+              <select
+                value={newElection.kind}
+                onChange={(event) => setNewElection({ ...newElection, kind: event.target.value as ElectionKind })}
+              >
+                {Object.entries(ELECTION_KINDS).map(([kind, label]) => (
+                  <option key={kind} value={kind}>
                     {label}
                   </option>
                 ))}
               </select>
             </label>
           </>
+        )}
+        {form.kind === 'candidate' && (
+          <label>
+            Result
+            <select value={form.result || ''} onChange={(event) => change({ result: event.target.value as Result })}>
+              {Object.entries(RESULTS).map(([result, label]) => (
+                <option key={result} value={result}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
         <label>
           Note

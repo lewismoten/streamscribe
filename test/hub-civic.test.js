@@ -30,12 +30,29 @@ test('public bodies: edited with edit.bodies, read by everyone', { skip: externa
     start: '2024-03-01',
     end: '2024-12-31'
   });
+  await boss.put('elections', 'warren-2025-11-04-general', {
+    date: '2025-11-04',
+    name: 'General election 2025',
+    organizationId: 'warren',
+    kind: 'general'
+  });
+  await boss.put('terms', 't3', {
+    sourceKey: 'warren-county-va',
+    personId: 'jane-doe',
+    bodyId: 'warren-bos',
+    kind: 'candidate',
+    title: 'Supervisor',
+    start: '2025-06-01',
+    electionId: 'warren-2025-11-04-general',
+    result: 'won'
+  });
   const sent = await boss.sync();
   assert.deepEqual(sent.refused, []);
 
   const reader = await anyone();
   assert.equal((await reader.get('terms', 't1')).data.kind, 'appointed', 'terms are public');
   assert.equal((await reader.get('bodies', 'warren-bos')).data.name, 'Board of Supervisors');
+  assert.equal((await reader.get('elections', 'warren-2025-11-04-general')).data.date, '2025-11-04', 'elections too');
 
   const jane = person(await signIn('jane'));
   await jane.put('terms', 't2', {

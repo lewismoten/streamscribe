@@ -84,3 +84,14 @@
   font: inherit;
   padding: 2px 4px;
 }
+.elections h3 {
+  margin: 14px 0 4px;
+  font-size: 1rem;
+}
+.elections > ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.elections li {
+  margin: 4px 0;
+}

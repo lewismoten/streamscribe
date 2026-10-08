@@ -9,6 +9,8 @@ import { districtName, kindTag, MemberCard, PersonLink } from './parts.tsx';
 import TermForm from './TermForm.tsx';
 import {
   bodiesOfRecording,
+  electionLabel,
+  electionOf,
   END_REASONS,
   isCurrent,
   MEMBER_KINDS,
@@ -185,7 +187,7 @@ export default function BodyPage() {
                   title={term.data.title}
                   details={[
                     district(term.data) && `${district(term.data)} District`,
-                    term.data.election && `election ${shortDate(term.data.election)}`
+                    electionOf(civic.elections, term.data) && electionLabel(electionOf(civic.elections, term.data)!)
                   ]
                     .filter(Boolean)
                     .join(' · ')}

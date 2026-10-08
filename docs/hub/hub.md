@@ -44,6 +44,7 @@ Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, o
 | `jobs`              | work for agents: clips to cut, recordings to encode                                                                                 | the Publish permission; agents (progress)                |
 | `organizations`     | counties, towns, school divisions, nonprofits with public bodies; their districts                                                   | Edit public bodies permission                            |
 | `bodies`            | public bodies (boards, committees, staff): how members are chosen, which meetings are theirs                                        | Edit public bodies permission                            |
+| `elections`         | an organization's elections: the day, a name, general, special, or primary                                                          | Edit public bodies permission                            |
 | `terms`             | who served on a body, as what, and when: elected, appointed, officer, staff, interim, candidate                                     | Edit public bodies permission                            |
 
 Anyone can read schedules, sources, settings, recorders, publications, the directory, and public bodies. Meetings (`recordings`, `transcript_chunks`, `stills`, `media`, `marks`) and the work queue (`jobs`) go only to keys and to people whose group may see meetings. Everyone else's browser gets them as deleted. Writing needs a key (the `X-Streamscribe-Key` header) or a signed-in person (the `X-Streamscribe-Token` header, which the web app sends) whose group allows it.
@@ -203,7 +204,10 @@ The Bodies page lists public bodies by the organization they belong to: a county
   - **Elected** or **Appointed** to a seat (appointed before an election, or after someone resigns), a **Citizen appointee**, or **Ex officio**.
   - An **Officer** of the body, such as Chair or Vice Chair, for a year at a time.
   - **Staff** or **Interim** staff, such as the County Administrator or County Attorney; someone moving between Interim County Administrator and Assistant to the County Administrator has one term for each stretch.
-  - A **Candidate** running for a seat, with the election day and its result (won, lost, withdrew), whether or not they're elected.
+  - A **Candidate** running for a seat, with the election they ran in and its result (won, lost, withdrew), whether or not they're elected.
+
+- **Elections** are records of their own (collection `elections`): an organization's election day, its name, and whether it's a general, special, or primary election. Add them on the Bodies page (＋ Election), or from a term form ("＋ A new election…"). A candidate's term says which election they ran in; an elected member's term can say which one they won, while the term itself runs from when they took office. Each organization's elections are listed with who ran.
+- **An office of one**, such as a sheriff's office, can be an organization with no bodies: in a term form it's offered as "(the office itself)", and saving makes it a body of its own.
 
 People in terms are the ones on each source's roster. Saving a term lists the person in the public directory (for people who may publish), since a public official's name is public; their photo stays as chosen on the People page.
 
