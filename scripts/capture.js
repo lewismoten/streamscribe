@@ -1055,8 +1055,9 @@ async function downloadPriorSegments(first, maxSegments, capture, knownKeys, con
 
 // Providers whose segment names carry a stream identifier: Swagit renews it (media-<id>_<n>.ts) about hourly and skips one sequence number
 // when it does. The server serves any segment number under any identifier, so the skipped number is still
-// recoverable (the gap backfill fetches it). With sources[].splitOnStreamIdentifierChange (default on),
-// each identifier is recorded as its own session, linked through previousSessionDir / nextSessionDir.
+// recoverable (the gap backfill fetches it). Because the renewal runs on a timer, it says nothing about the meeting:
+// by default the change is only logged (stream-identity-transitions.json) and the session carries on. With
+// sources[].splitOnStreamIdentifierChange, each identifier is recorded as its own session instead.
 async function rotateSessionOnIdentityChange(segment, capture, context) {
   const incoming = parseStreamIdentity(segment.url, capture);
   const current = capture.streamIdentityLog?.current;
@@ -1065,15 +1066,12 @@ async function rotateSessionOnIdentityChange(segment, capture, context) {
     return false;
   }
   const source = SOURCES.find((item) => item.key === capture.sourceKey);
-  if (source && !source.splitOnStreamIdentifierChange) {
+  if (!source?.splitOnStreamIdentifierChange) {
     return false;
   }
 
   // Finish the old stream: segments after the last one captured may still be served under the old identifier.
   await downloadTrailingSegments(segment, current, capture, context);
-
-  const previousSessionDir = capture.sessionDir;
-  const sessionDir = await createSessionDir(path.dirname(path.dirname(capture.sessionDir)), capture.id);
   const transition = {
     from: current.identifier,
     fromLastSequence: current.lastSequence,
@@ -1081,11 +1079,44 @@ async function rotateSessionOnIdentityChange(segment, capture, context) {
     toFirstSequence: segment.sequence,
     detectedAt: new Date().toISOString()
   };
-  capture.nextSessionDir = sessionDir;
-  capture.endedByTransition = transition;
-  await completeCapture(capture, `Stream identifier changed (${transition.from} -> ${transition.to})`);
+  const sessionDir = await startNextSession(capture, `Stream identifier changed (${transition.from} -> ${transition.to})`, { transition });
+  capture.lastObservedSegmentSequence = segment.sequence - 1;
+  console.log(`[live ${capture.id}] new session for stream ${transition.to} | ${sessionDir}`);
+  return true;
+}
 
-  // Reset the same record in place, so every caller holding it continues in the new session.
+// A new meeting: the stream comes back from the provider's standby slide after at least
+// sources[].newSessionAfterStandbyMinutes (10 by default; a recess shows the meeting's own title card, which is kept,
+// not the standby slide). The session that recorded the last meeting is finished and this segment starts the next
+// one, so each meeting gets its own folder, and none is made for standby alone. Returns the segment's new path.
+async function startSessionAfterStandby(segment, download, capture) {
+  const slideShow = capture.slideShow;
+  const source = SOURCES.find((item) => item.key === capture.sourceKey);
+  const minutes = slideShow?.active && slideShow.startedAt ? (Date.parse(download.capturedAt) - Date.parse(slideShow.startedAt)) / 60000 : 0;
+  if (!(capture.segmentCount > 0) || !(minutes >= Number(source?.newSessionAfterStandbyMinutes ?? 10))) {
+    return null;
+  }
+  const oldPath = path.join(capture.sessionDir, 'segments', download.fileName);
+  const sessionDir = await startNextSession(capture, `Standby slide for ${Math.round(minutes)} minutes: the meeting ended`, {
+    standby: { startedAt: slideShow.startedAt, endedAt: download.capturedAt, discardedSegmentCount: slideShow.discardedSegmentCount }
+  });
+  capture.lastObservedSegmentSequence = segment.sequence - 1;
+  const newPath = path.join(sessionDir, 'segments', download.fileName);
+  await rename(oldPath, newPath);
+  console.log(`[live ${capture.id}] new meeting after ${Math.round(minutes)} minutes of standby | ${sessionDir}`);
+  return newPath;
+}
+
+// Finishes the current session and continues in a new session folder beside it. The capture record is reset in
+// place, so every caller holding it continues in the new session. `link` says why (a stream transition or standby).
+async function startNextSession(capture, reason, link) {
+  const previousSessionDir = capture.sessionDir;
+  const sessionDir = await createSessionDir(path.dirname(path.dirname(capture.sessionDir)), capture.id);
+  capture.nextSessionDir = sessionDir;
+  if (link.transition) capture.endedByTransition = link.transition;
+  if (link.standby) capture.endedByStandby = link.standby;
+  await completeCapture(capture, reason);
+
   const base = {
     id: capture.id,
     title: capture.title,
@@ -1097,19 +1128,18 @@ async function rotateSessionOnIdentityChange(segment, capture, context) {
     masterPlaylistUrl: capture.masterPlaylistUrl,
     mediaPlaylistUrl: capture.mediaPlaylistUrl,
     previousSessionDir,
-    startedByTransition: transition
+    ...(link.transition ? { startedByTransition: link.transition } : {}),
+    ...(link.standby ? { startedAfterStandby: link.standby } : {})
   };
   for (const key of Object.keys(capture)) {
     delete capture[key];
   }
-  Object.assign(capture, buildCaptureRecord(base, sessionDir, transition.detectedAt));
+  Object.assign(capture, buildCaptureRecord(base, sessionDir, new Date().toISOString()));
   await writeJsonAtomically(path.join(sessionDir, 'session.json'), capture);
-  // The old session already holds everything it could recover up to this segment, so the new one starts
-  // right here without backfill (walking back would only re-download the old session's video).
+  // The old session already holds everything it could recover up to here, so the new one starts right here without
+  // backfill (walking back would only re-download the old session's video, or the standby slide).
   capture.initialBackfillCompleted = true;
-  capture.lastObservedSegmentSequence = segment.sequence - 1;
-  console.log(`[live ${capture.id}] new session for stream ${transition.to} | ${sessionDir}`);
-  return true;
+  return sessionDir;
 }
 
 // Walks forward from the old stream's last captured segment toward `nextSegment`, under the old identifier.
@@ -1169,6 +1199,7 @@ async function processDownloadedSegment(segment, download, capture, knownKeys) {
     await discardCapturedSegment(segment, download, capture, knownKeys, disposition);
     return false;
   }
+  await startSessionAfterStandby(segment, download, capture);
   await resumeFromSlideShow(capture, download);
   await recordCapturedSegment(segment, download, capture, knownKeys, disposition.maxVolumeDb);
   return true;

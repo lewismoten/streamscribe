@@ -63,7 +63,8 @@ function normalizeSource(value) {
     // For providers whose segment names carry a stream identifier (Swagit's media-<id>_<n>.ts), start a new session
     // folder whenever it changes. Swagit renews it about hourly without the meeting changing; turn this off to keep
     // one session per meeting.
-    splitOnStreamIdentifierChange: value.splitOnStreamIdentifierChange !== false,
+    splitOnStreamIdentifierChange: value.splitOnStreamIdentifierChange === true,
+    newSessionAfterStandbyMinutes: Number(value.newSessionAfterStandbyMinutes ?? 10),
     // For plain HLS: a regular expression with two groups (identifier, sequence number) matching segment file names,
     // which lets a capture fetch earlier and missed segments by name. Swagit's pattern is built in.
     segmentPattern: value.segmentPattern ? String(value.segmentPattern) : ''

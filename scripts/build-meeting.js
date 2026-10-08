@@ -126,7 +126,7 @@ async function main() {
   } else if (pending.length > 0) {
     console.log(`${pending.length} archive stretch${pending.length === 1 ? ' has' : 'es have'} no transcript yet; run again without --no-transcribe to transcribe ${pending.length === 1 ? 'it' : 'them'}.`);
   }
-  console.log(`Done. Open the meeting with npm run serve, then ${path.join(meetingDir, 'thumbnails', 'index.html')}`);
+  console.log(`Done. Open the meeting with npm start, then ${path.join(meetingDir, 'thumbnails', 'index.html')}`);
 }
 
 // Pieces in airing order. Live runs are stretches of consecutive segments; archive pieces come from the missing

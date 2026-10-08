@@ -419,7 +419,8 @@ async function forgetCaptureState(sessionDir) {
 function assertCaptureStopped() {
   const running = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' })
     .split('\n')
-    .filter((line) => /node .*scripts\/(capture|transcribe|extract-slides|extract-thumbnails)\.js/.test(line));
+    // Only processes that are Node itself running one of these scripts (not a shell whose command mentions them).
+    .filter((line) => /^\s*\d+\s+(\S*\/)?node\s+(\S+\s+)*\S*scripts\/(capture|transcribe|extract-slides|extract-thumbnails)\.js/.test(line));
   if (running.length > 0) {
     throw new Error(`Wait for these to finish (or stop them) before splitting:\n${running.map((line) => `  ${line.trim()}`).join('\n')}`);
   }

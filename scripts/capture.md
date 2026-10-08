@@ -79,7 +79,8 @@ Recovering earlier video:
 Segment identifiers and sessions:
 
 - Swagit names segment files `media-<identifier>_<sequence>.ts` and renews the identifier about hourly (the moments a browser player tends to freeze) and skips one sequence number when it does. The server serves any sequence number under any identifier, so the skipped segment is recovered by the gap backfill.
-- With `splitOnStreamIdentifierChange` (on by default for each `sources` entry), every identifier change starts a new session folder. The old session first recovers any segments up to the change, then is marked complete; the sessions link through `previousSessionDir` / `nextSessionDir`. Because the identifier renews on a timer, one meeting usually spans several sessions; set `splitOnStreamIdentifierChange: false` to keep one session per meeting and split afterward with `split-session`.
+- One meeting, one session folder. Identifier changes are only logged (`stream-identity-transitions.json`), since the renewal runs on a timer and lands mid-meeting. A new session starts when the stream comes back from the standby slide after at least `newSessionAfterStandbyMinutes` (10 by default): the old session is marked complete, and the sessions link through `previousSessionDir` / `nextSessionDir` (with `endedByStandby` / `startedAfterStandby` saying when standby ran). No folder is made for standby alone. A recess or closed session doesn't split the meeting: boards show their own title card for that (such as "Executive Session"), which is kept.
+- `splitOnStreamIdentifierChange: true` brings back the old behavior of a new session at every identifier change (the old session first recovers any segments up to the change).
 
 Request rate:
 

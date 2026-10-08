@@ -5,7 +5,8 @@ import { spawn } from 'child_process';
 import { mkdtemp, writeFile } from 'fs/promises';
 import { SOURCES, TOOLS } from './lib/runtime-config.js';
 import { selectConfiguredSources } from './lib/cli.js';
-import { loadJson, writeJson } from './lib/fs-utils.js';
+import { loadJson, writeJson, writeJsonAtomically } from './lib/fs-utils.js';
+import { readImageText } from './lib/ocr.js';
 import { formatPosition } from './lib/transcript.js';
 import { loadSessionSegments, splitIntoBatches } from './lib/session.js';
 import { thumbnailFileName, writeThumbnailsPage } from './lib/page.js';
@@ -166,7 +167,8 @@ async function refresh(sessionDir, session, byFile, options, { live, verbose }) 
     console.log(`Saved ${byFile.size} thumbnails to ${outputDir} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
   }
 
-  await detectScenes(sessionDir, session, outputDir, options, verbose);
+  const { stills } = await detectScenes(sessionDir, session, outputDir, options, verbose);
+  await describeCards(sessionDir, session, outputDir, stills, options, live);
   await writeThumbnailsPage(sessionDir, [...byFile.values()].sort((a, b) => a.positionSeconds - b.positionSeconds), { live });
 }
 
@@ -261,20 +263,37 @@ function extractThumbnail(segmentPath, offsetSeconds, outputPath, width) {
 // Saved as thumbnails/scenes/*.jpg and thumbnails/scenes.json; reused when the session hasn't changed.
 const sceneThreshold = 0.3;
 const sceneMatchDistance = 24;
+// Still stretches (thumbnails/scenes.json `stills`): the picture identical from keyframe to keyframe and the sound below
+// stillSilenceDb for at least stillMinimumSeconds. A live camera always changes a little (a wide shot of a quiet room
+// still scores about 0.001); a title card shown while the microphones are off scores 0.
+const stillSceneScore = 0.0002;
+const stillSilenceDb = -50;
+const stillMinimumSeconds = 20;
+
+// Joins still stretches that touch (one split across two scanned parts).
+function mergeStills(stills) {
+  const merged = [];
+  for (const [from, to] of [...stills].sort((left, right) => left[0] - right[0])) {
+    const last = merged.at(-1);
+    if (last && from <= last[1] + 2) last[1] = Math.max(last[1], to);
+    else merged.push([Number(from.toFixed(3)), Number(to.toFixed(3))]);
+  }
+  return merged.map(([from, to]) => [Number(from.toFixed(3)), Number(to.toFixed(3))]);
+}
 
 async function detectScenes(sessionDir, session, outputDir, options, verbose = true) {
   const scenesDir = path.join(outputDir, 'scenes');
   const indexPath = path.join(outputDir, 'scenes.json');
   const key = `${session.retained.length}:${session.retained.at(-1).sequence}:${options.width}`;
   const previous = await loadJson(indexPath, null);
-  if (previous?.key === key && Array.isArray(previous.scenes)) {
-    return previous.scenes;
+  if (previous?.key === key && Array.isArray(previous.scenes) && Array.isArray(previous.stills)) {
+    return { scenes: previous.scenes, stills: previous.stills };
   }
   const started = Date.now();
   // A session that only grew since the last run (it's still being captured) is scanned from where that run stopped;
   // anything else (segments filled in mid-session, a split, another width) starts over.
   const scanned = previous?.scanned;
-  const grown = Array.isArray(previous?.scenes) && previous.width === options.width && previous.threshold === sceneThreshold
+  const grown = Array.isArray(previous?.scenes) && Array.isArray(previous.stills) && previous.width === options.width && previous.threshold === sceneThreshold
     && scanned?.count > 0 && scanned.count <= session.retained.length
     && session.retained[scanned.count - 1]?.sequence === scanned.lastSequence
     && previous.scenes.every((scene) => fs.existsSync(path.join(outputDir, scene.fileName)));
@@ -287,23 +306,34 @@ async function detectScenes(sessionDir, session, outputDir, options, verbose = t
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'streamscribe-scenes-'));
   let cutPositions = [];
+  let stills = [];
   try {
-    // Continuing scans include the last scanned segment, so a change right at the boundary is still compared with
-    // the picture before it.
-    const pending = session.retained.slice(Math.max(0, fromIndex - 1));
+    // Continuing scans include the last few scanned segments, so a change right at the boundary is still compared
+    // with the picture before it, and a still stretch that carries on is long enough to be recognized again.
+    const pending = session.retained.slice(Math.max(0, fromIndex - 3));
     const scanFrom = grown ? session.retained[fromIndex]?.videoStart ?? Infinity : 0;
     const parts = splitIntoBatches(pending, 60);
     const found = [];
+    const foundStills = [];
     await runPool(parts.map((part, partIndex) => ({ part, partIndex })), options.concurrency, async ({ part, partIndex }) => {
       const listPath = path.join(tempDir, `part-${partIndex}.txt`);
       const quote = (value) => `'${value.replace(/'/g, `'\\''`)}'`;
       await writeFile(listPath, part.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n'));
-      const times = await sceneTimes(listPath);
+      const { cuts: times, stills } = await scanPart(listPath);
+      // A part's timestamps can run a little past its segments' total length, so a still that lasts to the end of the
+      // part is held to its last segment.
+      const partSeconds = part.reduce((total, item) => total + item.durationSeconds, 0);
+      for (const [from, to] of stills) {
+        const start = joinedToPosition(part, Math.min(from, partSeconds - 0.01));
+        const end = joinedToPosition(part, Math.max(from, Math.min(to, partSeconds) - 0.01));
+        if (start !== null && end !== null) foundStills.push([start, end]);
+      }
       // Part times are seconds into the joined part; convert to video positions. A part that starts at a switch
       // between sources counts as a change there.
       found.push(...(part[0].discontinuity ? [part[0].videoStart] : []), ...times.map((seconds) => joinedToPosition(part, seconds)).filter((position) => position !== null));
     });
     cutPositions = [...(grown ? [] : [0]), ...found.filter((position) => position >= scanFrom - 0.001)].sort((left, right) => left - right);
+    stills = mergeStills([...(grown ? previous.stills || [] : []), ...foundStills]);
   } finally {
     await fs.promises.rm(tempDir, { recursive: true, force: true });
   }
@@ -326,33 +356,138 @@ async function detectScenes(sessionDir, session, outputDir, options, verbose = t
   }
   await writeJson(indexPath, {
     key, updatedAt: new Date().toISOString(), threshold: sceneThreshold, width: options.width,
-    scanned: { count: session.retained.length, lastSequence: session.retained.at(-1).sequence }, scenes
+    scanned: { count: session.retained.length, lastSequence: session.retained.at(-1).sequence }, scenes, stills
   });
   if (verbose || cutPositions.length) {
     console.log(`Found ${scenes.length} camera or slide changes${grown ? ` (${cutPositions.length} new candidates)` : ''} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
   }
-  return scenes;
+  return { scenes, stills };
 }
 
-function sceneTimes(listPath) {
+// Title cards: still stretches of at least cardMinimumSeconds, such as the "Executive Session" card a board shows
+// while it meets in closed session. Each card's picture is saved (thumbnails/cards/) and its text read
+// (macOS text recognition, where available), in thumbnails/cards.json.
+const cardMinimumSeconds = 30;
+
+async function describeCards(sessionDir, session, outputDir, stills, options, live) {
+  const indexPath = path.join(outputDir, 'cards.json');
+  const known = new Map(((await loadJson(indexPath, null))?.cards || []).map((card) => [Math.round(card.from), card]));
+  const last = session.retained.at(-1);
+  const end = last.videoStart + last.durationSeconds;
+  const cards = [];
+  for (const [from, to] of stills) {
+    if (to - from < cardMinimumSeconds) continue;
+    const existing = known.get(Math.round(from));
+    let image = existing?.image || '';
+    let text = existing?.text || '';
+    if (!image || !fs.existsSync(path.join(outputDir, image))) {
+      const segment = findSegment(session.retained, from + 2);
+      if (!segment) continue;
+      image = `cards/card-${thumbnailFileName(from)}`;
+      await fs.promises.mkdir(path.join(outputDir, 'cards'), { recursive: true });
+      const offset = Math.min(from + 2 - segment.videoStart, Math.max(0, segment.durationSeconds - 1.2));
+      if (!await extractThumbnail(path.join(sessionDir, 'segments', segment.fileName), offset, path.join(outputDir, image), 960)) continue;
+      text = (await readImageText(path.join(outputDir, image))).slice(0, 120);
+    }
+    // A card still showing at the end of a capture that's still recording isn't over yet.
+    cards.push({ from, to, text, image, open: Boolean(live) && end - to < 15, chaptered: Boolean(existing?.chaptered) });
+  }
+  await addCardChapters(sessionDir, cards);
+  if (cards.length || known.size) {
+    await writeJson(indexPath, {
+      updatedAt: new Date().toISOString(),
+      note: 'Still stretches (picture unchanged, sound silent) of at least 30 seconds: from/to are video positions, text is what the card says.',
+      cards
+    });
+  }
+  return cards;
+}
+
+// Each card that has ended becomes two chapters, where it starts (named by its text, such as "Executive Session
+// (closed)") and where the meeting comes back, unless a chapter is already marked within 30 seconds. A card is only
+// done once, so a chapter that's edited or removed stays that way.
+async function addCardChapters(sessionDir, cards) {
+  const pending = cards.filter((card) => !card.chaptered && !card.open);
+  if (pending.length === 0) return;
+  const agendaPath = path.join(sessionDir, 'agenda.json');
+  const agenda = (await loadJson(agendaPath, null)) || {};
+  const items = Array.isArray(agenda.items) ? [...agenda.items] : [];
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const near = (seconds) => items.some((item) => Math.abs(Number(item.at) - seconds) < 30);
+  for (const card of pending) {
+    card.chaptered = true;
+    const closed = /executive|closed/i.test(card.text);
+    if (!near(card.from)) {
+      const title = card.text ? `${card.text}${closed && !/closed/i.test(card.text) ? ' (closed)' : ''}` : 'Paused';
+      items.push({ id: newId(), at: Number(card.from.toFixed(2)), title, auto: 'title card' });
+    }
+    if (!near(card.to)) {
+      items.push({ id: newId(), at: Number(card.to.toFixed(2)), title: closed ? 'Back in open session' : 'Resumed', auto: 'title card' });
+    }
+    console.log(`  Title card at ${formatPosition(card.from)}-${formatPosition(card.to)}${card.text ? ` ("${card.text}")` : ''}: chapters added`);
+  }
+  items.sort((left, right) => Number(left.at) - Number(right.at));
+  await writeJsonAtomically(agendaPath, { ...agenda, updatedAt: new Date().toISOString(), items });
+}
+
+// One joined part's keyframes: the times of camera cuts and slide changes (scene score above the threshold), and the
+// stretches where the picture doesn't change at all and the sound is silent, in seconds into the part.
+function scanPart(listPath) {
   return new Promise((resolve, reject) => {
     const child = spawn(TOOLS.ffmpeg, [
       '-hide_banner', '-nostats', '-skip_frame', 'nokey', '-f', 'concat', '-safe', '0', '-i', listPath,
-      '-an', '-vf', `scale=160:-2,select='gt(scene,${sceneThreshold})',showinfo`, '-f', 'null', '-'
+      '-filter_complex', `[0:v]scale=160:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score[v];[0:a]silencedetect=noise=${stillSilenceDb}dB:d=${stillMinimumSeconds}[a]`,
+      '-map', '[v]', '-map', '[a]', '-f', 'null', '-'
     ], { stdio: ['ignore', 'ignore', 'pipe'] });
-    const times = [];
+    const frames = [];
+    const silences = [];
+    let frameTime = null;
+    let silenceStart = null;
     let buffer = '';
     child.stderr.on('data', (chunk) => {
       buffer += chunk.toString();
       const lines = buffer.split('\n');
       buffer = lines.pop();
       for (const line of lines) {
-        const match = line.match(/showinfo.*pts_time:\s*([\d.]+)/);
-        if (match) times.push(Number(match[1]));
+        const time = line.match(/Parsed_metadata.*pts_time:\s*([\d.]+)/);
+        if (time) frameTime = Number(time[1]);
+        const score = line.match(/lavfi\.scene_score=([\d.]+)/);
+        if (score && frameTime !== null) frames.push([frameTime, Number(score[1])]);
+        const start = line.match(/silence_start:\s*(-?[\d.]+)/);
+        if (start) silenceStart = Math.max(0, Number(start[1]));
+        const end = line.match(/silence_end:\s*([\d.]+)/);
+        if (end && silenceStart !== null) { silences.push([silenceStart, Number(end[1])]); silenceStart = null; }
       }
     });
     child.on('error', reject);
-    child.on('close', (code) => (code === 0 ? resolve(times) : reject(new Error(`ffmpeg scene detection exited with code ${code}`))));
+    child.on('close', (code) => {
+      if (code !== 0) { reject(new Error(`ffmpeg scene detection exited with code ${code}`)); return; }
+      const duration = frames.length ? frames.at(-1)[0] : 0;
+      if (silenceStart !== null) silences.push([silenceStart, duration]);
+      // The first frame has no picture before it to compare with.
+      const cuts = frames.slice(1).filter(([, score]) => score > sceneThreshold).map(([time]) => time);
+      // Frozen: consecutive keyframes (about one a second) identical; a live camera always changes a little.
+      const frozen = [];
+      let runStart = null;
+      for (let index = 1; index < frames.length; index += 1) {
+        const still = frames[index][1] <= stillSceneScore;
+        if (still && runStart === null) runStart = frames[index - 1][0];
+        if ((!still || index === frames.length - 1) && runStart !== null) {
+          const runEnd = frames[still ? index : index - 1][0];
+          if (runEnd - runStart >= stillMinimumSeconds) frozen.push([runStart, runEnd]);
+          runStart = null;
+        }
+      }
+      const stills = [];
+      for (const [frozenStart, frozenEnd] of frozen) {
+        for (const [quietStart, quietEnd] of silences) {
+          const from = Math.max(frozenStart, quietStart);
+          const to = Math.min(frozenEnd, quietEnd);
+          if (to - from >= stillMinimumSeconds) stills.push([from, to]);
+        }
+      }
+      resolve({ cuts, stills });
+    });
   });
 }
 

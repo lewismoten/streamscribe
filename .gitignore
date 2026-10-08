@@ -5,3 +5,4 @@
 /transcription-corrections.local.json
 node_modules/
 .DS_Store
+/web/dist/

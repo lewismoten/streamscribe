@@ -93,7 +93,7 @@ export function findPeopleDir(sessionDir) {
   return source ? path.join(source.storageDir, 'people') : path.join(sessionDir, 'people');
 }
 
-// The same page on `npm run serve`, where the player can load the segments (browsers block that on file://).
+// The same page on the streamscribe server (`npm start`), where the player can load the segments (browsers block that on file://).
 function findServerUrl(sessionDir) {
   const source = findSource(sessionDir);
   if (!source) {
@@ -101,7 +101,7 @@ function findServerUrl(sessionDir) {
   }
   const slug = String(source.key).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const relative = path.relative(source.storageDir, sessionDir).split(path.sep).map(encodeURIComponent).join('/');
-  return `http://127.0.0.1:${serverPort}/${slug}/${relative}/thumbnails/index.html`;
+  return `http://127.0.0.1:${serverPort}/files/${slug}/${relative}/thumbnails/index.html`;
 }
 
 const escapeText = (value) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -446,6 +446,7 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
   /* One row of player controls under the slider; scrolls sideways instead of wrapping on narrow screens. */
   .live-edge { color: #d93025; font-weight: 600; white-space: nowrap; }
+  .home { text-decoration: none; padding: 0 4px; }
   .toolbar { display: flex; flex-wrap: nowrap; gap: 4px; align-items: center; max-width: 960px; margin: 2px 0 6px; overflow-x: auto; }
   .toolbar button { flex: 0 0 auto; min-width: 36px; padding: 5px 8px; line-height: 1.2; }
   .toolbar button[hidden] { display: none; }
@@ -530,6 +531,7 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
   </div>
 </div>
 <div class="toolbar" id="toolbar" role="toolbar" aria-label="Player">
+  <a class="home" id="home" href="/" title="The streamscribe library" aria-label="Library" hidden>🏠</a>
   <button type="button" id="play" title="Play or pause (Space)" aria-label="Play">▶︎</button>
   <span class="position" id="position">00:00:00</span>
   <button type="button" id="live-edge" class="live-edge" hidden title="Still being captured: jump to the latest moment">● Live</button>
@@ -1158,7 +1160,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     const link = page.serverUrl ? ' Then open <a href="' + page.serverUrl + '">' + page.serverUrl + '</a>.' : '';
     const onDisk = location.protocol === 'file:';
     note.innerHTML = (failed ? 'The video could not be loaded' + (detail ? ' (' + detail + ')' : '') + '. ' : 'Playing video needs the local server, because browsers block it on pages opened from disk. ')
-      + (onDisk ? 'Run <code>npm run serve</code> in the repository folder.' + link : 'Check that <code>npm run serve</code> is still running, then reload this page.');
+      + (onDisk ? 'Run <code>npm start</code> in the repository folder.' + link : 'Check that <code>npm start</code> is still running, then reload this page.');
     note.hidden = false;
   }
   if (location.protocol === 'file:') showFileNote(false);
@@ -1449,7 +1451,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     return initials;
   }
   async function putFile(url, body, type) {
-    if (location.protocol === 'file:') throw new Error('saving needs the local server (npm run serve)');
+    if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
     const response = await fetch(url, { method: 'PUT', headers: { 'content-type': type }, body });
     if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
   }
@@ -2304,7 +2306,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   $('play-boosts').addEventListener('change', () => setPlayBoosts($('play-boosts').checked));
   video.addEventListener('play', () => { boost.graph?.context.resume().catch(() => {}); boost.playingKey = null; updatePlaybackBoost(); });
   async function saveBoosts() {
-    if (location.protocol === 'file:') throw new Error('saving needs the local server (npm run serve)');
+    if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
     const response = await fetch('../audio-boosts.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ updatedAt: new Date().toISOString(), note: 'Volume boosts to play during playback; set from the thumbnails page.', boosts: playbackBoosts }, null, 2) });
     if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
@@ -2405,7 +2407,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
 
   // Server jobs: POST ../retranscribe, then follow ../retranscribe/jobs/{job}.json until it finishes.
   async function startBoostJob(body) {
-    if (location.protocol === 'file:') throw new Error('this needs the local server (npm run serve)');
+    if (location.protocol === 'file:') throw new Error('this needs the local server (npm start)');
     const response = await fetch('../retranscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
     const started = await response.json();
@@ -2530,7 +2532,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   function openBoostDialog(from, to) {
     $('boost-from').value = fmtPrecise(Math.max(0, from));
     $('boost-to').value = fmtPrecise(Math.min(endSeconds, to));
-    $('boost-status').textContent = location.protocol === 'file:' ? 'Listening works here once the video plays; sending needs the local server (npm run serve).' : '';
+    $('boost-status').textContent = location.protocol === 'file:' ? 'Listening works here once the video plays; sending needs the local server (npm start).' : '';
     readBoostRange();
     renderPortions();
     renderSavedBoosts();
@@ -2593,7 +2595,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   }
   async function saveMeetingName(name) {
     try {
-      if (location.protocol === 'file:') throw new Error('saving needs the local server (npm run serve)');
+      if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
       const response = await fetch('../meeting-info.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name, updatedAt: new Date().toISOString() }, null, 2) });
       if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
@@ -2721,7 +2723,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     const previous = agendaItems;
     agendaItems = [...items].sort((left, right) => left.at - right.at);
     try {
-      if (location.protocol === 'file:') throw new Error('saving needs the local server (npm run serve)');
+      if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
       const response = await fetch('../agenda.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ updatedAt: new Date().toISOString(), items: agendaItems }, null, 2) });
       if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
@@ -2861,7 +2863,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   }
   async function saveVotes(done) {
     try {
-      if (location.protocol === 'file:') throw new Error('saving needs the local server (npm run serve)');
+      if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
       const response = await fetch('../votes.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ updatedAt: new Date().toISOString(), seats: voteData.seats, needed: voteData.needed, members: voteData.members, votes: voteData.votes }, null, 2) });
       if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
@@ -3671,7 +3673,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     if (from === null || to === null || to <= from) { from = position; to = Math.min(endSeconds, position + 30); }
     $('clip-from').value = fmtPrecise(from);
     $('clip-to').value = fmtPrecise(to);
-    $('clip-status').textContent = location.protocol === 'file:' ? 'Downloading needs the local server (npm run serve).' : '';
+    $('clip-status').textContent = location.protocol === 'file:' ? 'Downloading needs the local server (npm start).' : '';
     readClipRange();
     if (!$('clip-dialog').open) {
       $('clip-dialog').show();
@@ -4309,7 +4311,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   });
   async function saveViews(done) {
     try {
-      if (location.protocol === 'file:') throw new Error('saving needs the local server (npm run serve)');
+      if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
       const response = await fetch('../views.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ updatedAt: new Date().toISOString(), views: viewData.views, sceneViews: viewData.sceneViews }, null, 2) });
       if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
@@ -4809,6 +4811,8 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     else loadLatestTranscript();
   }
   $('live-edge').addEventListener('click', () => showPosition(Math.max(0, endSeconds - 5)));
+  // Served by streamscribe, the page links back to the library.
+  $('home').hidden = location.protocol === 'file:';
   updateLiveEdge();
   if (page.live && location.protocol !== 'file:') setTimeout(refreshLive, 2000);
 

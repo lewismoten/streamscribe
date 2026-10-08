@@ -53,8 +53,11 @@ export default {
       // Plain HLS only: a regular expression for segment file names whose first group is a stream identifier and
       // second the sequence number, to track identifier changes as Swagit's are (optional).
       // segmentPattern: '^chunk-([a-z0-9]+)-(\\d+)\\.ts$',
-      // Start a new session folder whenever the stream identifier changes (Swagit renews it about hourly).
-      splitOnStreamIdentifierChange: true
+      // Each meeting gets its own session folder: a new one starts when the stream comes back from the provider's standby
+      // slide after at least this many minutes (Swagit; a recess shows the meeting's own title card instead).
+      newSessionAfterStandbyMinutes: 10,
+      // Also start a new session folder at every stream identifier change (Swagit renews it hourly, mid-meeting).
+      splitOnStreamIdentifierChange: false
     }
     // {
     //   key: 'warren-county-va',

@@ -37,7 +37,7 @@ Output goes to `{storageDir}/meetings/{date} video-{id}/`:
 - `speakers.json`, `transcripts/` (`raw.json`, `edits.json`, `latest.*`, and `pieces/` for archive transcriptions), `thumbnails/`
 - `archive-pieces/`, `cleaned/`: the archive cuts and cleaned segments, reused by later builds
 
-Open the page through `npm run serve` (the build prints its path).
+Open the page through `npm start` (the build prints its path).
 
 Options:
 

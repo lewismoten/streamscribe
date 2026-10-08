@@ -40,4 +40,4 @@ Saved boosts are kept in `{session}/audio-boosts.json` as ranges with their sett
 
 Live playback uses the browser's version of the adjustment (high-pass, gain, and a compressor for evening out), so noise reduction applies only to re-transcription. Boosts move with a full meeting's timeline when it's rebuilt, and `split-session` splits them.
 
-Sending needs `npm run serve`; the server runs this script in the background. Each job's progress is in `{session}/retranscribe/jobs/{job}.json`.
+Sending needs `npm start`; the server runs this script in the background. Each job's progress is in `{session}/retranscribe/jobs/{job}.json`.
