@@ -22,7 +22,7 @@ Edit `config.local.js`: add a `sources` entry for each stream (its live `.m3u8` 
 
 1. **Capture** while it's live: `npm run capture`. It recovers the minutes before you started (as far back as the server keeps them) and any gaps from network drops.
 2. **Transcribe**, even while still recording: `npm run transcribe`. Fix mishearings once with `npm run transcript-corrections -- add "heard as" "should be"`; they apply to every transcript.
-3. **Review** on the thumbnails page: `npm run extract-thumbnails`, then `npm run serve` and open the address it prints. Mark speakers, chapters (agenda items), and votes; boost quiet speakers and transcribe them again; magnify whoever is speaking; download clips, with or without the overlays.
+3. **Review** on the thumbnails page: `npm run extract-thumbnails` (add `-- --watch` during the meeting to follow it live), then `npm run serve` and open the address it prints. Mark speakers, chapters (agenda items), and votes; boost quiet speakers and transcribe them again; magnify whoever is speaking; download clips, with or without the overlays.
 4. **Complete it** once the official recording is posted: `npm run build-meeting -- --url <its page or video link>` (or `--file <video>`). It joins the archive and your capture into one full meeting, carrying your marks over.
 
 ## Scripts

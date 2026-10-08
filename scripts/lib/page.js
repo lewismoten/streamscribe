@@ -1,5 +1,5 @@
 import path from 'path';
-import { writeFile } from 'fs/promises';
+import { rename, writeFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { LOCALE, SOURCES } from './runtime-config.js';
 import { loadSessionSegments } from './session.js';
@@ -14,15 +14,31 @@ export function thumbnailFileName(position) {
 
 const serverPort = 4873;
 
-// Writes {session}/playback.m3u8 (an HLS playlist of the captured segments, for the page's player) and
-// {session}/thumbnails/index.html.
-export async function writeThumbnailsPage(sessionDir, thumbnails) {
+// Replaces a file in one step, so a page or player reading it never sees half of it.
+async function writeFileAtomically(filePath, text) {
+  await writeFile(`${filePath}.tmp`, text);
+  await rename(`${filePath}.tmp`, filePath);
+}
+
+// Thumbnails as the page uses them: file, position, time of day, and pass.
+function pageThumbs(thumbnails) {
+  const clock = (iso) => (iso
+    ? new Intl.DateTimeFormat('en-US', { timeZone: LOCALE.timeZone, hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date(iso))
+    : '');
+  return thumbnails.map((item) => ({ f: item.fileName, s: item.positionSeconds, c: clock(item.clockTime), l: item.level }));
+}
+
+// Writes {session}/playback.m3u8 (an HLS playlist of the captured segments, for the page's player),
+// {session}/thumbnails/index.html, and {session}/thumbnails/live.json. With `live` (a session still being captured,
+// from extract-thumbnails --watch), the playlist stays open so players keep loading new segments, and an open page
+// picks up new thumbnails, camera changes, and segments from live.json.
+export async function writeThumbnailsPage(sessionDir, thumbnails, { live = false } = {}) {
   // Camera and slide changes found by extract-thumbnails (thumbnails/scenes.json), if any.
   const sceneIndex = await loadJson(path.join(sessionDir, 'thumbnails', 'scenes.json'), null);
   const scenes = (sceneIndex?.scenes || []).map((scene) => [scene.positionSeconds, scene.fileName]);
   const session = await loadSessionSegments(sessionDir);
   const maxDuration = Math.ceil(Math.max(1, ...session.retained.map((item) => item.durationSeconds)));
-  const lines = ['#EXTM3U', '#EXT-X-VERSION:3', '#EXT-X-PLAYLIST-TYPE:VOD', `#EXT-X-TARGETDURATION:${maxDuration}`, '#EXT-X-MEDIA-SEQUENCE:0'];
+  const lines = ['#EXTM3U', '#EXT-X-VERSION:3', `#EXT-X-PLAYLIST-TYPE:${live ? 'EVENT' : 'VOD'}`, `#EXT-X-TARGETDURATION:${maxDuration}`, '#EXT-X-MEDIA-SEQUENCE:0'];
   session.retained.forEach((item, index) => {
     // A missed or discarded moment breaks the stream's timestamps, which players need flagged (as does each
     // switch between the live capture and the archive in a meeting built by build-meeting).
@@ -31,12 +47,17 @@ export async function writeThumbnailsPage(sessionDir, thumbnails) {
     }
     lines.push(`#EXTINF:${item.durationSeconds.toFixed(3)},`, `segments/${encodeURIComponent(item.fileName)}`);
   });
-  lines.push('#EXT-X-ENDLIST');
-  await writeFile(path.join(sessionDir, 'playback.m3u8'), `${lines.join('\n')}\n`);
+  if (!live) {
+    lines.push('#EXT-X-ENDLIST');
+  }
+  await writeFileAtomically(path.join(sessionDir, 'playback.m3u8'), `${lines.join('\n')}\n`);
 
   const segments = session.retained.map((item) => [Number(item.audioStart.toFixed(3)), Number(item.videoStart.toFixed(3)), item.durationSeconds]);
   // When each stretch's position zero aired, in milliseconds: [[start position, ms], ...].
   const clocks = session.clockRuns.filter((run) => run.zero !== null).map((run) => [Number(run.start.toFixed(3)), Math.round(run.zero * 1000)]);
+  await writeFileAtomically(path.join(sessionDir, 'thumbnails', 'live.json'), JSON.stringify({
+    live, updatedAt: new Date().toISOString(), thumbs: pageThumbs(thumbnails), segments, scenes, clocks
+  }));
   // The final transcript, built into the page; served pages also load the latest one at runtime.
   const transcript = await loadJson(path.join(sessionDir, 'transcripts', 'latest.json'), null);
   const transcriptLines = (transcript?.lines || []).map((line) => [Number(Number(line.startSeconds).toFixed(2)), Number(Number(line.endSeconds).toFixed(2)), line.text, line.retranscribed ? 1 : 0]);
@@ -56,7 +77,7 @@ export async function writeThumbnailsPage(sessionDir, thumbnails) {
     ? path.relative(path.join(sessionDir, 'thumbnails'), path.join(fullMeeting.meetingDir, 'thumbnails', 'index.html')).split(path.sep).map(encodeURIComponent).join('/')
     : '';
   await writeFile(path.join(sessionDir, 'thumbnails', 'index.html'), renderScrubber(thumbnails, sessionDir, {
-    segments, serverUrl: findServerUrl(sessionDir), transcriptLines, scenes, clocks,
+    segments, serverUrl: findServerUrl(sessionDir), transcriptLines, scenes, clocks, live,
     turns: speakers?.turns || [], people: roster?.people || [], peopleGroups: roster?.groups || null, peopleUrl, fullMeetingUrl, boosts: audioBoosts?.boosts || [], meetingName: meetingInfo?.name || '', agenda: agenda?.items || [], votes: { members: votes?.members || [], votes: votes?.votes || [], seats: votes?.seats ?? null, needed: votes?.needed ?? null }, views: { views: views?.views || [], sceneViews: views?.sceneViews || {} }
   }));
 }
@@ -89,9 +110,6 @@ const escapeText = (value) => String(value).replace(/&/g, '&amp;').replace(/</g,
 // Move to a moment (play, drag the slider, or click a thumbnail), press "Clip start", move again, press "Clip end",
 // and the `npm run extract-clip` command for that range appears, ready to copy.
 export function renderScrubber(thumbnails, sessionDir = '', playback = { segments: [], serverUrl: '', transcriptLines: [] }) {
-  const clock = (iso) => (iso
-    ? new Intl.DateTimeFormat('en-US', { timeZone: LOCALE.timeZone, hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date(iso))
-    : '');
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
   const sessionArg = sessionDir ? path.relative(repoRoot, sessionDir) || '.' : '<session folder>';
   // Clock time for any position: from the session's clock origins, or else the first thumbnail's clock time minus
@@ -99,7 +117,8 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
   const anchor = thumbnails.find((item) => item.clockTime);
   const clocks = playback.clocks?.length ? playback.clocks : (anchor ? [[0, Date.parse(anchor.clockTime) - (anchor.positionSeconds * 1000)]] : []);
   const data = JSON.stringify({
-    thumbs: thumbnails.map((item) => ({ f: item.fileName, s: item.positionSeconds, c: clock(item.clockTime), l: item.level })),
+    thumbs: pageThumbs(thumbnails),
+    live: Boolean(playback.live),
     segments: playback.segments,
     serverUrl: playback.serverUrl,
     transcript: playback.transcriptLines || [],
@@ -426,6 +445,7 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
   #slider.chapter-scope { accent-color: #7c5cff; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
   /* One row of player controls under the slider; scrolls sideways instead of wrapping on narrow screens. */
+  .live-edge { color: #d93025; font-weight: 600; white-space: nowrap; }
   .toolbar { display: flex; flex-wrap: nowrap; gap: 4px; align-items: center; max-width: 960px; margin: 2px 0 6px; overflow-x: auto; }
   .toolbar button { flex: 0 0 auto; min-width: 36px; padding: 5px 8px; line-height: 1.2; }
   .toolbar button[hidden] { display: none; }
@@ -512,6 +532,7 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
 <div class="toolbar" id="toolbar" role="toolbar" aria-label="Player">
   <button type="button" id="play" title="Play or pause (Space)" aria-label="Play">▶︎</button>
   <span class="position" id="position">00:00:00</span>
+  <button type="button" id="live-edge" class="live-edge" hidden title="Still being captured: jump to the latest moment">● Live</button>
   <button type="button" id="prev-frame" title="Previous frame (,)" aria-label="Previous frame" hidden>◀</button>
   <button type="button" id="next-frame" title="Next frame (.)" aria-label="Next frame" hidden>▶</button>
   <span class="sep"></span>
@@ -898,8 +919,8 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     const nextDay = startMs !== null && dayKeyFormat.format(new Date(ms)) !== dayKeyFormat.format(new Date(startMs));
     return (nextDay ? overlayDayFormat.format(new Date(ms)) + ', ' : '') + overlayFormat.format(new Date(ms));
   }
-  const last = thumbs[thumbs.length - 1];
-  const endSeconds = segments.length ? segments[segments.length - 1][1] + segments[segments.length - 1][2] : (last ? last.s : 0);
+  let last = thumbs[thumbs.length - 1];
+  let endSeconds = segments.length ? segments[segments.length - 1][1] + segments[segments.length - 1][2] : (last ? last.s : 0);
 
   // Video position (counts missed moments, like the transcript) <-> player time (only captured video).
   function toPlayerTime(position) {
@@ -1044,6 +1065,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     }
   }
 
+  let hls = null;
   async function initPlayer() {
     const source = '../playback.m3u8';
     // preload must allow loading, or Safari waits for play() before fetching anything.
@@ -1064,7 +1086,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     } else {
       setStatus('Loading playlist...');
       // Start loading at the current position instead of the beginning of the session.
-      const hls = new window.Hls({ startPosition: toPlayerTime(position) });
+      hls = new window.Hls({ startPosition: toPlayerTime(position) });
       hls.on(window.Hls.Events.ERROR, (event, data) => {
         if (data.fatal) {
           hlsError = (data.details || data.type) + (data.response && data.response.code ? ' (HTTP ' + data.response.code + ')' : '');
@@ -2153,11 +2175,16 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   $('find').addEventListener('input', () => { findNeedle = ''; });
   $('find-next').addEventListener('click', () => stepFind(1));
   $('find-prev').addEventListener('click', () => stepFind(-1));
+  let transcriptKey = '';
   function loadLatestTranscript() {
     return fetch('../transcripts/latest.json', { cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (data?.lines?.length) {
+          // Only redraw when it changed (a live session checks again every few seconds).
+          const key = data.lines.length + ':' + (data.updatedAt || '') + ':' + data.lines[data.lines.length - 1].text;
+          if (key === transcriptKey) return;
+          transcriptKey = key;
           transcript = data.lines.map((line) => [Number(line.startSeconds), Number(line.endSeconds), line.text, line.retranscribed ? 1 : 0]);
           renderTranscript();
         }
@@ -4722,6 +4749,68 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     }, video.paused ? 250 : 1000);
   }
   video.addEventListener('pause', scheduleQueryUpdate);
+
+  // A session still being captured (extract-thumbnails --watch writes live.json as segments arrive): every few seconds
+  // the page picks up new thumbnails, camera changes, segments, and transcript lines, and the player keeps loading
+  // the open playlist, so everything captured so far can be played and scrubbed. Stops once the session is finished.
+  let liveRuns = 0;
+  function gridCount() {
+    const maxLevel = Number($('density').value);
+    return thumbs.filter((item) => item.l <= maxLevel).length;
+  }
+  function updateLiveEdge() {
+    $('live-edge').hidden = !page.live;
+    $('live-edge').title = 'Still being captured (' + fmt(endSeconds) + ' so far): jump to the latest moment';
+  }
+  async function reloadPlayer() {
+    const wasPlaying = !video.paused;
+    if (hls) { hls.destroy(); hls = null; }
+    video.removeAttribute('src');
+    video.load();
+    playerReady = false;
+    await initPlayer();
+    setStatus('Play');
+    if (wasPlaying) await video.play().catch(() => {});
+  }
+  async function refreshLive() {
+    const data = await fetch('live.json', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
+    if (data && Array.isArray(data.segments)) {
+      // Segments filled in mid-session (a recovered gap) shift the player's timeline, so the player reloads; new
+      // segments at the end just extend it.
+      const appended = data.segments.length >= segments.length
+        && segments.every((item, index) => data.segments[index][0] === item[0] && data.segments[index][1] === item[1]);
+      const segmentsChanged = !appended || data.segments.length !== segments.length;
+      const shownBefore = gridCount();
+      const scenesChanged = JSON.stringify(data.scenes) !== JSON.stringify(page.scenes);
+      segments.splice(0, segments.length, ...data.segments);
+      thumbs.splice(0, thumbs.length, ...data.thumbs);
+      page.clocks = data.clocks || page.clocks;
+      last = thumbs[thumbs.length - 1];
+      endSeconds = segments.length ? segments[segments.length - 1][1] + segments[segments.length - 1][2] : (last ? last.s : 0);
+      if (segmentsChanged) {
+        sliderRangeKey = '';
+        updateSliderRange();
+        slider.value = position;
+        renderScrubMarks();
+      }
+      if (gridCount() !== shownBefore) renderGrid();
+      if (scenesChanged) {
+        page.scenes = data.scenes;
+        renderTranscript();
+        updateNowScene();
+      }
+      if (!appended && playerReady) await reloadPlayer().catch((error) => showFileNote(true, error.message));
+      page.live = Boolean(data.live);
+    }
+    liveRuns += 1;
+    if (page.live && liveRuns % 3 === 0) loadLatestTranscript();
+    updateLiveEdge();
+    if (page.live) setTimeout(refreshLive, 5000);
+    else loadLatestTranscript();
+  }
+  $('live-edge').addEventListener('click', () => showPosition(Math.max(0, endSeconds - 5)));
+  updateLiveEdge();
+  if (page.live && location.protocol !== 'file:') setTimeout(refreshLive, 2000);
 
   $('density').addEventListener('change', renderGrid);
   try { if (localStorage.getItem('thumbnails.playBoosts') === '1') $('play-boosts').checked = true; } catch {}

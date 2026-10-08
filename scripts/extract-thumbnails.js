@@ -24,21 +24,89 @@ import { thumbnailFileName, writeThumbnailsPage } from './lib/page.js';
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const sessionDir = options.session ? path.resolve(options.session) : findLatestSession(options.sources);
-  const session = await loadSessionSegments(sessionDir);
-  if (session.retained.length === 0) {
-    throw new Error(`No captured segments in ${sessionDir}`);
+  let sessionDir = options.session ? path.resolve(options.session) : findLatestSession(options.sources);
+  if (!options.watch) {
+    const session = await loadSessionSegments(sessionDir);
+    if (session.retained.length === 0) {
+      throw new Error(`No captured segments in ${sessionDir}`);
+    }
+    console.log(`Session ${sessionDir}`);
+    await refresh(sessionDir, session, await loadThumbnailIndex(sessionDir, options), options, { live: false, verbose: true });
+    return;
   }
-  const last = session.retained.at(-1);
-  const totalSeconds = last.videoStart + last.durationSeconds;
-  console.log(`Session ${sessionDir}`);
-  console.log(`  ${formatPosition(totalSeconds)} of video; thumbnails ${options.width}px wide, every ${options.firstInterval}s down to every ${options.minInterval}s or less`);
 
+  // Watching a session that is still being captured: every --watch seconds, thumbnails and camera changes for the new
+  // segments, and an open playlist the page keeps playing from. When the capture moves on to a new session folder
+  // (Swagit renews its stream identifier about hourly), this one is finished and the new one watched, unless --session
+  // named a single session. It stops once no segment has arrived for --idle-minutes, or on Ctrl+C.
+  console.log(`Watching every ${options.watch}s; stops after ${options.idleMinutes} minutes without new segments`);
+  let stopping = false;
+  process.on('SIGINT', () => { stopping = true; });
+  process.on('SIGTERM', () => { stopping = true; });
+  while (sessionDir) {
+    const next = await watchSession(sessionDir, options, () => stopping);
+    sessionDir = !stopping && !options.session ? next : '';
+  }
+}
+
+async function loadThumbnailIndex(sessionDir, options) {
   const outputDir = path.join(sessionDir, 'thumbnails');
   await fs.promises.mkdir(outputDir, { recursive: true });
+  const previous = await loadJson(path.join(outputDir, 'thumbnails.json'), null);
+  return new Map((previous?.width === options.width ? previous.thumbnails : []).map((item) => [item.fileName, item]));
+}
+
+// Follows one session until it goes idle, a newer one starts (returned), or stopping.
+async function watchSession(sessionDir, options, isStopping) {
+  console.log(`Session ${sessionDir}`);
+  const byFile = await loadThumbnailIndex(sessionDir, options);
+  let lastKey = '';
+  let lastChangeAt = Date.now();
+  let newer = '';
+  while (!isStopping()) {
+    const session = await loadSessionSegments(sessionDir);
+    const key = `${session.retained.length}:${session.lastSequence}`;
+    if (session.retained.length > 0 && key !== lastKey) {
+      lastKey = key;
+      lastChangeAt = Date.now();
+      try {
+        await refresh(sessionDir, session, byFile, options, { live: true, verbose: false });
+        const last = session.retained.at(-1);
+        console.log(`  ${new Date().toLocaleTimeString()}: ${formatPosition(last.videoStart + last.durationSeconds)} captured, ${byFile.size} thumbnails`);
+      } catch (error) {
+        console.error(`  ${new Date().toLocaleTimeString()}: ${error.message || error}`);
+      }
+    }
+    if (Date.now() - lastChangeAt > options.idleMinutes * 60000) {
+      console.log(`  no new segments for ${options.idleMinutes} minutes`);
+      break;
+    }
+    newer = newerSession(sessionDir);
+    if (newer) {
+      console.log(`  the capture moved on to ${path.basename(newer)}`);
+      break;
+    }
+    for (let waited = 0; waited < options.watch * 1000 && !isStopping(); waited += 250) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  const session = await loadSessionSegments(sessionDir);
+  if (session.retained.length > 0) {
+    await refresh(sessionDir, session, byFile, options, { live: false, verbose: false });
+    console.log(`  finished ${path.basename(sessionDir)}: ${byFile.size} thumbnails; its page and playlist are final`);
+  }
+  return newer;
+}
+
+// Thumbnails for every position not yet covered, the camera changes, and the page.
+async function refresh(sessionDir, session, byFile, options, { live, verbose }) {
+  const last = session.retained.at(-1);
+  const totalSeconds = last.videoStart + last.durationSeconds;
+  if (verbose) {
+    console.log(`  ${formatPosition(totalSeconds)} of video; thumbnails ${options.width}px wide, every ${options.firstInterval}s down to every ${options.minInterval}s or less`);
+  }
+  const outputDir = path.join(sessionDir, 'thumbnails');
   const indexPath = path.join(outputDir, 'thumbnails.json');
-  const previous = await loadJson(indexPath, null);
-  const byFile = new Map((previous?.width === options.width ? previous.thumbnails : []).map((item) => [item.fileName, item]));
 
   let interval = options.firstInterval;
   let level = 0;
@@ -80,8 +148,10 @@ async function main() {
         });
       }
     });
-    console.log(`  pass ${level + 1}: every ${formatInterval(interval)} (${jobs.length} new, ${byFile.size} total, ${((Date.now() - started) / 1000).toFixed(1)}s)`);
-    await saveIndex(indexPath, sessionDir, options, byFile);
+    if (verbose) {
+      console.log(`  pass ${level + 1}: every ${formatInterval(interval)} (${jobs.length} new, ${byFile.size} total, ${((Date.now() - started) / 1000).toFixed(1)}s)`);
+      await saveIndex(indexPath, sessionDir, options, byFile);
+    }
     interval /= 2;
     level += 1;
   }
@@ -92,14 +162,23 @@ async function main() {
     item.clockTime = seconds === null ? '' : new Date(seconds * 1000).toISOString();
   }
   await saveIndex(indexPath, sessionDir, options, byFile);
-  console.log(`Saved ${byFile.size} thumbnails to ${outputDir} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  if (verbose) {
+    console.log(`Saved ${byFile.size} thumbnails to ${outputDir} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  }
 
-  await detectScenes(sessionDir, session, outputDir, options);
-  await writeThumbnailsPage(sessionDir, [...byFile.values()].sort((a, b) => a.positionSeconds - b.positionSeconds));
+  await detectScenes(sessionDir, session, outputDir, options, verbose);
+  await writeThumbnailsPage(sessionDir, [...byFile.values()].sort((a, b) => a.positionSeconds - b.positionSeconds), { live });
+}
+
+// The next session folder of the same stream, once the capture has started one after this session.
+function newerSession(sessionDir) {
+  const name = path.basename(sessionDir);
+  return listDirs(path.dirname(sessionDir)).filter((dir) => path.basename(dir) > name && fs.existsSync(path.join(dir, 'segments.jsonl')))
+    .sort()[0] || '';
 }
 
 function parseArgs(argv) {
-  const options = { sources: [], session: '', firstInterval: 300, minInterval: 5, width: 320, concurrency: Math.max(2, os.cpus().length) };
+  const options = { sources: [], session: '', firstInterval: 300, minInterval: 5, width: 320, concurrency: Math.max(2, os.cpus().length), watch: 0, idleMinutes: 90 };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => argv[++index];
@@ -109,10 +188,12 @@ function parseArgs(argv) {
     else if (arg === '--min-interval') options.minInterval = Number(next());
     else if (arg === '--width') options.width = Number.parseInt(next(), 10);
     else if (arg === '--concurrency') options.concurrency = Number.parseInt(next(), 10);
+    else if (arg === '--watch') options.watch = /^\d+(\.\d+)?$/.test(argv[index + 1] || '') ? Number(next()) : 10;
+    else if (arg === '--idle-minutes') options.idleMinutes = Number(next());
     else throw new Error(`Unknown option ${arg}`);
   }
-  if (!(options.firstInterval > 0) || !(options.minInterval > 0) || !(options.width >= 16) || !(options.concurrency >= 1)) {
-    throw new Error('--first-interval, --min-interval, --width, and --concurrency must be positive numbers');
+  if (!(options.firstInterval > 0) || !(options.minInterval > 0) || !(options.width >= 16) || !(options.concurrency >= 1) || !(options.idleMinutes > 0)) {
+    throw new Error('--first-interval, --min-interval, --width, --concurrency, and --idle-minutes must be positive numbers');
   }
   return options;
 }
@@ -181,7 +262,7 @@ function extractThumbnail(segmentPath, offsetSeconds, outputPath, width) {
 const sceneThreshold = 0.3;
 const sceneMatchDistance = 24;
 
-async function detectScenes(sessionDir, session, outputDir, options) {
+async function detectScenes(sessionDir, session, outputDir, options, verbose = true) {
   const scenesDir = path.join(outputDir, 'scenes');
   const indexPath = path.join(outputDir, 'scenes.json');
   const key = `${session.retained.length}:${session.retained.at(-1).sequence}:${options.width}`;
@@ -190,13 +271,28 @@ async function detectScenes(sessionDir, session, outputDir, options) {
     return previous.scenes;
   }
   const started = Date.now();
-  await fs.promises.rm(scenesDir, { recursive: true, force: true });
+  // A session that only grew since the last run (it's still being captured) is scanned from where that run stopped;
+  // anything else (segments filled in mid-session, a split, another width) starts over.
+  const scanned = previous?.scanned;
+  const grown = Array.isArray(previous?.scenes) && previous.width === options.width && previous.threshold === sceneThreshold
+    && scanned?.count > 0 && scanned.count <= session.retained.length
+    && session.retained[scanned.count - 1]?.sequence === scanned.lastSequence
+    && previous.scenes.every((scene) => fs.existsSync(path.join(outputDir, scene.fileName)));
+  const fromIndex = grown ? scanned.count : 0;
+  const scenes = grown ? [...previous.scenes] : [];
+  if (!grown) {
+    await fs.promises.rm(scenesDir, { recursive: true, force: true });
+  }
   await fs.promises.mkdir(scenesDir, { recursive: true });
 
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'streamscribe-scenes-'));
   let cutPositions = [];
   try {
-    const parts = splitIntoBatches(session.retained, 60);
+    // Continuing scans include the last scanned segment, so a change right at the boundary is still compared with
+    // the picture before it.
+    const pending = session.retained.slice(Math.max(0, fromIndex - 1));
+    const scanFrom = grown ? session.retained[fromIndex]?.videoStart ?? Infinity : 0;
+    const parts = splitIntoBatches(pending, 60);
     const found = [];
     await runPool(parts.map((part, partIndex) => ({ part, partIndex })), options.concurrency, async ({ part, partIndex }) => {
       const listPath = path.join(tempDir, `part-${partIndex}.txt`);
@@ -207,13 +303,12 @@ async function detectScenes(sessionDir, session, outputDir, options) {
       // between sources counts as a change there.
       found.push(...(part[0].discontinuity ? [part[0].videoStart] : []), ...times.map((seconds) => joinedToPosition(part, seconds)).filter((position) => position !== null));
     });
-    cutPositions = [0, ...found].sort((left, right) => left - right);
+    cutPositions = [...(grown ? [] : [0]), ...found.filter((position) => position >= scanFrom - 0.001)].sort((left, right) => left - right);
   } finally {
     await fs.promises.rm(tempDir, { recursive: true, force: true });
   }
 
-  const scenes = [];
-  let lastFingerprint = null;
+  let lastFingerprint = scenes.length ? await imageFingerprint(path.join(outputDir, scenes.at(-1).fileName)) : null;
   for (const position of cutPositions) {
     const segment = findSegment(session.retained, position + 0.01);
     if (!segment) continue;
@@ -229,8 +324,13 @@ async function detectScenes(sessionDir, session, outputDir, options) {
     lastFingerprint = fingerprint;
     scenes.push({ positionSeconds: Number(position.toFixed(3)), fileName: `scenes/${fileName}` });
   }
-  await writeJson(indexPath, { key, updatedAt: new Date().toISOString(), threshold: sceneThreshold, scenes });
-  console.log(`Found ${scenes.length} camera or slide changes in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  await writeJson(indexPath, {
+    key, updatedAt: new Date().toISOString(), threshold: sceneThreshold, width: options.width,
+    scanned: { count: session.retained.length, lastSequence: session.retained.at(-1).sequence }, scenes
+  });
+  if (verbose || cutPositions.length) {
+    console.log(`Found ${scenes.length} camera or slide changes${grown ? ` (${cutPositions.length} new candidates)` : ''} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  }
   return scenes;
 }
 

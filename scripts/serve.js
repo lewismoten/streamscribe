@@ -405,7 +405,8 @@ function streamFile(response, request, method, filePath, stats) {
       'accept-ranges': 'bytes',
       'content-length': range.end - range.start + 1,
       'content-range': `bytes ${range.start}-${range.end}/${totalSize}`,
-      'content-type': contentType
+      'content-type': contentType,
+      ...freshness(filePath)
     });
 
     if (method === 'HEAD') {
@@ -420,7 +421,8 @@ function streamFile(response, request, method, filePath, stats) {
   response.writeHead(200, {
     'accept-ranges': 'bytes',
     'content-length': totalSize,
-    'content-type': contentType
+    'content-type': contentType,
+    ...freshness(filePath)
   });
 
   if (method === 'HEAD') {
@@ -551,3 +553,9 @@ main().catch((error) => {
   console.error(error.message);
   process.exitCode = 1;
 });
+
+// Playlists, pages, and data change while a session is captured (extract-thumbnails --watch), so browsers and players
+// always ask again; segments and images never change once written.
+function freshness(filePath) {
+  return /\.(m3u8|json|html)$/i.test(filePath) ? { 'cache-control': 'no-cache' } : {};
+}
