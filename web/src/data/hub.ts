@@ -1,3 +1,5 @@
+import { isPreviewing } from './preview.ts';
+
 // Where the hub is, and how this browser speaks to it: a signed-in person's session token, or a key (for scripts and
 // recorders' own pages). Kept only in this browser (never in the site's files), so the site can be public while only
 // people allowed to can change things.
@@ -15,7 +17,11 @@ const builtIn = String(import.meta.env.VITE_HUB_URL || '').trim();
 
 function resolve(url: string) {
   if (!url) return '';
-  try { return new URL(url, location.href).href.replace(/\/+$/, ''); } catch { return url; }
+  try {
+    return new URL(url, location.href).href.replace(/\/+$/, '');
+  } catch {
+    return url;
+  }
 }
 
 export const defaultHubUrl = () => resolve(builtIn);
@@ -32,7 +38,10 @@ export function hubSettings(): HubSettings {
 
 export function saveHubSettings(settings: Partial<HubSettings>) {
   const next = { ...hubSettings(), ...settings };
-  localStorage.setItem(KEY, JSON.stringify({ url: next.url.trim().replace(/\/+$/, ''), key: next.key.trim(), token: next.token }));
+  localStorage.setItem(
+    KEY,
+    JSON.stringify({ url: next.url.trim().replace(/\/+$/, ''), key: next.key.trim(), token: next.token })
+  );
 }
 
 // The hub's folder (published files are under it, at media/…): the API address without api.php.
@@ -41,11 +50,16 @@ export const hubBase = (url = hubSettings().url) => url.replace(/api\.php$/, '')
 // Meetings' files are private (private/…): served through the API with a signature that expires, which viewers who
 // may see meetings get after signing in (account.ts keeps it fresh).
 let fileKey: { e: number; s: string } | null = null;
-export const setFileKey = (key: { e: number; s: string } | null) => { fileKey = key; };
+export const setFileKey = (key: { e: number; s: string } | null) => {
+  fileKey = key;
+};
 export const mediaUrl = (path: string, url = hubSettings().url) => {
   if (!path) return '';
   if (!path.startsWith('private/')) return hubBase(url) + path;
-  return fileKey ? `${url}/file/${path.split('/').map(encodeURIComponent).join('/')}?e=${fileKey.e}&s=${fileKey.s}` : '';
+  // Previewing the public view, private files stay out of sight as they would for a visitor.
+  return fileKey && !isPreviewing()
+    ? `${url}/file/${path.split('/').map(encodeURIComponent).join('/')}?e=${fileKey.e}&s=${fileKey.s}`
+    : '';
 };
 
 // A call to the hub's API with this browser's session or key. Throws the hub's message on failure.
@@ -55,10 +69,14 @@ export async function hubCall<T = Record<string, unknown>>(route: string, body?:
   const response = await fetch(`${url}/${route}`, {
     method: body === undefined ? 'GET' : 'POST',
     cache: 'no-store',
-    headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(token ? { 'x-streamscribe-token': token } : key ? { 'x-streamscribe-key': key } : {}) },
+    headers: {
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(token ? { 'x-streamscribe-token': token } : key ? { 'x-streamscribe-key': key } : {})
+    },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(value.error || `The hub answered ${response.status}`), { status: response.status });
+  if (!response.ok)
+    throw Object.assign(new Error(value.error || `The hub answered ${response.status}`), { status: response.status });
   return value as T;
 }

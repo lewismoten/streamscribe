@@ -188,6 +188,8 @@ The People page lists the people in meetings. It draws on each source's roster f
 - **Photos:** a public photo is a copy of the private one in `media/people/<source>/`, removed when it stops being public.
 - **Published transcripts:** show a public photo beside the speaker's name.
 
+**Previewing the public view:** an admin sees a small 👁️ button in the corner of every page. It switches the site to what a signed-out visitor sees (a separate signed-out copy in the browser, with no private files), and the button (now 🙈) stays to switch back. The preview lasts for that browser tab, and ends on sign-out.
+
 ## Schedules
 
 A schedule says when a meeting happens, in its own time zone, so a 6 pm meeting stays at 6 pm when daylight saving changes:

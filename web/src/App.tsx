@@ -19,6 +19,7 @@ import PersonPage from './people/PersonPage.tsx';
 import AgentsPage from './pages/AgentsPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
+import { setPreviewing } from './data/preview.ts';
 
 // Two ways to run: served by a recorder's streamscribe server (its library of local recordings, search, and capture,
 // plus the hub pages), or as a static site such as GitHub Pages or the hub's own server (the hub pages only, kept in
@@ -113,6 +114,18 @@ export default function App() {
           </Routes>
         )}
       </main>
+      {account.admin && (
+        <button
+          type="button"
+          className={`preview-toggle${account.previewing ? ' on' : ''}`}
+          aria-pressed={account.previewing}
+          aria-label={account.previewing ? 'Back to my view' : 'See what the public sees'}
+          title={account.previewing ? 'Back to my view' : 'See what the public sees'}
+          onClick={() => setPreviewing(!account.previewing)}
+        >
+          <span aria-hidden="true">{account.previewing ? '🙈' : '👁️'}</span>
+        </button>
+      )}
     </>
   );
 }

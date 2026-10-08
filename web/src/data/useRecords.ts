@@ -15,14 +15,19 @@ export interface HubRecord<T = Record<string, unknown>> {
 export function useRecords<T = Record<string, unknown>>(collection: string) {
   const [records, setRecords] = useState<HubRecord<T>[] | null>(null);
   const load = useCallback(() => {
-    syncClient().list(collection).then((list: HubRecord<T>[]) => setRecords(list));
+    syncClient()
+      .list(collection)
+      .then((list: HubRecord<T>[]) => setRecords(list));
   }, [collection]);
   useEffect(() => {
     load();
-    return onRecordsChanged((changes) => { if (changes.some((change) => change.collection === collection)) load(); });
+    return onRecordsChanged((changes) => {
+      if (changes.some((change) => change.collection === collection)) load();
+    });
   }, [collection, load]);
   return { records, reload: load };
 }
 
-export const putRecord = (collection: string, id: string | null, data: unknown) => syncClient().put(collection, id, data);
+export const putRecord = (collection: string, id: string | null, data: unknown) =>
+  syncClient().put(collection, id, data);
 export const removeRecord = (collection: string, id: string) => syncClient().remove(collection, id);

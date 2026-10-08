@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { hubCall, hubSettings, saveHubSettings, setFileKey } from './hub.ts';
 import { idbStore } from './idb-store.ts';
+import { isPreviewing, onPreviewChange, setPreviewing } from './preview.ts';
 import { syncNow } from './sync.ts';
 
 // Who is signed in on the hub, with what their group may do. Signed out, everything is read-only. Signing in or out
@@ -29,6 +30,10 @@ export interface Account {
   permissionNames: Record<string, string>;
   checked: boolean;
   fileKeyAt: number;
+  // Whether the person signed in is an admin (who may preview the public view), and whether they are previewing it:
+  // then pages see a signed-out account with no permissions.
+  admin: boolean;
+  previewing: boolean;
 }
 
 let account: Account = {
@@ -37,14 +42,28 @@ let account: Account = {
   settings: null,
   permissionNames: {},
   checked: false,
-  fileKeyAt: 0
+  fileKeyAt: 0,
+  admin: false,
+  previewing: false
 };
+// The account pages see: the real one, or (while an admin previews the public view) a signed-out one.
+let shown: Account = account;
 const listeners = new Set<(value: Account) => void>();
+function notify() {
+  const admin = account.user?.groupId === 1 || account.permissions.includes('manage.users');
+  // Only admins preview; once the hub has said who this is, anyone else is put back.
+  if (account.checked && !admin && isPreviewing()) return setPreviewing(false); // which notifies again
+  const previewing = admin && isPreviewing();
+  account = { ...account, admin, previewing };
+  shown = previewing ? { ...account, user: null, permissions: [] } : account;
+  for (const listener of listeners) listener(shown);
+}
 function set(value: Partial<Account>) {
   account = { ...account, ...value };
-  for (const listener of listeners) listener(account);
+  notify();
   keepFileKey();
 }
+onPreviewChange(notify);
 
 // The signature for meetings' private files (see hub.ts), for viewers who may see meetings: fetched on sign-in and
 // renewed every few hours (it lasts 12). Pages showing private pictures and media re-render when it arrives.
@@ -73,8 +92,8 @@ function keepFileKey() {
   fetchKey();
 }
 
-export const currentAccount = () => account;
-export const can = (permission: string, value = account) => value.permissions.includes(permission);
+export const currentAccount = () => shown;
+export const can = (permission: string, value = shown) => value.permissions.includes(permission);
 
 // The account, re-rendering the component whenever it changes (sign-in, sign-out, a new file key).
 const subscribe = (listener: () => void) => {
@@ -137,6 +156,7 @@ export async function signOut() {
 }
 
 async function forgetSession() {
+  setPreviewing(false);
   saveHubSettings({ token: '' });
   set({ user: null, permissions: [] });
   await idbStore.clear();

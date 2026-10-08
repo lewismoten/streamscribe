@@ -1,5 +1,6 @@
 import { SyncClient } from '../../../src/sync/client.js';
-import { idbStore } from './idb-store.ts';
+import { idbStore, publicStore } from './idb-store.ts';
+import { isPreviewing, onPreviewChange } from './preview.ts';
 import { hubSettings } from './hub.ts';
 import { sessionEnded } from './account.ts';
 
@@ -29,8 +30,20 @@ function announce(changes: { collection: string; id: string }[], fromOtherTab = 
 channel?.addEventListener('message', (event) => announce(event.data.changes || [], true));
 
 let client: SyncClient | null = null;
+let publicClient: SyncClient | null = null;
+// The client for this browser's own copy, signed in as its person (or with a key, or reading only); while an admin
+// previews the public view, a second client keeps a signed-out copy, so pages show exactly what visitors get.
 export function syncClient(): SyncClient {
   const { url, key, token } = hubSettings();
+  if (isPreviewing()) {
+    publicClient ??= new SyncClient({
+      store: publicStore,
+      hubUrl: url,
+      onChange: (changes: { collection: string; id: string }[]) => announce(changes)
+    });
+    publicClient.hubUrl = url;
+    return publicClient;
+  }
   client ??= new SyncClient({
     store: idbStore,
     hubUrl: url,
@@ -46,6 +59,31 @@ export function syncClient(): SyncClient {
   client.key = token ? '' : key;
   return client;
 }
+const activeStore = () => (isPreviewing() ? publicStore : idbStore);
+
+// Switching between the admin's view and the public one: every page reloads its records from the other copy, which
+// is brought up to date.
+const ALL_COLLECTIONS = [
+  'sources',
+  'schedules',
+  'settings',
+  'recorders',
+  'recordings',
+  'transcript_chunks',
+  'stills',
+  'media',
+  'marks',
+  'publications',
+  'jobs',
+  'directory'
+];
+onPreviewChange(() => {
+  announce(
+    ALL_COLLECTIONS.map((collection) => ({ collection, id: '*' })),
+    true
+  );
+  syncNow();
+});
 
 function setState(patch: Partial<SyncState>) {
   syncState = { ...syncState, ...patch };
@@ -55,7 +93,7 @@ function setState(patch: Partial<SyncState>) {
 export async function syncNow() {
   const sync = syncClient();
   if (!sync.hubUrl) {
-    setState({ pending: (await idbStore.listPending()).length });
+    setState({ pending: (await activeStore().listPending()).length });
     return;
   }
   const work = async () => {
@@ -79,7 +117,7 @@ export async function syncNow() {
       }
       setState({ error: (error as Error).message });
     } finally {
-      setState({ syncing: false, pending: (await idbStore.listPending()).length });
+      setState({ syncing: false, pending: (await activeStore().listPending()).length });
     }
   };
   if (navigator.locks) await navigator.locks.request('streamscribe-sync', work);

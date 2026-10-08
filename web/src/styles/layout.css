@@ -232,3 +232,23 @@
   width: 140px;
   flex: none;
 }
+
+/* An admin's switch between their own view and the public one: always in the corner, so the way back stays in reach. */
+.preview-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #0003;
+}
+.preview-toggle.on {
+  outline: 3px solid var(--live);
+}
