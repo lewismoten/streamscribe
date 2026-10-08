@@ -238,7 +238,9 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
   .w.edited { text-decoration: underline dotted color-mix(in srgb, var(--start) 80%, transparent); text-underline-offset: 3px; text-decoration-thickness: 2px; }
   .w.deleted { text-decoration: line-through; opacity: 0.45; }
   .picker-edit { display: flex; gap: 4px; margin: 0 0 6px; }
-  .download-menu { width: auto; max-width: min(420px, calc(100vw - 16px)); display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+  .download-menu { position: fixed; z-index: 50; width: auto; max-width: min(420px, calc(100vw - 16px)); display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+    padding: 8px 10px; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+  .download-menu[hidden] { display: none; }
   .download-menu button { text-align: left; }
   .picker-edit input { flex: 1; min-width: 0; }
   .w { border-radius: 3px; }
@@ -2433,7 +2435,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   }
   // ⬇ beside the find box: the whole meeting, or the chapter being played.
   const downloadMenu = document.createElement('div');
-  downloadMenu.className = 'word-picker download-menu';
+  downloadMenu.className = 'download-menu';
   downloadMenu.hidden = true;
   document.body.appendChild(downloadMenu);
   $('transcript-download').addEventListener('click', (event) => {

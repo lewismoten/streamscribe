@@ -14,6 +14,7 @@
     "transcribe": "node scripts/transcribe.js",
     "transcribe-media": "node scripts/transcribe-media.js",
     "transcript-corrections": "node scripts/transcript-corrections.js",
+    "combine-transcripts": "node scripts/combine-transcripts.js",
     "split-session": "node scripts/split-session.js",
     "join-sessions": "node scripts/join-sessions.js",
     "extract-slides": "node scripts/extract-slides.js",

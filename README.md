@@ -52,6 +52,7 @@ To work on the web app, run `npm run dev` and open http://localhost:5173/: Vite 
 | [`transcribe`](scripts/transcribe.md) | Transcribes a captured session locally with whisper.cpp |
 | [`transcribe-media`](scripts/transcribe-media.md) | Transcribes any video or audio file, or part of one |
 | [`transcript-corrections`](scripts/transcript-corrections.md) | Manages mishearing corrections and line edits, and rebuilds transcripts |
+| [`combine-transcripts`](scripts/combine-transcripts.md) | Combines the usual transcript with a `--best` one, chunk by chunk |
 | [`extract-thumbnails`](scripts/extract-thumbnails.md) | Builds a session's thumbnails, camera changes, and review page |
 | [`extract-slides`](scripts/extract-slides.md) | Saves each presentation slide shown during a session |
 | [`extract-clip`](scripts/extract-clip.md) | Cuts an MP4 clip of a session |
