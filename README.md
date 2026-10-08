@@ -1,6 +1,6 @@
 # streamscribe
 
-![Stream Scribe: Capture. Search. Research.](docs/streamscribe.jpg)
+![Stream Scribe: Capture. Search. Research.](docs/socialpreview.jpg)
 
 Capture public meeting livestreams, fill the gaps from the official archive, transcribe them locally with Whisper, and review them on a page with speakers, chapters, votes, audio boosts, a magnifier, and clips. Everything runs on your own machine.
 
