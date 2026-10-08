@@ -4774,8 +4774,33 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     if (file !== currentSceneFile()) return;
     currentView = view;
     sceneViewCache.set(file, view ? view.id : null);
+    // The shots either side too, so the magnifier switches views on the exact frame of a cut.
+    [nowScene - 1, nowScene + 1].forEach((index) => { if (page.scenes[index]) cachedViewFor(page.scenes[index][1]); });
     renderViewSelect();
     updateZoom();
+  }
+  // The view of a shot if it's known yet (undefined while it's being worked out, null for none).
+  const pendingViews = new Set();
+  function cachedViewFor(file) {
+    if (!sceneViewCache.has(file)) {
+      if (!pendingViews.has(file)) {
+        pendingViews.add(file);
+        viewForScene(file).then((view) => { sceneViewCache.set(file, view ? view.id : null); pendingViews.delete(file); updateZoom(); });
+      }
+      return undefined;
+    }
+    const id = sceneViewCache.get(file);
+    return id ? viewData.views.find((view) => view.id === id) || null : null;
+  }
+  // The shot (camera change) showing at a video position, as an index into page.scenes, or -1.
+  function sceneIndexAt(seconds) {
+    const scenes = page.scenes;
+    let low = 0, high = scenes.length - 1, found = -1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      if (scenes[middle][0] <= seconds + 0.05) { found = middle; low = middle + 1; } else high = middle - 1;
+    }
+    return found;
   }
   function renderViewSelect() {
     const select = $('view-select');
@@ -4855,19 +4880,32 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   const targetOf = (region) => region.target || magnifiedPlace(region, defaultGrow);
   // What to show at a video position: each area with how far along it is, from 0 (where they sit) to 1 (its larger
   // copy in place). It grows in during the lead-up to speaking, holds while they speak and a few seconds after, then
-  // shrinks back into their seat.
+  // shrinks back into their seat. Every step stays within the shot (camera view) showing at that moment, worked out
+  // for the exact frame: nothing grows ahead of a cut, nothing lingers past one, and someone already talking when the
+  // camera cuts to them grows in at the start of the new shot.
   let manualFadeStart = 0;
   function magnifiedAt(seconds) {
     if (manualZoom) return [{ region: manualZoom, progress: Math.min(1, (performance.now() - manualFadeStart) / (leadSeconds * 1000)) }];
-    if (!autoZoom || !currentView) return [];
+    if (!autoZoom) return [];
+    const scene = sceneIndexAt(seconds);
+    const view = scene >= 0 ? cachedViewFor(page.scenes[scene][1]) : null;
+    if (!view) return [];
+    const sceneStart = page.scenes[scene][0];
+    const sceneEnd = scene + 1 < page.scenes.length ? page.scenes[scene + 1][0] : Infinity;
     const shown = [];
-    Object.entries(currentView.regions || {}).forEach(([id, region]) => {
+    Object.entries(view.regions || {}).forEach(([id, region]) => {
       const stretches = speakingStretches(id);
-      if (stretches.some((item) => seconds >= item.from && seconds < item.to)) { shown.push({ region, progress: 1 }); return; }
-      const ended = [...stretches].reverse().find((item) => item.to <= seconds);
+      const speaking = stretches.find((item) => seconds >= item.from && seconds < item.to);
+      if (speaking) {
+        shown.push({ region, progress: speaking.from < sceneStart ? Math.min(1, (seconds - sceneStart) / leadSeconds) : 1 });
+        return;
+      }
+      // Only a stretch that ended in this shot lingers, and only one starting in this shot grows in ahead of it.
+      const ended = [...stretches].reverse().find((item) => item.to <= seconds && item.to > sceneStart);
       const since = ended ? seconds - ended.to : Infinity;
-      const next = stretches.find((item) => item.from > seconds && item.from - seconds <= leadSeconds);
-      const growing = next ? 1 - (next.from - seconds) / leadSeconds : 0;
+      const next = stretches.find((item) => item.from > seconds && item.from - seconds <= leadSeconds && item.from < sceneEnd);
+      const lead = next ? Math.min(leadSeconds, next.from - sceneStart) : leadSeconds;
+      const growing = next && lead > 0 ? Math.max(0, 1 - (next.from - seconds) / lead) : 0;
       const leaving = since < holdSeconds ? 1 : (since < holdSeconds + fadeSeconds ? 1 - (since - holdSeconds) / fadeSeconds : 0);
       const progress = Math.max(growing, leaving);
       if (progress > 0) shown.push({ region, progress });

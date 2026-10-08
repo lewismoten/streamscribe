@@ -243,12 +243,17 @@ function findSegment(retained, position) {
 }
 
 // Input seeking (-ss before -i) without accurate seek lands on the keyframe at or before the offset, so only
-// one frame is decoded. Returns false when the segment can't be read (for example, a missing file).
-function extractThumbnail(segmentPath, offsetSeconds, outputPath, width) {
+// one frame is decoded; `accurate` decodes on to the exact frame (for camera cuts, which fall between keyframes).
+// Returns false when the segment can't be read (for example, a missing file).
+function extractThumbnail(segmentPath, offsetSeconds, outputPath, width, accurate = false) {
   return new Promise((resolve) => {
     const child = spawn(TOOLS.ffmpeg, [
       '-hide_banner', '-loglevel', 'error', '-y',
-      '-noaccurate_seek', '-ss', Math.max(0, offsetSeconds).toFixed(3), '-i', segmentPath,
+      // Exact: decode the (10-second) segment from its start up to the moment; seeking ahead of decoding can find no
+      // frames near the end of a piece cut from the archive, which keeps its original timestamps.
+      ...(accurate
+        ? ['-i', segmentPath, '-ss', Math.max(0, offsetSeconds).toFixed(3)]
+        : ['-noaccurate_seek', '-ss', Math.max(0, offsetSeconds).toFixed(3), '-i', segmentPath]),
       '-frames:v', '1', '-an', '-vf', `scale=${width}:-2:flags=fast_bilinear`, '-q:v', '5',
       outputPath
     ], { stdio: 'ignore' });
@@ -314,6 +319,7 @@ async function detectScenes(sessionDir, session, outputDir, options, verbose = t
     const scanFrom = grown ? session.retained[fromIndex]?.videoStart ?? Infinity : 0;
     const parts = splitIntoBatches(pending, 60);
     const found = [];
+    const cuts = [];
     const foundStills = [];
     await runPool(parts.map((part, partIndex) => ({ part, partIndex })), options.concurrency, async ({ part, partIndex }) => {
       const listPath = path.join(tempDir, `part-${partIndex}.txt`);
@@ -330,8 +336,13 @@ async function detectScenes(sessionDir, session, outputDir, options, verbose = t
       }
       // Part times are seconds into the joined part; convert to video positions. A part that starts at a switch
       // between sources counts as a change there.
-      found.push(...(part[0].discontinuity ? [part[0].videoStart] : []), ...times.map((seconds) => joinedToPosition(part, seconds)).filter((position) => position !== null));
+      found.push(...(part[0].discontinuity ? [part[0].videoStart] : []));
+      cuts.push(...times.map((seconds) => joinedToPosition(part, seconds)).filter((position) => position !== null));
     });
+    // Keyframes come about once a second, so a cut found between two of them is moved to its exact frame.
+    const refined = [];
+    await runPool(cuts, options.concurrency, async (position) => { refined.push(await exactCut(sessionDir, session, position, tempDir)); });
+    found.push(...refined);
     cutPositions = [...(grown ? [] : [0]), ...found.filter((position) => position >= scanFrom - 0.001)].sort((left, right) => left - right);
     stills = mergeStills([...(grown ? previous.stills || [] : []), ...foundStills]);
   } finally {
@@ -339,13 +350,17 @@ async function detectScenes(sessionDir, session, outputDir, options, verbose = t
   }
 
   let lastFingerprint = scenes.length ? await imageFingerprint(path.join(outputDir, scenes.at(-1).fileName)) : null;
-  for (const position of cutPositions) {
-    const segment = findSegment(session.retained, position + 0.01);
+  for (const [cutIndex, position] of cutPositions.entries()) {
+    // The picture comes from half a second into the shot (once a dissolve or a moving camera has settled), never
+    // past the next cut.
+    const pictureAt = Math.min(position + 0.5, (cutPositions[cutIndex + 1] ?? Infinity) - 0.05);
+    const segment = findSegment(session.retained, pictureAt);
     if (!segment) continue;
     const fileName = `scene-${thumbnailFileName(position)}`;
     const outputPath = path.join(scenesDir, fileName);
-    const offset = Math.min(position - segment.videoStart + 0.01, Math.max(0, segment.durationSeconds - 1.2));
-    if (!await extractThumbnail(path.join(sessionDir, 'segments', segment.fileName), offset, outputPath, options.width)) continue;
+    // Cuts are exact frames, between keyframes, so the picture is decoded exactly.
+    const offset = Math.min(pictureAt - segment.videoStart, Math.max(0, segment.durationSeconds - 0.05));
+    if (!await extractThumbnail(path.join(sessionDir, 'segments', segment.fileName), offset, outputPath, options.width, true)) continue;
     const fingerprint = await imageFingerprint(outputPath);
     if (lastFingerprint && hamming(fingerprint, lastFingerprint) <= sceneMatchDistance) {
       await fs.promises.rm(outputPath, { force: true });
@@ -489,6 +504,44 @@ function scanPart(listPath) {
       resolve({ cuts, stills });
     });
   });
+}
+
+// The exact frame of a camera cut found at a keyframe: every frame in the second and a half before it is compared with
+// the one before, and the cut moves to the biggest change (or stays put if none stands out).
+async function exactCut(sessionDir, session, position, tempDir) {
+  const from = position - 1.5;
+  const pieces = session.retained.filter((item) => item.videoStart + item.durationSeconds > from && item.videoStart <= position + 0.05);
+  if (pieces.length === 0 || pieces.some((item, index) => index > 0 && item.discontinuity)) return position;
+  const listPath = path.join(tempDir, `cut-${position.toFixed(3)}.txt`);
+  const quote = (value) => `'${value.replace(/'/g, `'\\''`)}'`;
+  await writeFile(listPath, pieces.map((item) => `file ${quote(path.join(sessionDir, 'segments', item.fileName))}`).join('\n'));
+  const frames = await new Promise((resolve) => {
+    const child = spawn(TOOLS.ffmpeg, ['-hide_banner', '-nostats', '-f', 'concat', '-safe', '0', '-i', listPath, '-an',
+      '-vf', "scale=160:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score", '-f', 'null', '-'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const list = [];
+    let time = null;
+    let buffer = '';
+    child.stderr.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        const pts = line.match(/Parsed_metadata.*pts_time:\s*([\d.]+)/);
+        if (pts) time = Number(pts[1]);
+        const score = line.match(/lavfi\.scene_score=([\d.]+)/);
+        if (score && time !== null) list.push([time, Number(score[1])]);
+      }
+    });
+    child.on('error', () => resolve([]));
+    child.on('close', () => resolve(list));
+  });
+  let best = null;
+  for (const [seconds, score] of frames.slice(1)) {
+    const at = joinedToPosition(pieces, seconds);
+    if (at === null || at < from || at > position + 0.05) continue;
+    if (!best || score > best.score) best = { at, score };
+  }
+  return best && best.score > sceneThreshold / 2 ? Number(best.at.toFixed(3)) : position;
 }
 
 // Seconds into a joined run of segments -> video position (null past the end).
