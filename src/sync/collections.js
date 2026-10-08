@@ -13,6 +13,7 @@ export const COLLECTIONS = {
   recordings: { writers: ['recorder', 'editor'], mode: 'mutable', doc: 'A recorded meeting: its occurrence, parts (local sessions), times, status, title.' },
   transcript_chunks: { writers: ['recorder'], mode: 'immutable', doc: 'Transcript lines of a recording, a few minutes at a time, quick (while live) or final.' },
   stills: { writers: ['recorder'], mode: 'immutable', doc: 'Pictures from a recording (by media hash), for viewing without the video.' },
+  media: { writers: ['recorder', 'editor'], mode: 'mutable', doc: 'A recording part\'s published audio (also the podcast episode) and silent low-resolution video, as files on the hub (see src/media/publish-media.js).' },
   marks: { writers: ['editor', 'recorder'], mode: 'mutable', doc: 'Review marks of a recording, one record per kind: speakers, agenda, votes, views, audio-boosts, meeting-info, word-edits, playlist; and people per source.' },
   settings: { writers: ['editor'], mode: 'mutable', doc: 'Public settings (never secrets).' }
 };

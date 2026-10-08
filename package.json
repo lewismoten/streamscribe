@@ -31,7 +31,9 @@
     "recorder": "node bin/recorder.js",
     "test:recorder": "node --test test/recorder.e2e.js",
     "deploy:hub": "bin/deploy-hub.sh",
-    "hub:dev": "php -S 127.0.0.1:8080 -t hub-php"
+    "hub:dev": "php -S 127.0.0.1:8080 -t hub-php",
+    "publish-library": "node bin/publish-library.js",
+    "publish-media": "node bin/publish-media.js"
   },
   "engines": {
     "node": ">=24"

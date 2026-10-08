@@ -7,6 +7,7 @@ const COLLECTIONS = [
   'recordings' => ['writers' => ['recorder', 'editor'], 'mode' => 'mutable'],
   'transcript_chunks' => ['writers' => ['recorder'], 'mode' => 'immutable'],
   'stills' => ['writers' => ['recorder'], 'mode' => 'immutable'],
+  'media' => ['writers' => ['recorder', 'editor'], 'mode' => 'mutable'],
   'marks' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'settings' => ['writers' => ['editor'], 'mode' => 'mutable'],
 ];

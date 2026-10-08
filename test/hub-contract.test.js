@@ -321,3 +321,23 @@ test('trust: hiding someone\'s changes, reviewers, and the admin\'s tools', { sk
   await bossClient.pull();
   assert.equal(await seen(bossClient, `rx:p:word-edits~${m}`), undefined);
 });
+
+test('podcast: a feed per source from published audio, with chapters from the agenda', async () => {
+  const recorder = client(recorderKey);
+  await recorder.put('media', 'rp1:part one', { recordingId: 'rp1', part: 'part one', partIndex: 0, title: 'Council & friends', sourceKey: 'town', sourceName: 'Town', recordedAt: '2026-10-06T22:00:00Z', seconds: 3725,
+    audio: { path: 'media/recordings/rp1/part-one/audio-abc.m4a', bytes: 12345, type: 'audio/mp4' }, video: null });
+  await recorder.put('marks', 'rp1:part one:agenda', { items: [{ id: 'b', at: 600, title: 'Budget' }, { id: 'a', at: 0, title: 'Call to order' }] });
+  await recorder.sync();
+  const response = await fetch(`${hub}/podcast/town.xml`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /rss\+xml/);
+  const feed = await response.text();
+  assert.match(feed, /<title>Town meetings<\/title>/);
+  assert.match(feed, /<title>Council &amp; friends<\/title>/);
+  assert.match(feed, /<enclosure url="http:\/\/127\.0\.0\.1:\d+\/media\/recordings\/rp1\/part-one\/audio-abc\.m4a" length="12345" type="audio\/mp4"\/>/);
+  assert.match(feed, /<itunes:duration>1:02:05<\/itunes:duration>/);
+  assert.match(feed, /0:00:00 Call to order\n0:10:00 Budget/);
+  const chapters = await (await fetch(feed.match(/podcast:chapters url="([^"]+)"/)[1])).json();
+  assert.deepEqual(chapters.chapters.map((chapter) => chapter.title), ['Call to order', 'Budget']);
+  assert.equal((await fetch(`${hub}/podcast/nowhere.xml`)).status, 404);
+});

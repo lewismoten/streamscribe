@@ -166,6 +166,17 @@ function normalizeRecorderConfig(value) {
     maxStills: number(recorder.maxStills, 300),
     leaseSeconds: number(recorder.leaseSeconds, 300),
     minFreeGb: number(recorder.minFreeGb, 2),
+    // Published audio and video for the hub (npm run publish-media): silent video at height × fps, H.264 at crf (capped
+    // at maxrateKbps), audio as AAC at audioKbps mono with even loudness; video older than keepVideoDays is removed from
+    // the hub (audio and stills stay).
+    media: {
+      height: number(recorder.media?.height, 360),
+      fps: number(recorder.media?.fps, 15),
+      crf: number(recorder.media?.crf, 34),
+      maxrateKbps: number(recorder.media?.maxrateKbps, 150),
+      audioKbps: number(recorder.media?.audioKbps, 48),
+      keepVideoDays: number(recorder.media?.keepVideoDays, 365)
+    },
     overrun: {
       standbyMinutes: number(recorder.overrun?.standbyMinutes, 10),
       idleMinutes: number(recorder.overrun?.idleMinutes, 15),

@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { layerData, layerId, stackMarks } from '../../../src/sync/layers.js';
 import { MARK_PERMISSIONS } from '../../../src/sync/permissions.js';
@@ -7,6 +7,8 @@ import { putRecord, useRecords, type HubRecord } from '../data/useRecords.ts';
 import { syncNow } from '../data/sync.ts';
 import { clock, duration } from '../format.ts';
 import { dateTime, mediaUrlOf, STATUS_LABEL, type RecordingData } from './MeetingsPage.tsx';
+import MediaPlayer, { type MediaData } from '../MediaPlayer.tsx';
+import { hubSettings } from '../data/hub.ts';
 
 // One meeting from the hub: its stills, chapters, votes, and transcript (the final one when it's ready, the quick
 // one while recording), with the word corrections and speakers everyone may see. Signed in, a click on a word of the
@@ -50,6 +52,10 @@ export default function MeetingPage() {
   const { records: marks } = useRecords<Record<string, unknown>>('marks');
   const [filter, setFilter] = useState('');
   const [picked, setPicked] = useState<Word | null>(null);
+  const { records: mediaRecords } = useRecords<MediaData>('media');
+  const [partShown, setPartShown] = useState('');
+  const [seek, setSeek] = useState<{ time: number; n: number } | null>(null);
+  const [nowLine, setNowLine] = useState('');
   const [status, setStatus] = useState('');
   const recording = recordings?.find((record) => record.id === id);
   const stacks = useMemo(() => stackMarks((marks || []).filter((mark) => mark.id.startsWith(`${id}:`) || (recording && mark.id.startsWith(`${recording.data.sourceKey}:people`))), viewerId) as Map<string, Stack>, [marks, id, recording, viewerId]);
@@ -143,6 +149,21 @@ export default function MeetingPage() {
     return layer ? layer.owner_name || 'someone' : '';
   };
 
+  // Published audio and video (npm run publish-media), per part; the player follows the transcript's clicks.
+  const media = (mediaRecords || []).filter((record) => record.data.recordingId === id).map((record) => record.data).sort((a, b) => a.partIndex - b.partIndex);
+  const playing = media.find((item) => item.part === partShown) || media[0];
+  const playAt = (part: string, seconds: number) => {
+    if (!media.some((item) => item.part === part)) return;
+    setPartShown(part);
+    setSeek({ time: seconds, n: Date.now() });
+  };
+  const playingPart = playing?.part;
+  const onTime = useCallback((seconds: number) => {
+    let current = '';
+    for (const line of lines) if (line.part === playingPart && line.start <= seconds + 0.2) current = `${line.part}-${line.start}`;
+    setNowLine((previous) => (previous === current ? previous : current));
+  }, [lines, playingPart]);
+
   if (!recordings) return <p className="empty">Loading…</p>;
   if (!recording) return <p>No such meeting on the hub. <Link to="/meetings">All meetings</Link></p>;
   const data = recording.data;
@@ -163,7 +184,7 @@ export default function MeetingPage() {
             {account.user
               ? <>Click a word to correct it or to say who is speaking from there.{account.user.trusted ? '' : ' Your changes are visible only to you.'}</>
               : <><Link to="/account">Sign in</Link> to correct the transcript or say who is speaking.</>}
-            {' '}The video is on {data.recorderId}.
+            {' '}{(mediaRecords || []).some((record) => record.data.recordingId === id) ? `The full-quality video is on ${data.recorderId}.` : `The video is on ${data.recorderId}.`}
           </p>
         </div>
       </header>
@@ -172,14 +193,26 @@ export default function MeetingPage() {
       )}
       <div className="recording-columns">
         <div className="side">
+          {playing && (
+            <div className="sticky-player">
+              {media.length > 1 && (
+                <span className="segmented" role="group" aria-label="Part">
+                  {media.map((item) => <button key={item.part} type="button" className={item.part === playing.part ? 'on' : ''} onClick={() => setPartShown(item.part)}>Part {item.partIndex + 1}</button>)}
+                </span>
+              )}
+              <MediaPlayer key={playing.part} media={playing} seek={seek}
+                stills={pictures.filter((still) => still.data.part === playing.part).map((still) => ({ position: still.data.position, path: still.data.path }))} onTime={onTime} />
+              <p className="muted small"><a href={`${hubSettings().url}/podcast/${encodeURIComponent(playing.sourceKey)}.xml`}>🎧 Podcast feed</a> for {playing.sourceName || playing.sourceKey} meetings</p>
+            </div>
+          )}
           {chapters.length > 0 && (
             <section className="panel"><h2>Chapters</h2>
-              <ol className="chapters">{chapters.sort((a, b) => a.at - b.at).map((chapter) => <li key={chapter.id}><span className="time">{clock(chapter.at)}</span> {chapter.title}</li>)}</ol>
+              <ol className="chapters">{chapters.sort((a, b) => a.at - b.at).map((chapter) => <li key={chapter.id}><TimeLink seconds={chapter.at} onPlay={playing ? () => playAt(playing.part, chapter.at) : null} /> {chapter.title}</li>)}</ol>
             </section>
           )}
           {votes.length > 0 && (
             <section className="panel"><h2>Votes</h2>
-              <ul className="votes">{votes.sort((a, b) => a.at - b.at).map((vote) => <li key={vote.id}><span className="time">{clock(vote.at)}</span> {vote.motion || 'Motion'}</li>)}</ul>
+              <ul className="votes">{votes.sort((a, b) => a.at - b.at).map((vote) => <li key={vote.id}><TimeLink seconds={vote.at} onPlay={playing ? () => playAt(playing.part, vote.at) : null} /> {vote.motion || 'Motion'}</li>)}</ul>
             </section>
           )}
         </div>
@@ -193,8 +226,8 @@ export default function MeetingPage() {
             <ol className="lines">{shown.map((line, lineIndex) => {
               let last = lineIndex > 0 ? speakersAt(shown[lineIndex - 1].part, shown[lineIndex - 1].end - 0.01).join() : '';
               return (
-                <li key={`${line.part}-${line.start}`}>
-                  <span className="time">{clock(line.start)}</span>
+                <li key={`${line.part}-${line.start}`} className={nowLine === `${line.part}-${line.start}` ? 'now' : undefined}>
+                  <TimeLink seconds={line.start} onPlay={media.some((item) => item.part === line.part) ? () => playAt(line.part, line.start) : null} />
                   <span className="words">{line.words.map((word) => {
                     const speakers = speakersAt(line.part, word.at);
                     const label = speakers.join() !== last ? speakers.map((speaker) => personName(peopleMap.get(speaker), speaker)).join(', ') : '';
@@ -221,6 +254,12 @@ export default function MeetingPage() {
       </div>
     </article>
   );
+}
+
+// A time that plays from there when there's published audio.
+function TimeLink({ seconds, onPlay }: { seconds: number; onPlay: (() => void) | null }) {
+  if (!onPlay) return <span className="time">{clock(seconds)}</span>;
+  return <button type="button" className="time time-link" title="Play from here" onClick={onPlay}>{clock(seconds)}</button>;
 }
 
 function WordEditor({ word, people, speakers, onWord, onSpeakers, onAdd, onClose }: {

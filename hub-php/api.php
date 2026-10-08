@@ -10,6 +10,7 @@
 //   GET  live                         every recorder's latest state
 //   POST live-thumbnail?recorder=ID   (recorder key) a JPEG, replacing that recorder's live picture
 //   POST media?sha256=HEX&type=image/jpeg   (key) a file stored by its hash; already there → { exists: true }
+// The podcast (lib/podcast-routes.php): GET podcast/<source key>.xml, GET podcast-chapters/<media id>.json
 // People (lib/users.php):
 //   POST register {username, password, displayName}, POST login {username, password} → { token, ...me }
 //   POST logout, GET me, POST password {current, password}
@@ -83,7 +84,7 @@ $route = trim((string)($_SERVER['PATH_INFO'] ?? ($_GET['r'] ?? '')), '/');
 $db = hub_db($config);
 $viewer = hub_viewer($config, $db);
 // A browser whose session ended hears so (instead of quietly getting what anyone gets), except where that's moot.
-if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'logout', 'me', 'live', 'groups'], true)) {
+if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'logout', 'me', 'live', 'groups'], true) && strpos($route, 'podcast') !== 0) {
   hub_fail(401, 'Signed out (the session ended); sign in again');
 }
 
@@ -239,5 +240,6 @@ if ($method === 'POST' && ($route === 'media' || $route === 'live-thumbnail')) {
 }
 
 require __DIR__ . '/lib/account-routes.php';
+require __DIR__ . '/lib/podcast-routes.php';
 
 hub_fail(404, 'No such route: ' . $method . ' ' . $route);

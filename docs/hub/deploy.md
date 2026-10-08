@@ -112,6 +112,22 @@ gh variable set PAGES_HUB_URL --body https://example.com/meetings/hub/api.php
 
 Then push to main, or run **Deploy hub** from the Actions tab. The job runs the tests (`npm test`), builds the web app, and deploys. It runs again whenever the hub, the web app or the sync code changes on main.
 
+## Sending recordings you already have
+
+Meetings a recorder records reach the hub by themselves. For ones already in your local library, run `npm run publish-library` on the machine that has them. It sends each recording's details, final transcript, up to `recorder.maxStills` stills from its thumbnails, its marks (speakers, chapters, votes, word corrections and the rest) and each source's people. The video stays on your machine.
+
+1. **Make a recorder key:** run `php tools/new-key.php recorder "Your Mac"` on the server, and add the line it prints to `keys` in `hub/config.php`.
+2. **Point your machine at the hub:** in `config.local.js`, add the hub's address and that key:
+
+   ```js
+   recorder: { hubUrl: 'https://example.com/hub/api.php', key: 'ss_…' }
+   ```
+3. **Send:** `npm run publish-library -- --dry-run` lists what would go, and `npm run publish-library` sends it.
+
+Run it again after transcribing or marking more. Only what changed is sent, and pictures already on the hub aren't uploaded again.
+- `--recording <id>` sends one recording, by its id in the library database.
+- `--all` also sends captures already joined into a full meeting.
+
 ## GitHub Pages
 
 The **Pages** workflow publishes the web app at `https://YOUR-NAME.github.io/REPOSITORY/`.

@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { writeFile } from 'fs/promises';
 import { TOOLS } from '../config/runtime-config.js';
 import { runCommand } from '../util/process.js';
 
@@ -56,11 +55,65 @@ export async function extractRangeAudio(sessionDir, session, from, to, outputPat
     }
   }));
 
-  const listPath = path.join(tempDir, 'parts.txt');
-  await writeFile(listPath, parts.map((part) => `file '${part.file.replace(/'/g, `'\\''`)}'`).join('\n'));
   await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
-  await runCommand(TOOLS.ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', outputPath]);
+  await joinExactly(parts, outputPath);
   return outputPath;
+}
+
+// Joins the parts' WAVs so each starts exactly where it belongs: a segment often carries a little less (or more)
+// audio than its stated length, and over a long meeting that adds up (half a minute in 4 hours), pulling everything
+// after it early. Each part gets exactly its share of samples (counted from running totals, so rounding doesn't
+// add up either), padded with silence or trimmed.
+const SAMPLE_RATE = 44100;
+async function joinExactly(parts, outputPath) {
+  let position = 0;
+  let written = 0;
+  const totalSamples = Math.round(parts.reduce((total, part) => total + (part.silence ?? part.end - part.start), 0) * SAMPLE_RATE);
+  const out = await fs.promises.open(outputPath, 'w');
+  try {
+    await out.write(wavHeader(totalSamples * 2), 0, 44, 0);
+    let offset = 44;
+    for (const part of parts) {
+      position += part.silence ?? part.end - part.start;
+      const samples = Math.round(position * SAMPLE_RATE) - written;
+      const bytes = Buffer.alloc(samples * 2);
+      const data = await wavData(part.file);
+      data.copy(bytes, 0, 0, Math.min(data.length, bytes.length));
+      await out.write(bytes, 0, bytes.length, offset);
+      offset += bytes.length;
+      written += samples;
+    }
+  } finally {
+    await out.close();
+  }
+}
+
+function wavHeader(dataBytes) {
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + dataBytes, 4);
+  header.write('WAVEfmt ', 8);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(1, 22); // mono
+  header.writeUInt32LE(SAMPLE_RATE, 24);
+  header.writeUInt32LE(SAMPLE_RATE * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(dataBytes, 40);
+  return header;
+}
+
+// A WAV file's samples (its data chunk), wherever ffmpeg put it among the other chunks.
+async function wavData(file) {
+  const buffer = await fs.promises.readFile(file);
+  for (let at = 12; at + 8 <= buffer.length;) {
+    const size = buffer.readUInt32LE(at + 4);
+    if (buffer.toString('ascii', at, at + 4) === 'data') return buffer.subarray(at + 8, Math.min(buffer.length, at + 8 + size));
+    at += 8 + size + (size % 2);
+  }
+  return Buffer.alloc(0);
 }
 
 // The ffmpeg audio filter for the boost settings chosen on the thumbnails page.

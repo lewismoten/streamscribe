@@ -63,6 +63,9 @@ To work on the web app, run `npm run dev` and open http://localhost:5173/: Vite 
 | [`extract-clip`](docs/media/extract-clip.md) | Cuts an MP4 clip of a session |
 | `render-playlist` | Joins a playlist of clips into one video (used by the review page) |
 | [`render-mp4`](docs/media/render-mp4.md) | Stitches a session's segments into one MP4, optionally with a clock |
+| `publish-library` | Sends recordings in the library (details, transcripts, stills, marks) to the hub (docs/hub/deploy.md) |
+| [`publish-media`](docs/media/publish-media.md) | Makes light audio (also the podcast) and silent 360p video of recordings, and puts them on the hub |
+| `deploy:hub` | Puts the hub and the web app on your server over SSH (docs/hub/deploy.md) |
 | [`retranscribe-range`](docs/transcription/retranscribe-range.md) | Boosts the audio of part of a session and transcribes it again (used by the review page) |
 | [`split-session`](docs/capture/split-session.md) | Splits a session in two |
 | [`join-sessions`](docs/capture/join-sessions.md) | Joins sessions of one meeting into one |
