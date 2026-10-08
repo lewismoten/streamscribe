@@ -15,7 +15,7 @@ function hub_db(array $config): PDO {
 
 // Brings a database of any earlier version up to date (schema.sql only creates what's missing; columns added later
 // are added here). Cheap when there's nothing to do.
-const HUB_SCHEMA_VERSION = 2;
+const HUB_SCHEMA_VERSION = 3;
 function hub_migrate(PDO $db): void {
   if ((int)$db->query('PRAGMA user_version')->fetchColumn() >= HUB_SCHEMA_VERSION) return;
   $db->exec('BEGIN IMMEDIATE');

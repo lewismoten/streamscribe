@@ -70,3 +70,21 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- Failed sign-ins, to slow down password guessing.
 CREATE TABLE IF NOT EXISTS login_failures (key TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS login_failures_key ON login_failures (key, at);
+
+-- Agents (recorders) added in the web app: each gets its key from a one-time install token, and is kept here only as
+-- the key's hash (keys in config.php work too). Revoking clears the key.
+CREATE TABLE IF NOT EXISTS agents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  key_hash TEXT,
+  created_at TEXT NOT NULL,
+  created_by TEXT NOT NULL DEFAULT '',
+  enrolled_at TEXT,
+  revoked INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS enrollments (
+  token_hash TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at TEXT
+);

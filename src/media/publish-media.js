@@ -14,8 +14,8 @@ import { localRecordings } from '../recorder/publish-library.js';
 // Light copies of recordings for the hub, which has little disk: per recording part, one audio file (AAC mono, even
 // loudness) and one silent video (360p, 15 fps, H.264). Signed-in viewers who may see meetings play the audio with
 // the video kept in step, or with stills. Each file's time is the part's position (moments not captured are silence
-// and black), so transcripts and chapters line up. Files are made in {part}/published/, sent over SSH to the hub's
-// private folder (meetings are private; see hub-php/lib/files.php), and listed on the hub as `media` records. Video
+// and black), so transcripts and chapters line up. Files are made in {part}/published/, sent through the hub's API to
+// its private folder (meetings are private; see hub-php/lib/files.php), and listed on the hub as `media` records. Video
 // older than recorder.media.keepVideoDays is removed from the hub; audio stays.
 //   npm run publish-media [-- --dry-run] [--recording <library id>] [--force] [--no-upload]
 // Agents run it for one recording as an 'encode' job (src/recorder/jobs.js).
@@ -72,7 +72,6 @@ async function encodePart(dir, { force = false, video = true, log, signal, onPro
 export async function publishMedia({ dryRun = false, force = false, upload = true, only = null, items = null, log = console.log, signal, onProgress = () => {} } = {}) {
   if (!hubConfigured()) throw new Error('Set recorder.hubUrl and recorder.key in config.local.js first (docs/hub/deploy.md)');
   const files = hubFiles();
-  if (upload && !files.configured) throw new Error('Uploading needs DEPLOY_HOST, DEPLOY_USER, and DEPLOY_PATH (deploy.local.env; see docs/hub/deploy.md)');
   const store = new SqliteStore(path.join(STATE_ROOT, 'publish-library.sqlite'));
   const client = new SyncClient({ store, hubUrl: RECORDER.hubUrl, key: RECORDER.key });
   const keepVideoMs = RECORDER.media.keepVideoDays * 86400000;
@@ -90,11 +89,11 @@ export async function publishMedia({ dryRun = false, force = false, upload = tru
       const made = await encodePart(dir, { force, video: keepVideo, log, signal, onProgress });
       if (!made) { log('  nothing captured'); continue; }
       if (!upload) continue; // encoding only
-      onProgress(0.92, 'Uploading');
+      onProgress(0.9, 'Uploading');
       // Files named by content, so a new encoding is a new address (no stale caches); older ones are removed.
       const sending = [{ local: path.join(dir, 'published', made.audio.file), name: `audio-${made.audio.sha256.slice(0, 10)}.m4a` }];
       if (keepVideo && made.video) sending.push({ local: path.join(dir, 'published', made.video.file), name: `video-${made.video.height}p-${made.video.sha256.slice(0, 10)}.mp4` });
-      const paths = await files.sendFolder('private', `recordings/${id}/${slug(part.name)}`, sending, { signal });
+      const paths = await files.sendFolder('private', `recordings/${id}/${slug(part.name)}`, sending, { signal, onProgress: (share) => onProgress(0.9 + share * 0.09, 'Uploading') });
       log(`  sent ${sending.map((file) => file.name).join(', ')}`);
       const mediaId = `${id}:${part.name}`;
       const existing = await client.get('media', mediaId);

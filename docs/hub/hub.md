@@ -131,7 +131,9 @@ How agents share the work:
 - **Picking jobs.** An idle agent takes the oldest queued job it can do: it must have that recording, and a job meant for a particular agent waits for that one.
 - **Claiming.** It claims the job on the hub, so no other agent takes it, and renews the claim while it works. It writes its progress into the job.
 - **Stopping.** Cancelling stops the job. An agent that shuts down mid-job puts the job back in the queue.
-- **Uploads.** Agents upload over SSH with the deploy settings (`deploy.local.env`, see deploy.md), so each agent machine needs those and an SSH key the server accepts.
+- **Uploads.** Agents upload through the API with their own key, in pieces (`upload-begin`, `upload-chunk`, `upload-finish`). Each piece is at most `upload_chunk_bytes` (4 MB by default, under the host's `post_max_size`). An interrupted upload resumes, and the result is checked against its SHA-256. Agents may only put files in the meetings' private `recordings/` and the public `published/`.
+
+**Adding an agent.** On the Agents page, an admin adds an agent with a short id and a name, and gets a one-line install command for a Raspberry Pi or other Debian or Ubuntu machine (see ../recorder/recorder.md). The command's token works once and expires after 48 hours. Installing trades it for the agent's own key, which the hub keeps only as a hash in its database, beside any keys in `config.php`. Revoke stops a key at once. Deploys put the agent's code on the hub (`hub/agent/`, downloadable only with an install token or an agent's key).
 
 ## Schedules
 

@@ -12,3 +12,4 @@ node_modules/
 /hub-php/media/
 notes/
 /deploy.local.env
+/web/dist-agent/

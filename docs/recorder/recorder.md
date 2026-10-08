@@ -48,11 +48,33 @@ Every few seconds it:
 - **A capture started by hand:** if one is already running for the source, from a terminal say, the recorder uses it rather than starting another.
 - **Low disk:** with less free space than `minFreeGb`, it doesn't start a meeting and reports why.
 
+## Installing an agent (Raspberry Pi, Debian, Ubuntu)
+
+On the hub's Agents page, as an admin, add an agent with a short id (such as `pi1`) and a name. You get a command; ssh into the machine and run it there as the user the agent should run as:
+
+```bash
+curl -fsSL 'https://example.com/hub/api.php/agent-install?token=…' | bash
+```
+
+The script:
+- installs ffmpeg and Node.js 24 (asking for sudo where it must)
+- puts the agent in `~/streamscribe` and its data in `~/streamscribe-data`
+- trades the command's token for the agent's own key and writes `~/streamscribe/config.local.js`
+- sets up the `streamscribe-agent` systemd service, which restarts if it stops and starts with the machine
+
+The token works once and expires after 48 hours, and the key never appears in the command or your shell history. Within a minute the agent shows as online on the Agents page, with what its machine has (CPU, memory, ffmpeg, whisper.cpp) and so what it can do.
+
+To update the agent or give it a new key, use Reinstall command on the Agents page and run that; its other settings stay. Revoke stops its key at once. On the machine:
+- **Logs:** `journalctl -u streamscribe-agent -f`
+- **Restart:** `sudo systemctl restart streamscribe-agent`
+
+A 64-bit system is best (a Raspberry Pi 4 or 5 with 64-bit Raspberry Pi OS); Node.js 24 may not install on 32-bit ones.
+
 ## Agent work
 
 The recorder is also an agent: it takes work from the hub's queue, cutting published clips and encoding recordings' audio and video, and reports progress on the hub's Agents page. See ../hub/hub.md, Agents and their work.
 - **Name it.** Give each machine a short `recorder.id` (such as `mac1`) and a `recorder.name` (such as `Office Mac`).
-- **Let it upload.** Give it the deploy settings (`deploy.local.env` with an SSH key the server accepts), since results are uploaded over SSH.
+- **Uploads.** Results go up through the hub's API in pieces, with the agent's own key, so no SSH access to the server is needed.
 - **Keep it running.** It only works while `npm run recorder` is running; see below.
 
 ## Keeping it running (macOS)

@@ -10,7 +10,7 @@ npm run publish-media -- --no-upload     # encode only
 npm run publish-media -- --force         # encode again even if nothing changed
 ```
 
-It works on the same recordings as `npm run publish-library`, which sends their transcripts, stills and marks; run that first. Both need `recorder.hubUrl` and `recorder.key` in `config.local.js`. Uploading also needs the deploy settings, `DEPLOY_HOST`, `DEPLOY_USER` and `DEPLOY_PATH` (and `DEPLOY_SSH_OPTIONS`), in `deploy.local.env` (see [../hub/deploy.md](../hub/deploy.md)). Files go over SSH with rsync, because the hub's upload limit is far too small for them.
+It works on the same recordings as `npm run publish-library`, which sends their transcripts, stills and marks; run that first. Both need `recorder.hubUrl` and `recorder.key` in `config.local.js`. Files go up through the hub's API in pieces of up to 4 MB, because shared hosting limits each request. An interrupted upload resumes, and a file the hub already has isn't sent again.
 
 ## What it makes
 

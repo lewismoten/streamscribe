@@ -16,7 +16,7 @@ import { publishRecording, recordingParts } from './publish.js';
 import { syncMarks } from './marks.js';
 import { jobRunner } from './jobs.js';
 import { localRecordings } from './publish-library.js';
-import { hubFiles } from './hub-files.js';
+import { detectCapabilities } from './capabilities.js';
 import { runCommand } from '../util/process.js';
 import { TOOLS } from '../config/runtime-config.js';
 
@@ -65,6 +65,13 @@ export async function main() {
 
   const timers = { sync: 0, heartbeat: 0, thumbnail: 0, quick: 0, marks: 0, register: 0, jobs: 0 };
   const jobs = jobRunner({ client, findRecording, log });
+  // What this machine can do (shown on the Agents page), checked now and hourly.
+  let capabilities = null;
+  // (Reported at the next tick, rather than waiting for the next heartbeat.)
+  const checkCapabilities = () => detectCapabilities().then((value) => { capabilities = value; timers.heartbeat = 0; }).catch(() => {});
+  checkCapabilities();
+  const capabilityTimer = setInterval(checkCapabilities, 3600000);
+  capabilityTimer.unref();
   let busy = false;
   let stopping = false;
   let publishing = null;
@@ -220,7 +227,7 @@ export async function main() {
           await putRecording(finished);
           log(`Published ${finished.title}: ${finished.parts.length} part${finished.parts.length === 1 ? '' : 's'}, ${finished.final.stills.length} stills`);
           // Its private audio and video come next, as a job for this agent (shown with the hub's work queue).
-          if (hubFiles().configured && !(await client.get('jobs', `encode-${finished.id}`))) {
+          if (hubConfigured() && !(await client.get('jobs', `encode-${finished.id}`))) {
             await client.put('jobs', `encode-${finished.id}`, { type: 'encode', status: 'queued', title: `Audio and video: ${finished.title}`, recordingId: finished.id,
               forAgent: RECORDER.id, progress: 0, message: '', createdAt: new Date().toISOString(), createdBy: RECORDER.name });
           }
@@ -383,6 +390,7 @@ export async function main() {
       agentId: RECORDER.id,
       name: RECORDER.name,
       job,
+      capabilities,
       version,
       freeGb: freeGigabytes(),
       clockSkewSeconds: hub.clockSkewSeconds,

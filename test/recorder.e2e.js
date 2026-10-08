@@ -40,8 +40,7 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
   const processes = [];
   const logs = {};
   const start = (name, command, args, env = {}) => {
-    // (No deploy settings: nothing this test runs may upload to a real server.)
-    const child = spawn(command, args, { cwd: repo, env: { ...process.env, STREAMSCRIBE_DEPLOY_ENV: '', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { cwd: repo, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
     logs[name] = logs[name] || '';
     fs.mkdirSync(path.join(dir, 'logs'), { recursive: true });
     const onData = (chunk) => { logs[name] += chunk; fs.appendFileSync(path.join(dir, 'logs', `${name}.log`), chunk); };
@@ -100,12 +99,8 @@ test('a recorder records a scheduled meeting and publishes it', { timeout: 15 * 
       return file;
     };
     const mainConfig = writeConfig('main-recorder');
-    // The main recorder uploads (as an agent) to this test's hub folder, over a stand-in for ssh that runs commands here.
-    const fakeBin = path.join(dir, 'fakebin');
-    fs.mkdirSync(fakeBin, { recursive: true });
-    fs.writeFileSync(path.join(fakeBin, 'ssh'), '#!/usr/bin/env bash\nwhile [ $# -gt 0 ]; do case "$1" in -p|-o|-i|-l) shift 2;; -*) shift;; *) break;; esac; done\nshift\nexec bash -c "$*"\n', { mode: 0o755 });
-    fs.writeFileSync(path.join(dir, 'deploy.env'), `DEPLOY_HOST=test\nDEPLOY_USER=test\nDEPLOY_PATH=${dir}\n`);
-    const agentEnv = { STREAMSCRIBE_CONFIG: mainConfig, STREAMSCRIBE_DEPLOY_ENV: path.join(dir, 'deploy.env'), PATH: `${fakeBin}:${process.env.PATH}` };
+    // (The main recorder, as an agent, uploads its work to this test's hub through the API.)
+    const agentEnv = { STREAMSCRIBE_CONFIG: mainConfig };
     const backupConfig = writeConfig('backup-recorder');
 
     // A one-minute meeting starting at the next whole minute at least 50 seconds away, with a 9-second lead.

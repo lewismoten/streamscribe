@@ -14,6 +14,10 @@
 // Publishing (lib/publish-routes.php): POST publish, POST unpublish (publish)
 // The podcast of published clips (lib/podcast-routes.php): GET podcast/<source key>.xml,
 //   GET podcast-chapters/<publication id>.json
+// Agents' uploads in pieces (lib/upload-routes.php): POST upload-begin, upload-chunk, upload-finish, files-prune,
+//   files-remove (recorder keys)
+// Adding agents (lib/agent-routes.php): GET agents, POST agents/create, agents/token, agents/revoke (manage.users);
+//   GET agent-install?token=, GET agent-download, POST agent-enroll
 // People (lib/users.php):
 //   POST register {username, password, displayName}, POST login {username, password} → { token, ...me }
 //   POST logout, GET me, POST password {current, password}
@@ -89,7 +93,7 @@ $route = trim((string)($_SERVER['PATH_INFO'] ?? ($_GET['r'] ?? '')), '/');
 $db = hub_db($config);
 $viewer = hub_viewer($config, $db);
 // A browser whose session ended hears so (instead of quietly getting what anyone gets), except where that's moot.
-if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'logout', 'me', 'live', 'groups'], true) && strpos($route, 'podcast') !== 0 && strpos($route, 'file/') !== 0) {
+if (!empty($viewer['expired']) && !in_array($route, ['info', '', 'login', 'register', 'logout', 'me', 'live', 'groups'], true) && strpos($route, 'podcast') !== 0 && strpos($route, 'file/') !== 0 && strpos($route, 'agent-') !== 0) {
   hub_fail(401, 'Signed out (the session ended); sign in again');
 }
 
@@ -264,5 +268,7 @@ if (($method === 'GET' || $method === 'HEAD') && preg_match('#^file/private/(.+)
 require __DIR__ . '/lib/account-routes.php';
 require __DIR__ . '/lib/publish-routes.php';
 require __DIR__ . '/lib/podcast-routes.php';
+require __DIR__ . '/lib/upload-routes.php';
+require __DIR__ . '/lib/agent-routes.php';
 
 hub_fail(404, 'No such route: ' . $method . ' ' . $route);

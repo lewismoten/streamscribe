@@ -1,11 +1,13 @@
 :root {
+  /* Colors of the Stream Scribe logo and preview (docs/socialpreview.jpg, web/favicon.ico): deep navy, teal, cream,
+     with amber and violet touches. Light mode turns it over: cream paper, navy ink, a deeper teal. */
   color-scheme: light dark;
-  --bg: #f6f6f4; --fg: #1d1d1b; --muted: #66665f; --card: #ffffff; --line: #d9d9d3; --accent: #1f5f8b; --accent-fg: #ffffff;
-  --live: #d93025; --pass: #1f7a4d; --fail: #b3261e; --code: #ecece8; --note: #fff4d6; --mark: #ffe58a;
+  --bg: #f7f2e6; --fg: #0b1b2b; --muted: #556677; --card: #fffdf8; --line: #e1d8c5; --accent: #017f72; --accent-fg: #ffffff;
+  --live: #c8412f; --pass: #017f72; --fail: #b3261e; --code: #efe8d8; --note: #fff1c7; --mark: #ffd472; --violet: #6b62a0;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #161615; --fg: #ececea; --muted: #a2a29b; --card: #222220; --line: #3a3a37; --accent: #6aaee0; --accent-fg: #0e1c26;
-    --live: #f07167; --pass: #4fbf87; --fail: #f07167; --code: #2b2b29; --note: #3a3222; --mark: #6b5a12; }
+  :root { --bg: #091928; --fg: #fbf5e5; --muted: #93a5b6; --card: #0f2236; --line: #22384d; --accent: #2fc4b1; --accent-fg: #04201c;
+    --live: #ff7a66; --pass: #2fc4b1; --fail: #ff7a66; --code: #16304a; --note: #123445; --mark: #6b5418; --violet: #9a91c8; }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
@@ -22,7 +24,8 @@ input[type=search], select { font: inherit; padding: 6px 10px; border: 1px solid
 .note { background: var(--note); padding: 8px 12px; border-radius: 8px; }
 
 .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 18px; padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--line); }
-.brand { font-weight: 700; font-size: 1.05rem; color: var(--fg); }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 1.15rem; color: var(--fg); }
+.brand img { width: 26px; height: 26px; }
 .topbar nav { display: flex; gap: 4px; }
 .topbar nav a { color: var(--fg); padding: 6px 10px; border-radius: 8px; }
 .topbar nav a.active { background: var(--code); font-weight: 600; }
@@ -156,7 +159,7 @@ table.permissions th { white-space: nowrap; }
 .word:not(:disabled):hover { background: var(--mark); }
 .word.edited { text-decoration: underline dotted var(--accent); text-underline-offset: 3px; }
 .word.deleted { color: var(--muted); }
-.speaker-label { color: var(--accent); }
+.speaker-label { color: var(--violet); }
 .word-editor { display: grid; gap: 8px; margin: 6px 0; padding: 10px; max-width: 520px; box-shadow: 0 4px 16px rgb(0 0 0 / 0.15); }
 .word-editor form { display: grid; gap: 6px; }
 .word-editor .toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -200,3 +203,7 @@ table.permissions th { white-space: nowrap; }
 .progress-bar { height: 8px; background: var(--code); border-radius: 4px; overflow: hidden; }
 .progress-bar span { display: block; height: 100%; background: var(--accent); transition: width 0.5s; }
 table.jobs td { font-size: 0.9rem; }
+.add-agent label { display: inline-flex; flex-direction: column; gap: 2px; font-size: 0.85rem; }
+.add-agent input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
+pre.command { white-space: pre-wrap; word-break: break-all; padding: 10px 12px; border: 1px solid var(--line); }
+.capabilities { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }

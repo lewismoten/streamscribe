@@ -41,7 +41,7 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <NavLink to="/" className="brand">🎙 streamscribe</NavLink>
+        <NavLink to="/" className="brand"><img src={`${import.meta.env.BASE_URL}favicon.ico`} alt="" />Stream Scribe</NavLink>
         <nav>
           {local && <NavLink to="/" end>Library</NavLink>}
           {local && <NavLink to="/search">Search</NavLink>}

@@ -14,7 +14,7 @@ import { hubFiles, sha256 } from './hub-files.js';
 // takes it too (renewed while it works), and reports its progress in the job record. Cancelling a job in the web app
 // stops it. Job types:
 //   clip    { publicationId, recordingId, part, from, to }  cut a published clip (MP4 with sound, and M4A), upload
-//           it to the hub's public media/published/<id>/, and mark the publication's clip ready
+//           it (through the hub's API, in pieces) to its public media/published/<id>/, and mark the clip ready
 //   encode  { recordingId }  make and upload the recording's private audio and silent video (publish-media.js)
 const LEASE_SECONDS = 180;
 
@@ -45,7 +45,8 @@ export function jobRunner({ client, findRecording, log }) {
           progress(0.92, 'Uploading');
           const [videoHash, audioHash] = [await sha256(made.video), await sha256(made.audio)];
           const files = [{ local: made.video, name: `clip-${videoHash.slice(0, 10)}.mp4` }, { local: made.audio, name: `clip-${audioHash.slice(0, 10)}.m4a` }];
-          const [videoPath, audioPath] = await hubFiles().sendFolder('public', `published/${job.publicationId}`, files, { keepOthers: true, signal });
+          const [videoPath, audioPath] = await hubFiles().sendFolder('public', `published/${job.publicationId}`, files, { keepOthers: true, signal,
+            onProgress: (share) => progress(0.92 + share * 0.07, 'Uploading') });
           const latest = await client.get('publications', job.publicationId);
           if (!latest) throw new Error('The publication is gone (unpublished)');
           await client.put('publications', job.publicationId, { ...latest.data, clip: { ...latest.data.clip, status: 'ready',

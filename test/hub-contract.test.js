@@ -427,3 +427,65 @@ test('upgrading: meeting files already in the web folder move to the private fol
   assert.equal((await recorder.get('stills', 'old1:0-0')).data.path, `private/stills/ab/00/${hash}.jpg`);
   assert.equal((await recorder.get('media', 'old1:p')).data.audio.path, 'private/recordings/old1/p/audio.m4a');
 });
+
+test('agents: an install command, enrolling once for a key, downloading, revoking', { skip: !dir }, async () => {
+  const boss = await signIn('boss');
+  assert.equal((await json('agents/create', { id: 'pi1', name: 'Pi' }, await signIn('jane'))).status, 403, 'admins add agents');
+  assert.equal((await json('agents/create', { id: 'Bad Id!', name: 'x' }, boss)).status, 400);
+  const created = await json('agents/create', { id: 'pi1', name: 'Kitchen Pi' }, boss);
+  assert.equal(created.status, 200);
+  assert.match(created.command, /^curl -fsSL 'http:\/\/127\.0\.0\.1:\d+\/api\.php\/agent-install\?token=[0-9a-f]{48}' \| bash$/);
+  assert.equal((await json('agents/create', { id: 'pi1', name: 'Again' }, boss)).status, 409);
+  const script = await (await fetch(created.command.match(/'([^']+)'/)[1])).text();
+  assert.match(script, /^#!\/usr\/bin\/env bash/);
+  assert.match(script, /AGENT_ID='pi1'\nAGENT_NAME='Kitchen Pi'/);
+  assert.match(script, new RegExp(`TOKEN='${created.token}'`));
+  // Downloading needs the token (or an agent's key); the package comes from a deploy.
+  assert.equal((await fetch(`${hub}/agent-download`)).status, 403);
+  fs.mkdirSync(path.join(dir, 'agent'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'agent', 'streamscribe-agent.tgz'), 'package');
+  assert.equal(await (await fetch(`${hub}/agent-download?token=${created.token}`)).text(), 'package');
+  // Enrolling trades the token for the agent's key, once.
+  const enrolled = await json('agent-enroll', { token: created.token });
+  assert.equal(enrolled.agentId, 'pi1');
+  assert.match(enrolled.key, /^ss_[0-9a-f]{48}$/);
+  assert.equal((await json('agent-enroll', { token: created.token })).status, 410, 'one use');
+  assert.equal((await fetch(`${hub}/agent-install?token=${created.token}`)).status, 410);
+  const agentLive = await post('live', { recorderId: 'pi1', status: { state: 'idle' } }, enrolled.key);
+  assert.equal(agentLive.status, 200, 'the key works as a recorder key');
+  assert.equal((await fetch(`${hub}/agent-download`, { headers: { 'x-streamscribe-key': enrolled.key } })).status, 200);
+  const listed = await json('agents', null, boss, 'GET');
+  assert.equal(listed.agents.find((agent) => agent.id === 'pi1').joined, true);
+  // A new command replaces the key; revoking stops it.
+  const again = await json('agents/token', { id: 'pi1' }, boss);
+  const second = await json('agent-enroll', { token: again.token });
+  assert.equal((await post('live', { recorderId: 'pi1', status: {} }, enrolled.key)).status, 401, 'the old key stopped working');
+  assert.equal((await json('agents/revoke', { id: 'pi1' }, boss)).ok, true);
+  assert.equal((await post('live', { recorderId: 'pi1', status: {} }, second.key)).status, 401);
+});
+
+test('uploads in pieces: resuming, checking, only where agents may put files', async () => {
+  const bytes = crypto.randomBytes(300000);
+  const hash = sha(bytes);
+  const where = { area: 'private', folder: 'recordings/rx/p1', name: 'audio-1.m4a', bytes: bytes.length, sha256: hash };
+  const call = (route, body, headers = {}) => fetch(`${hub}/${route}`, { method: 'POST', headers: { 'x-streamscribe-key': recorderKey, 'content-type': typeof body === 'string' ? 'application/json' : 'application/octet-stream', ...headers }, body });
+  assert.equal((await fetch(`${hub}/upload-begin`, { method: 'POST', body: JSON.stringify(where) })).status, 401);
+  assert.equal((await call('upload-begin', JSON.stringify({ ...where, folder: 'recordings/../../etc' }))).status, 400);
+  assert.equal((await call('upload-begin', JSON.stringify({ ...where, area: 'public', folder: 'somewhere' }))).status, 400);
+  assert.equal((await (await call('upload-begin', JSON.stringify(where))).json()).offset, 0);
+  const chunk = (offset, piece) => call(`upload-chunk?sha256=${hash}&bytes=${bytes.length}&offset=${offset}`, piece).then((response) => response.json());
+  assert.equal((await chunk(0, bytes.subarray(0, 100000))).offset, 100000);
+  assert.equal((await chunk(0, bytes.subarray(0, 100000))).offset, 100000, 'a repeated piece is ignored');
+  assert.equal((await (await call('upload-finish', JSON.stringify(where))).status), 409, 'not complete yet');
+  assert.equal((await (await call('upload-begin', JSON.stringify(where))).json()).offset, 100000, 'resumes');
+  assert.equal((await chunk(100000, bytes.subarray(100000))).offset, bytes.length);
+  const finished = await (await call('upload-finish', JSON.stringify(where))).json();
+  assert.equal(finished.path, 'private/recordings/rx/p1/audio-1.m4a');
+  assert.ok(fs.readFileSync(path.join(dir, 'data', 'private', 'recordings', 'rx', 'p1', 'audio-1.m4a')).equals(bytes));
+  assert.equal((await (await call('upload-begin', JSON.stringify(where))).json()).done, true, 'already there');
+  fs.writeFileSync(path.join(dir, 'data', 'private', 'recordings', 'rx', 'p1', 'audio-0.m4a'), 'old');
+  assert.equal((await (await call('files-prune', JSON.stringify({ area: 'private', folder: 'recordings/rx/p1', keep: ['audio-1.m4a'] }))).json()).removed, 1);
+  assert.equal((await call('files-remove', JSON.stringify({ path: 'private/../config.php' }))).status, 400);
+  assert.equal((await (await call('files-remove', JSON.stringify({ path: finished.path }))).json()).ok, true);
+  assert.ok(!fs.existsSync(path.join(dir, 'data', 'private', 'recordings', 'rx', 'p1', 'audio-1.m4a')));
+});

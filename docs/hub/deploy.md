@@ -64,6 +64,7 @@ You need SSH access, PHP 8 with `pdo_sqlite` on the command line and the web ser
    DEPLOY_PATH=public_html/meetings
    DEPLOY_PORT=22
    SITE_BASE=/meetings/
+   SITE_URL=https://example.com/meetings
    DEPLOY_SSH_OPTIONS="-i $HOME/.ssh/streamscribe_deploy -o IdentitiesOnly=yes"
    ```
 
@@ -98,6 +99,7 @@ ssh-keyscan -p 22 example.com | gh secret set DEPLOY_KNOWN_HOSTS
 | `DEPLOY_PATH` | `public_html/meetings` (relative to your home folder, or absolute) | yes |
 | `DEPLOY_PORT` | SSH port | if it isn't 22 |
 | `SITE_BASE` | the site's path in the browser, such as `/meetings/` | if it isn't `/` |
+| `SITE_URL` | the site's full address, such as `https://streamscribe.lewismoten.com` | for the preview picture when links are shared |
 | `REMOTE_PHP` | the PHP command on the server, such as `php8.3` or `/usr/local/bin/php` | if plain `php` isn't PHP 8 |
 | `PAGES_HUB_URL` | `https://example.com/meetings/hub/api.php` | for GitHub Pages, to sync with your hub |
 | `PAGES_ON_PUSH` | `true` | to publish GitHub Pages on every push (otherwise run it by hand) |

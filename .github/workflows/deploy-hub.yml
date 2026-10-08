@@ -1,7 +1,7 @@
 # Deploys the hub (PHP) and the web app to your server over SSH whenever main changes (or when run by hand), with
 # bin/deploy-hub.sh. The settings live in the repository's "production" environment (Settings → Environments), or at
 # the repository level; nothing is deployed until DEPLOY_HOST is set. What to set up: docs/hub/deploy.md.
-#   Variables: DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH, and optionally DEPLOY_PORT, SITE_BASE, REMOTE_PHP
+#   Variables: DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH, and optionally DEPLOY_PORT, SITE_BASE, SITE_URL, REMOTE_PHP
 #   Secrets:   DEPLOY_SSH_KEY (a private key the server accepts), DEPLOY_KNOWN_HOSTS (ssh-keyscan of the server)
 name: Deploy hub
 on:
@@ -57,5 +57,6 @@ jobs:
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
           DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
           SITE_BASE: ${{ vars.SITE_BASE || '/' }}
+          SITE_URL: ${{ vars.SITE_URL }}
           REMOTE_PHP: ${{ vars.REMOTE_PHP || 'php' }}
           DEPLOY_SSH_OPTIONS: -i ~/.ssh/deploy_key -o IdentitiesOnly=yes
