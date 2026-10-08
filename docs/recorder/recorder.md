@@ -82,6 +82,7 @@ To update the agent or give it a new key, use Reinstall command on the Agents pa
 
 - **Repairs:** finishes an earlier package install that was interrupted (`dpkg --configure -a`).
 - **Waits:** if automatic updates are installing packages, it waits for them.
+- **Never asks:** package installs run unattended. Ubuntu's restart prompts are skipped, and config files are kept, since nobody can answer through `curl … | bash`. If the updates it installed want a restart, it says so at the end; the agent starts again by itself afterwards.
 - **Warns:** about a Raspberry Pi that is short of power. That can drop its network or reset it partway through.
 
 A 64-bit system is best (a Raspberry Pi 4 or 5 with 64-bit Raspberry Pi OS); Node.js 24 may not install on 32-bit ones.

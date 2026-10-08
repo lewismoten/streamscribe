@@ -42,8 +42,12 @@ trap on_error ERR
 
 if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 RUN_AS="$(id -un)"
-# apt waits for another install (such as automatic updates) to finish rather than failing on its lock.
-APT="$SUDO apt-get -o DPkg::Lock::Timeout=600"
+# Package installs never stop to ask: this script arrives through a pipe, so nobody can answer a prompt (Ubuntu's
+# "pending kernel upgrade" and "restart services" questions from needrestart, a changed config file). apt also waits
+# for another install (such as automatic updates) to finish rather than failing on its lock.
+QUIET_ENV=(env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1)
+APT_OPTIONS=(-o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+apt_get() { $SUDO "${QUIET_ENV[@]}" apt-get "${APT_OPTIONS[@]}" "$@" < /dev/null; }
 
 step "Checking this machine"
 command -v apt-get >/dev/null || fail "This installer is for Debian-based Linux (Raspberry Pi OS, Debian, Ubuntu)."
@@ -67,15 +71,15 @@ fi
 # Interrupted package installs (a reset, a lost connection) are finished first.
 if [ -n "$($SUDO dpkg --audit 2>/dev/null)" ] || [ -n "$(ls -A /var/lib/dpkg/updates 2>/dev/null)" ]; then
   warn "A package install was interrupted earlier: finishing it (dpkg --configure -a)"
-  $SUDO dpkg --configure -a
-  $APT -f install -y
+  $SUDO "${QUIET_ENV[@]}" dpkg --force-confdef --force-confold --configure -a < /dev/null
+  apt_get -f install -y
 fi
 
 step "Installing ffmpeg and tools (this can take several minutes on a Raspberry Pi)"
-$APT update
+apt_get update
 # Without recommended extras: ffmpeg would otherwise bring desktop packages (icons, sound, GTK) a headless machine
 # doesn't need.
-$APT install -y --no-install-recommends ca-certificates curl ffmpeg tar
+apt_get install -y --no-install-recommends ca-certificates curl ffmpeg tar
 note "$(ffmpeg -version | head -1)"
 
 step "Installing Node.js 24"
@@ -83,9 +87,9 @@ NODE_MAJOR=0
 if command -v node >/dev/null; then NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"; fi
 if [ "$NODE_MAJOR" -lt 24 ]; then
   note "Adding the NodeSource package source"
-  if [ -n "$SUDO" ]; then curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
-  else curl -fsSL https://deb.nodesource.com/setup_24.x | bash -; fi
-  $APT install -y --no-install-recommends nodejs
+  curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh
+  $SUDO "${QUIET_ENV[@]}" bash /tmp/nodesource-setup.sh < /dev/null
+  apt_get install -y --no-install-recommends nodejs
 else
   note "Already installed"
 fi
@@ -156,3 +160,7 @@ echo "  Logs:     journalctl -u $SERVICE -f"
 echo "  Restart:  sudo systemctl restart $SERVICE"
 echo "  Settings: $CONFIG"
 echo "  This log: $LOG"
+# Updates installed along the way (a new kernel, say) may want a restart; the agent starts again by itself after one.
+if [ -f /var/run/reboot-required ]; then
+  printf '\n\033[1;33mThe system has updates waiting for a restart (%s). Restart when convenient: sudo reboot\033[0m\n' "$(tr '\n' ' ' < /var/run/reboot-required.pkgs 2>/dev/null | head -c 120)"
+fi
