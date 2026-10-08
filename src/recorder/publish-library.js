@@ -8,6 +8,7 @@ import { SqliteStore } from '../sync/stores/node-sqlite.js';
 import { chunkId, stillId } from '../sync/collections.js';
 import { hubConfigured, uploadMedia } from './hub-api.js';
 import { MARK_KINDS } from './marks.js';
+import { parseOfficialUrl, timelineFromAlignment } from '../sync/official.js';
 
 // Sends recordings already in the local library (data/streamscribe.db) to the hub, as a recorder sends the meetings
 // it records: the recording's details, its final transcript, stills from its thumbnails, its marks (speakers,
@@ -78,7 +79,20 @@ export function localRecordings(options = {}) {
     const officialUrl = readJson(path.join(dir, 'meeting.json'))?.url
       || (row.part_of_dir ? readJson(path.join(source.storageDir, row.part_of_dir, 'meeting.json'))?.url : null)
       || readJson(path.join(dir, 'meeting-info.json'))?.officialUrl || null;
-    return [{ row, source, dir, id, part, title, officialUrl }];
+    // Structured official sources (see sync/official.js), with how this meeting's positions line up with the official
+    // video's time when build-meeting lined them up.
+    let official = officialUrl ? { ...parseOfficialUrl(officialUrl) } : null;
+    if (official?.swagit) {
+      const meetingDir = row.kind === 'meeting' ? dir : row.part_of_dir ? path.join(source.storageDir, row.part_of_dir) : null;
+      const meeting = meetingDir ? readJson(path.join(meetingDir, 'meeting.json')) : null;
+      const alignment = meeting?.archive ? readJson(path.join(source.storageDir, path.dirname(meeting.archive), 'alignment.json')) : null;
+      if (row.kind === 'meeting' && meeting && alignment) {
+        official.swagit.timeline = timelineFromAlignment(meeting, alignment);
+        if (alignment.archiveDuration) official.swagit.duration = Math.round(alignment.archiveDuration * 10) / 10;
+      }
+    }
+    if (official) delete official.link;
+    return [{ row, source, dir, id, part, title, officialUrl, official }];
   });
 }
 
@@ -98,7 +112,7 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
   try {
     await client.pull();
     const sources = new Set();
-    for (const { row, source, dir, id, part, title, officialUrl } of localRecordings({ all, only })) {
+    for (const { row, source, dir, id, part, title, officialUrl, official } of localRecordings({ all, only })) {
       sources.add(source);
       log(`${title} (${row.kind} ${row.id}, ${Math.round(row.duration_seconds / 60)} min) → ${id}`);
 
@@ -135,7 +149,7 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
       }
 
       await put('recordings', id, {
-        occurrenceKey: '', scheduleId: '', title, sourceKey: source.key, sourceName: source.name, officialUrl, recorderId: RECORDER.id, status: 'done', imported: true,
+        occurrenceKey: '', scheduleId: '', title, sourceKey: source.key, sourceName: source.name, officialUrl, official, recorderId: RECORDER.id, status: 'done', imported: true,
         kind: row.kind, scheduledStart: row.started_at, scheduledEnd: row.ended_at, startedAt: row.started_at, stoppedAt: row.ended_at,
         stopReason: null, durationSeconds: Math.round(row.duration_seconds), parts: [part]
       }, 'recordings');

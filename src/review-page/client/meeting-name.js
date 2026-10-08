@@ -42,11 +42,14 @@ function showMeetingName(name) {
   $('title-overlay').hidden = !$('show-name').checked;
   stackChapter();
 }
+// The rest of meeting-info.json (such as the meeting's official sources, set in the hub's web app) is kept.
+let meetingInfo = {};
 async function saveMeetingName(name) {
   try {
     if (location.protocol === 'file:') throw new Error('saving needs the local server (npm start)');
     const response = await fetch('../meeting-info.json', { method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, updatedAt: new Date().toISOString() }, null, 2) });
+      body: JSON.stringify({ ...meetingInfo, name, updatedAt: new Date().toISOString() }, null, 2) });
+    meetingInfo = { ...meetingInfo, name };
     if (!response.ok) throw new Error('the server answered ' + response.status + ' ' + (await response.text().catch(() => '')));
     showMeetingName(name);
     $('snapshot-status').textContent = 'Saved the meeting name';

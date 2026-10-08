@@ -23,7 +23,8 @@ export interface Publication {
   seconds: number;
   officialUrl: string | null;
   transcript: { path: string; text: string; captions: string; lines: number } | null;
-  chapters: { at: number; title: string }[];
+  chapters: { at: number; title: string; links?: { label: string; url: string }[]; official?: string | null }[];
+  official?: { swagit: { base: string; videoId: string } | null; at: number | null; to: number | null; page: string | null; links: { group: string; label: string; url: string }[] } | null;
   poster: string | null;
   clip: { status: 'queued' | 'ready' | 'failed'; error?: string; hasVideo?: boolean; video?: { path: string; bytes: number }; audio?: { path: string; bytes: number } } | null;
   publishedAt: string;
@@ -78,6 +79,35 @@ export function PublishedList() {
 
 interface Line { start: number; end: number; speaker: string; text: string }
 
+// The official sources: the official video (embedded with its own player, and linked at this stretch), documents,
+// calendar entry. This archive is independent; these are the originals.
+function OfficialSources({ item }: { item: Publication }) {
+  const official = item.official!;
+  const groups = [...new Set(official.links.map((link) => link.group))];
+  return (
+    <section className="panel official">
+      <h2>From the official source</h2>
+      {official.swagit && (
+        <>
+          <div className="official-embed">
+            <iframe title="Official video (Swagit)" src={`${official.swagit.base}/videos/${official.swagit.videoId}/embed?autoplay=0`} allowFullScreen loading="lazy" />
+          </div>
+          {official.page && item.kind !== 'note' && item.to > 0 && (
+            <p><a href={official.page} target="_blank" rel="noopener noreferrer">Watch this part on the official site ↗</a>
+              {official.at !== null && <span className="muted"> (from {clock(official.at)}{official.to !== null ? ` to ${clock(official.to)}` : ''} of the official video)</span>}</p>
+          )}
+        </>
+      )}
+      {groups.map((group) => (
+        <div key={group} className="official-group">
+          <h3>{group}</h3>
+          <ul className="small">{official.links.filter((link) => link.group === group).map((link) => <li key={link.url}><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a></li>)}</ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export function PublicationPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
@@ -129,7 +159,7 @@ export function PublicationPage() {
         {item.kind !== 'note' && item.to > 0 && <> · {clock(item.from)} to {clock(item.to)} ({duration(item.seconds)})</>}
         {item.recordingId && can('view.meetings', account) && <> · <Link to={`/meetings/${item.recordingId}`}>the whole meeting</Link></>}
       </p>
-      {item.officialUrl && <p><a href={item.officialUrl} rel="noopener noreferrer">Official recording ↗</a> <span className="muted">(from the official source)</span></p>}
+      {!item.official && item.officialUrl && <p><a href={item.officialUrl} rel="noopener noreferrer">Official recording ↗</a> <span className="muted">(from the official source)</span></p>}
       {item.clip && (ready ? (
         <section className="panel player">
           {item.clip.video
@@ -144,11 +174,15 @@ export function PublicationPage() {
         <p className="note">{item.clip.status === 'failed' ? `The clip couldn't be made: ${item.clip.error || 'unknown error'}` : 'The clip is being prepared by an agent; it appears here when it\'s ready.'}</p>
       ))}
       {item.body && <section className="body"><Body text={item.body} /></section>}
+      {item.official && (item.official.swagit || item.official.links.length > 0) && <OfficialSources item={item} />}
       {item.chapters.length > 0 && (
         <section className="panel"><h2>Chapters</h2>
           <ol className="chapters">{item.chapters.map((chapter) => <li key={chapter.at}>{ready
             ? <button type="button" className="time time-link" onClick={() => playFrom(chapter.at)}>{clock(chapter.at)}</button>
-            : <span className="time">{clock(chapter.at)}</span>} {chapter.title}</li>)}</ol>
+            : <span className="time">{clock(chapter.at)}</span>} {chapter.title}
+            {chapter.official && <a className="official-at" href={chapter.official} target="_blank" rel="noopener noreferrer" title="On the official video, at this moment">↗</a>}
+            {chapter.links?.length ? <span className="chapter-files small">{chapter.links.map((link) => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}</span> : null}
+          </li>)}</ol>
         </section>
       )}
       {item.transcript && (

@@ -9,6 +9,8 @@ import { clock, duration } from '../format.ts';
 import { dateTime, mediaUrlOf, STATUS_LABEL, type RecordingData } from './MeetingsPage.tsx';
 import MediaPlayer, { type MediaData, type PlayerControl } from '../MediaPlayer.tsx';
 import PublishPanel, { type PublishLine } from '../PublishPanel.tsx';
+import OfficialPanel, { type Official } from '../OfficialPanel.tsx';
+import { mergeOfficial, officialTime, parseOfficialUrl, swagitAt } from '../../../src/sync/official.js';
 
 // One meeting from the hub: its stills, chapters, votes, and transcript (the final one when it's ready, the quick
 // one while recording), with the word corrections and speakers everyone may see. Signed in, a click on a word of the
@@ -96,8 +98,9 @@ export default function MeetingPage() {
   const pictures = (stills || []).filter((still) => still.data.recordingId === id).sort((a, b) => a.data.partIndex - b.data.partIndex || a.data.position - b.data.position);
   const markList = <T,>(kindName: string, field: string) => [...stacks.entries()]
     .filter(([markId]) => markId.startsWith(`${id}:`) && markId.endsWith(`:${kindName}`))
-    .flatMap(([, stack]) => ((stack.data?.[field] as T[]) || []));
-  const chapters = markList<{ id: string; at: number; title: string }>('agenda', 'items');
+    .flatMap(([markId, stack]) => ((stack.data?.[field] as T[]) || []).map((item) => ({ ...item, markId })));
+  // Chapters (agenda items), each with any official files of its own (links: draft minutes, attachments).
+  const chapters = markList<{ id: string; at: number; title: string; links?: { label: string; url: string }[] }>('agenda', 'items');
   const votes = markList<{ id: string; at: number; motion?: string }>('votes', 'votes');
 
   // Saving: this person's layer of the mark, measured against what they see without it.
@@ -199,13 +202,22 @@ export default function MeetingPage() {
   if (!recordings) return <p className="empty">Loading…</p>;
   if (!recording) return <p>No such meeting on the hub. <Link to="/meetings">All meetings</Link></p>;
   const data = recording.data;
-  // The official recording: from the recorder (a built meeting's archive page), or set here (meeting-info, a mark).
+  // Official sources (src/sync/official.js): what the recorder knew (a built meeting's archive, lined up with it), with
+  // what people set here over it (meeting-info, a mark). An older plain link still counts.
   const infoId = `${id}:${data.parts?.[0]?.name || ''}:meeting-info`;
-  const officialUrl = (markData<{ officialUrl?: string }>(infoId)?.officialUrl) || data.officialUrl || '';
-  const editOfficial = async () => {
-    const value = prompt('Address of the official recording (the source\'s own archive page):', officialUrl);
-    if (value === null) return;
-    await save(infoId, { ...(markData<Record<string, unknown>>(infoId) || {}), officialUrl: value.trim() }, value.trim() ? 'Official recording link saved' : 'Official recording link removed');
+  const info = markData<{ official?: Official; officialUrl?: string }>(infoId) || {};
+  const legacy = info.officialUrl || data.officialUrl;
+  const official = mergeOfficial(data.official || (legacy ? parseOfficialUrl(legacy) : null), info.official) as Official | null;
+  const saveOfficial = (next: Official) => save(infoId, { ...info, official: next }, 'Official sources saved');
+  const editChapters = can('contribute.chapters', account);
+  const addChapterFile = async (chapter: (typeof chapters)[number]) => {
+    const url = prompt(`An official file for “${chapter.title}” (such as its draft minutes or attachment):`);
+    if (!url?.trim()) return;
+    if (!/^https?:\/\//.test(url.trim())) { setStatus('That isn\'t a web address'); return; }
+    const label = prompt('What is it?', 'Attachment') || 'Attachment';
+    const current = markData<{ items?: { id: string }[] }>(chapter.markId) || {};
+    const items = (current.items || []).map((item) => (item.id === chapter.id ? { ...item, links: [...(chapter.links || []), { label: label.trim(), url: url.trim() }] } : item));
+    await save(chapter.markId, { ...current, items }, `Added “${label.trim()}” to ${chapter.title}`);
   };
   // The transcript as shown (corrections, speaker names), for publishing.
   const linesFor = (part: string): PublishLine[] => lines.filter((line) => line.part === part).map((line) => ({
@@ -238,11 +250,7 @@ export default function MeetingPage() {
               : <><Link to="/account">Sign in</Link> to correct the transcript or say who is speaking.</>}
             {' '}{(mediaRecords || []).some((record) => record.data.recordingId === id) ? `The full-quality video is on ${data.recorderId}.` : `The video is on ${data.recorderId}.`}
           </p>
-          <p className="small">
-            {officialUrl ? <a href={officialUrl} rel="noopener noreferrer">Official recording ↗</a> : <span className="muted">No official recording linked.</span>}
-            {can('contribute.chapters', account) && <button type="button" className="link-button" onClick={editOfficial}>{officialUrl ? 'change' : 'add a link'}</button>}
-            {!media.length && can('publish', account) && <button type="button" className="link-button" onClick={encodeQueued}>Make audio and video for the hub</button>}
-          </p>
+          {!media.length && can('publish', account) && <p className="small"><button type="button" className="link-button" onClick={encodeQueued}>Make audio and video for the hub</button></p>}
         </div>
       </header>
       {pictures.length > 0 && (
@@ -265,12 +273,24 @@ export default function MeetingPage() {
           )}
           {can('publish', account) && (
             <PublishPanel recordingId={id} part={playing?.part || firstPart} seconds={playing?.seconds || data.durationSeconds || 0} playerTime={() => playerTime.current}
-              linesFor={linesFor} chapters={chapters.map((chapter) => ({ at: chapter.at, title: chapter.title }))}
+              linesFor={linesFor} official={official} chapters={chapters.map((chapter) => ({ at: chapter.at, title: chapter.title, links: chapter.links || [] }))}
               clips={((markData<{ clips?: { title: string; from: number; to: number }[] }>(`${id}:${playing?.part || firstPart}:playlist`))?.clips) || []} />
           )}
+          <OfficialPanel official={official} playerTime={() => playerTime.current} canEdit={editChapters} onSave={saveOfficial} />
           {chapters.length > 0 && (
             <section className="panel"><h2>Chapters</h2>
-              <ol className="chapters">{chapters.sort((a, b) => a.at - b.at).map((chapter) => <li key={chapter.id}><TimeLink seconds={chapter.at} onPlay={playing ? () => playAt(playing.part, chapter.at) : null} /> {chapter.title}</li>)}</ol>
+              <ol className="chapters">{chapters.sort((a, b) => a.at - b.at).map((chapter) => (
+                <li key={chapter.id}>
+                  <TimeLink seconds={chapter.at} onPlay={playing ? () => playAt(playing.part, chapter.at) : null} /> {chapter.title}
+                  {official?.swagit && officialTime(official, chapter.at) !== null && <a className="official-at" href={swagitAt(official, chapter.at) || ''} target="_blank" rel="noopener noreferrer" title="On the official video, at this moment">↗</a>}
+                  {(chapter.links?.length || editChapters) && (
+                    <span className="chapter-files small">
+                      {(chapter.links || []).map((link) => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.label} ↗</a>)}
+                      {editChapters && <button type="button" className="link-button" onClick={() => addChapterFile(chapter)}>+ file</button>}
+                    </span>
+                  )}
+                </li>
+              ))}</ol>
             </section>
           )}
           {votes.length > 0 && (

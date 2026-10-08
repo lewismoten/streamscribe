@@ -33,6 +33,22 @@ function hub_remove_tree(string $dir): void {
   rmdir($dir);
 }
 
+// A web address, or null.
+function hub_web_url($value): ?string {
+  $url = trim((string)$value);
+  return preg_match('#^https?://[^\s"<>]+$#i', $url) && strlen($url) <= 2000 ? $url : null;
+}
+
+// Labelled links ({ label, url }), as sent: only web addresses, a few dozen at most.
+function hub_links($value): array {
+  $links = [];
+  foreach (array_slice((array)$value, 0, 40) as $link) {
+    $url = hub_web_url($link['url'] ?? '');
+    if ($url) $links[] = array_filter(['group' => isset($link['group']) ? mb_substr((string)$link['group'], 0, 60) : null, 'label' => mb_substr(trim((string)($link['label'] ?? '')), 0, 120) ?: $url, 'url' => $url], fn ($item) => $item !== null);
+  }
+  return $links;
+}
+
 function hub_stamp(float $seconds, bool $srt = false): string {
   $whole = (int)floor($seconds);
   $text = sprintf('%02d:%02d:%02d', intdiv($whole, 3600), intdiv($whole % 3600, 60), $whole % 60);
@@ -74,14 +90,25 @@ if ($method === 'POST' && $route === 'publish') {
   $chapters = [];
   foreach ((array)($input['chapters'] ?? []) as $chapter) {
     $at = (float)($chapter['at'] ?? -1);
-    if ($at >= $from - 0.01 && $at < $to) $chapters[] = ['at' => round(max(0, $at - $from), 2), 'title' => mb_substr((string)($chapter['title'] ?? ''), 0, 200)];
+    if ($at >= $from - 0.01 && $at < $to) $chapters[] = ['at' => round(max(0, $at - $from), 2), 'title' => mb_substr((string)($chapter['title'] ?? ''), 0, 200),
+      'links' => hub_links($chapter['links'] ?? []), 'official' => hub_web_url($chapter['official'] ?? '')];
   }
   $folder = "published/$id";
   $dir = rtrim($config['media_dir'], '/') . '/' . $folder;
   if (!is_dir($dir)) mkdir($dir, 0775, true);
   $meetingTitle = (string)($recording['title'] ?? '');
   $sourceName = (string)($recording['sourceName'] ?? $recording['sourceKey'] ?? '');
-  $official = $recording['officialUrl'] ?? (hub_record_data($db, 'marks', "$recordingId:$part:meeting-info")['officialUrl'] ?? null);
+  // The official sources, as the publisher's page worked them out (src/sync/official.js), timed to this stretch.
+  $sent = (array)($input['official'] ?? []);
+  $swagit = (array)($sent['swagit'] ?? []);
+  $officialSources = $sent ? [
+    'swagit' => hub_web_url($swagit['base'] ?? '') && preg_match('/^\d{1,12}$/', (string)($swagit['videoId'] ?? '')) ? ['base' => hub_web_url($swagit['base']), 'videoId' => (string)$swagit['videoId']] : null,
+    'at' => isset($sent['at']) && is_numeric($sent['at']) ? round((float)$sent['at'], 1) : null,
+    'to' => isset($sent['to']) && is_numeric($sent['to']) ? round((float)$sent['to'], 1) : null,
+    'page' => hub_web_url($sent['page'] ?? ''),
+    'links' => hub_links($sent['links'] ?? []),
+  ] : null;
+  $official = $officialSources['page'] ?? $recording['officialUrl'] ?? (hub_record_data($db, 'marks', "$recordingId:$part:meeting-info")['officialUrl'] ?? null);
   if ($lines) file_put_contents("$dir/transcript.json", json_encode(['title' => $title, 'meeting' => $meetingTitle, 'from' => $from, 'to' => $to, 'lines' => $lines], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
   $text = [$title, $meetingTitle . ($recording['startedAt'] ?? '' ? ' (' . substr($recording['startedAt'], 0, 10) . ')' : '') . ', from ' . hub_stamp($from) . ' to ' . hub_stamp($to), ''];
   $speaker = null;
@@ -115,6 +142,7 @@ if ($method === 'POST' && $route === 'publish') {
     'recordingId' => $recordingId, 'part' => $part, 'meeting' => $meetingTitle, 'sourceKey' => $recording['sourceKey'] ?? '', 'sourceName' => $sourceName,
     'recordedAt' => $recording['startedAt'] ?? null, 'from' => $from, 'to' => $to, 'seconds' => round($to - $from, 2),
     'officialUrl' => $official,
+    'official' => $officialSources,
     'transcript' => $lines ? ['path' => "media/$folder/transcript.json", 'text' => "media/$folder/transcript.txt", 'captions' => "media/$folder/captions.srt", 'lines' => count($lines)] : null,
     'chapters' => $chapters, 'poster' => $poster,
     'clip' => $wantsClip ? ['status' => 'queued', 'job' => "clip-$id", 'hasVideo' => (bool)($media['video'] ?? false)] : null,

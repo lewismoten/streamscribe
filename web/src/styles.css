@@ -207,3 +207,12 @@ table.jobs td { font-size: 0.9rem; }
 .add-agent input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
 pre.command { white-space: pre-wrap; word-break: break-all; padding: 10px 12px; border: 1px solid var(--line); }
 .capabilities { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+
+/* Official sources */
+.official-group h3 { font-size: 0.85rem; color: var(--muted); margin: 10px 0 2px; }
+.official-group ul { margin: 0; padding-left: 18px; }
+.official textarea { width: 100%; font: 0.8rem ui-monospace, Menlo, monospace; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--code); color: var(--fg); margin: 6px 0; }
+.official-embed { position: relative; aspect-ratio: 16 / 9; margin: 8px 0; border-radius: 8px; overflow: hidden; background: #000; }
+.official-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.official-at { margin-left: 6px; font-size: 0.85rem; }
+.chapter-files { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: 8px; }

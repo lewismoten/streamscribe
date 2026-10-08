@@ -95,6 +95,7 @@ if (location.protocol !== 'file:') {
     if (data?.items) { agendaItems = data.items; renderAgenda(); renderTranscript(); }
   }).catch(() => {});
   fetch('../meeting-info.json', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).then((data) => {
+    if (data && typeof data === 'object') meetingInfo = data;
     if (data && typeof data.name === 'string') showMeetingName(data.name);
   }).catch(() => {});
   fetch('../audio-boosts.json', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).then((data) => {

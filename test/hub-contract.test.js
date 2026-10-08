@@ -365,7 +365,12 @@ test('meetings are private; publishing notes, transcripts, and clips (cut by an 
   const text = await (await fetch(hub.replace('api.php', excerpt.publication.transcript.text))).text();
   assert.match(text, /Pat Lee:\n\[00:00:00\] Next, the budget\./);
   assert.doesNotMatch(text, /not in it/);
-  const clip = await json('publish', { title: 'Budget clip', clip: true, transcript: true, recordingId: 'rp1', part: 'part one', from: 600, to: 660, lines, chapters: [{ at: 610, title: 'Budget' }] }, boss);
+  const clip = await json('publish', { title: 'Budget clip', clip: true, transcript: true, recordingId: 'rp1', part: 'part one', from: 600, to: 660, lines,
+    chapters: [{ at: 610, title: 'Budget', official: 'https://example.com/videos/1?ts=605', links: [{ label: 'Draft minutes', url: 'https://example.com/files/1' }, { label: 'Bad', url: 'javascript:alert(1)' }] }],
+    official: { swagit: { base: 'https://example.com', videoId: '1' }, at: 595, to: 655, page: 'https://example.com/videos/1?ts=595', links: [{ group: 'Documents', label: 'Agenda', url: 'https://example.com/agenda' }, { group: 'x', label: 'x', url: 'data:text/html,hi' }] } }, boss);
+  assert.deepEqual(clip.publication.official, { swagit: { base: 'https://example.com', videoId: '1' }, at: 595, to: 655, page: 'https://example.com/videos/1?ts=595', links: [{ group: 'Documents', label: 'Agenda', url: 'https://example.com/agenda' }] }, 'only web addresses are kept');
+  assert.deepEqual(clip.publication.chapters[0].links, [{ label: 'Draft minutes', url: 'https://example.com/files/1' }]);
+  assert.equal(clip.publication.officialUrl, 'https://example.com/videos/1?ts=595', 'the official link starts where the clip does');
   assert.equal(clip.publication.clip.status, 'queued');
   await signedOut.pull();
   assert.deepEqual((await signedOut.list('publications')).map((record) => record.data.title).sort(), ['Budget clip', 'Budget talk', 'What happened'], 'publications are for everyone');
@@ -392,7 +397,7 @@ test('meetings are private; publishing notes, transcripts, and clips (cut by an 
   assert.doesNotMatch(feed, /Budget talk|What happened/);
   assert.match(feed, new RegExp(`<enclosure url="http://127\\.0\\.0\\.1:\\d+/media/published/${clip.id}/clip-abc\\.m4a" length="12345" type="audio/mp4"/>`));
   assert.match(feed, /<itunes:duration>0:01:00<\/itunes:duration>/);
-  assert.match(feed, /Official recording: https:\/\/example\.com\/videos\/1/);
+  assert.match(feed, /Official recording: https:\/\/example\.com\/videos\/1\?ts=595/);
   const chapters = await (await fetch(feed.match(/podcast:chapters url="([^"]+)"/)[1])).json();
   assert.deepEqual(chapters.chapters, [{ startTime: 10, title: 'Budget' }]);
   assert.equal((await fetch(`${hub}/podcast/nowhere.xml`)).status, 404);

@@ -19,6 +19,7 @@ export interface RecordingData {
   parts: { index: number; name: string; dir: string; seconds: number }[];
   error?: string | null;
   officialUrl?: string | null;
+  official?: import('../OfficialPanel.tsx').Official | null;
 }
 
 export const STATUS_LABEL: Record<string, string> = { recording: '● Recording', publishing: 'Finishing up', done: 'Recorded', failed: 'Failed', skipped: 'Skipped' };

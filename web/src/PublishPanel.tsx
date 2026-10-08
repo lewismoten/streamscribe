@@ -5,6 +5,8 @@ import { useRecords } from './data/useRecords.ts';
 import { syncNow } from './data/sync.ts';
 import { clock } from './format.ts';
 import type { Publication } from './pages/PublishedPage.tsx';
+import type { Official } from './OfficialPanel.tsx';
+import { officialLinks, officialTime, swagitAt } from '../../src/sync/official.js';
 
 // Publishing from a private meeting (for groups with the publish permission): notes or a summary, a stretch of the
 // transcript (or all of it), a clip of that stretch (cut by an agent), in any mix. What goes out is self-contained:
@@ -17,9 +19,10 @@ const parseTime = (text: string) => {
   return parts.reduce((total, part) => total * 60 + part, 0);
 };
 
-export default function PublishPanel({ recordingId, part, seconds, playerTime, linesFor, chapters, clips }: {
+export default function PublishPanel({ recordingId, part, seconds, playerTime, linesFor, chapters, clips, official }: {
   recordingId: string; part: string; seconds: number; playerTime: () => number;
-  linesFor: (part: string) => PublishLine[]; chapters: { at: number; title: string }[]; clips: { title: string; from: number; to: number }[];
+  linesFor: (part: string) => PublishLine[]; chapters: { at: number; title: string; links: { label: string; url: string }[] }[];
+  clips: { title: string; from: number; to: number }[]; official: Official | null;
 }) {
   const { records } = useRecords<Publication>('publications');
   const [open, setOpen] = useState(false);
@@ -40,9 +43,17 @@ export default function PublishPanel({ recordingId, part, seconds, playerTime, l
     if (!form.transcript && !form.clip && !form.body.trim()) { setMessage('Write something, or include the transcript or a clip'); return; }
     setBusy(true);
     try {
+      // The official sources go along, timed to the stretch: the official video from its start, and each chapter's moment.
+      const start = ranged ? from : 0;
+      const snapshot = official ? {
+        swagit: official.swagit ? { base: official.swagit.base, videoId: official.swagit.videoId } : null,
+        at: officialTime(official, start), to: ranged ? officialTime(official, to) : null,
+        page: official.swagit ? swagitAt(official, start) : null,
+        links: officialLinks(official, ranged ? { at: from } : {})
+      } : null;
       const reply = await hubCall<{ id: string }>('publish', {
-        title: form.title.trim(), body: form.body, recordingId, part, transcript: form.transcript, clip: form.clip,
-        ...(ranged ? { from, to, lines: linesFor(part), chapters } : {})
+        title: form.title.trim(), body: form.body, recordingId, part, transcript: form.transcript, clip: form.clip, official: snapshot,
+        ...(ranged ? { from, to, lines: linesFor(part), chapters: chapters.map((chapter) => ({ ...chapter, official: official?.swagit && officialTime(official, chapter.at) !== null ? swagitAt(official, chapter.at) : null })) } : {})
       });
       syncNow();
       setMessage(`Published. ${form.clip ? 'An agent will cut the clip and upload it. ' : ''}`);

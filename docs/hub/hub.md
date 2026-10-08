@@ -100,6 +100,26 @@ They're served only through `api.php/file/private/…`, with a signature that ex
 
 Hubs from before meetings were private had these files in `media/`. The first deploy after the upgrade moves them, through `tools/migrate.php`. Their records then point at the new place, and browsers that may no longer see them drop them.
 
+## Official sources
+
+This archive is independent, but it points to the originals. Each meeting keeps its official sources (`src/sync/official.js`), and every link is built from their ids:
+
+| Source | Links |
+| --- | --- |
+| Official video (Swagit) | the video page (`/videos/<id>`), the page at a moment (`?ts=<seconds>`), the embed code (`/embed`, with `?autoplay=0` unless you choose autoplay), download (`/download`), the transcript with the video (`#transcript`), the transcript download (`/transcript`), the agenda with the video (`#full-agenda`) |
+| Documents (CivicClerk) | the meeting overview (`/event/<id>/overview`), the agenda and the full packet (`/event/<id>/files/agenda/<file>`) |
+| Calendar (CivicPlus) | the calendar entry |
+| Per chapter | files such as draft minutes (`/event/<id>/files/attachment/<file>`), added with "+ file" on a chapter |
+
+**Where they come from.** A meeting built from the archive (`build-meeting`) brings its Swagit video, and `publish-library` sends it. People who may edit chapters can add or change any of them on the meeting page: under Official sources, paste the official addresses and the ids are taken from them.
+
+**Times.** The official video's clock isn't this archive's. A capture may start earlier, or include material the archive left out (the Oct 6 meeting has about 11 minutes of it). For a built meeting, the alignment `build-meeting` made becomes a list of matching points, so official links "at this moment" land on the same words. Otherwise, set the seconds the official video is ahead of this one. With neither, links go to the start of the video rather than claim a time.
+
+**Where they show:**
+- **The meeting page:** the Official sources panel: the links, "from the player's moment", and the embed code. Each chapter gets a ↗ to the official video at its moment, plus its files.
+- **Publications:** the official player embedded, "watch this part on the official site" at the same moment, the links, and each chapter's official moment and files.
+- **The podcast:** each episode's notes link to the official video at the clip's start.
+
 ## Publishing
 
 On a meeting page, people whose group may publish see a Publish panel:
