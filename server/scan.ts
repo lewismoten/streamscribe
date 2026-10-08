@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { SOURCES } from '../scripts/lib/runtime-config.js';
-import { loadSessionSegments } from '../scripts/lib/session.js';
+import { SOURCES } from '../src/config/runtime-config.js';
+import { loadSessionSegments } from '../src/sessions/session.js';
 import { importDocumentFile, RECORDING_DOCUMENTS } from './documents.ts';
 
 export interface Source {

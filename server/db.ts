@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { DATA_ROOT } from '../scripts/lib/runtime-config.js';
+import { DATA_ROOT } from '../src/config/runtime-config.js';
 
 // The library database: sources, recordings (captured sessions, full meetings, archive downloads), their transcripts
 // (searchable), the marks made on the review page (speakers, chapters, votes, views, boosts, meeting names), the

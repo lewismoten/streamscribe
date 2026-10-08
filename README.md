@@ -48,27 +48,49 @@ To work on the web app, run `npm run dev` and open http://localhost:5173/: Vite 
 | `start` | Runs the streamscribe server: the web app, its API, and the data folders |
 | `dev` | Runs the server and Vite for working on the web app |
 | `build` | Builds the web app into `web/dist` |
-| [`capture`](scripts/capture.md) | Records live HLS streams segment by segment, recovering earlier and missed segments |
-| [`transcribe`](scripts/transcribe.md) | Transcribes a captured session locally with whisper.cpp |
-| [`transcribe-media`](scripts/transcribe-media.md) | Transcribes any video or audio file, or part of one |
-| [`transcript-corrections`](scripts/transcript-corrections.md) | Manages mishearing corrections and line edits, and rebuilds transcripts |
-| [`combine-transcripts`](scripts/combine-transcripts.md) | Combines the usual transcript with a `--best` one, chunk by chunk |
-| [`extract-thumbnails`](scripts/extract-thumbnails.md) | Builds a session's thumbnails, camera changes, and review page |
-| [`extract-slides`](scripts/extract-slides.md) | Saves each presentation slide shown during a session |
-| [`extract-clip`](scripts/extract-clip.md) | Cuts an MP4 clip of a session |
+| [`capture`](docs/capture/capture.md) | Records live HLS streams segment by segment, recovering earlier and missed segments |
+| [`transcribe`](docs/transcription/transcribe.md) | Transcribes a captured session locally with whisper.cpp |
+| [`transcribe-media`](docs/transcription/transcribe-media.md) | Transcribes any video or audio file, or part of one |
+| [`transcript-corrections`](docs/transcription/transcript-corrections.md) | Manages mishearing corrections and line edits, and rebuilds transcripts |
+| [`combine-transcripts`](docs/transcription/combine-transcripts.md) | Combines the usual transcript with a `--best` one, chunk by chunk |
+| [`extract-thumbnails`](docs/review/extract-thumbnails.md) | Builds a session's thumbnails, camera changes, and review page |
+| [`extract-slides`](docs/media/extract-slides.md) | Saves each presentation slide shown during a session |
+| [`extract-clip`](docs/media/extract-clip.md) | Cuts an MP4 clip of a session |
 | `render-playlist` | Joins a playlist of clips into one video (used by the review page) |
-| [`render-mp4`](scripts/render-mp4.md) | Stitches a session's segments into one MP4, optionally with a clock |
-| [`retranscribe-range`](scripts/retranscribe-range.md) | Boosts the audio of part of a session and transcribes it again (used by the review page) |
-| [`split-session`](scripts/split-session.md) | Splits a session in two |
-| [`join-sessions`](scripts/join-sessions.md) | Joins sessions of one meeting into one |
-| [`backfill-from-archive`](scripts/backfill-from-archive.md) | Downloads the official recording, lines it up with the capture by audio, and cuts out what the capture missed |
-| [`build-meeting`](scripts/build-meeting.md) | Joins the capture and the archive into one complete meeting |
-| [`report-stream-identifiers`](scripts/report-stream-identifiers.md) | Reports stream identifier changes in captured sessions |
-| [`classify-swagit-standby`](scripts/providers/swagit/classify-standby-slides.md) | Finds Swagit standby-slide segments (Swagit sources only) |
+| [`render-mp4`](docs/media/render-mp4.md) | Stitches a session's segments into one MP4, optionally with a clock |
+| [`retranscribe-range`](docs/transcription/retranscribe-range.md) | Boosts the audio of part of a session and transcribes it again (used by the review page) |
+| [`split-session`](docs/capture/split-session.md) | Splits a session in two |
+| [`join-sessions`](docs/capture/join-sessions.md) | Joins sessions of one meeting into one |
+| [`backfill-from-archive`](docs/archive/backfill-from-archive.md) | Downloads the official recording, lines it up with the capture by audio, and cuts out what the capture missed |
+| [`build-meeting`](docs/archive/build-meeting.md) | Joins the capture and the archive into one complete meeting |
+| [`report-stream-identifiers`](docs/capture/report-stream-identifiers.md) | Reports stream identifier changes in captured sessions |
+| [`classify-swagit-standby`](docs/capture/classify-swagit-standby.md) | Finds Swagit standby-slide segments (Swagit sources only) |
+
+## Repository layout
+
+```text
+bin/                 one entry point per npm command (npm run capture runs bin/capture.js)
+src/
+  config/            settings (config.local.js), repository paths, the mounted-volume check
+  util/              files, processes, command-line options, HTML
+  net/               fetching with rate limits and robots.txt
+  providers/         streaming services: plain HLS, and swagit/ (discovery, identifiers, standby slides)
+  capture/           live capture: discovery, playlists, segments, backfill, sessions, stream identity, signals
+  sessions/          a session's segment timeline; splitting and joining sessions; identifier reports
+  transcription/     whisper.cpp, transcribe (speech detection, boosts), corrections, combining, re-transcribing
+  media/             thumbnails/ (frames, camera changes, title cards), clips/ (clips, playlists),
+                     render-mp4/, slides, audio, text recognition
+  archive/           official recordings: download and alignment (backfill-from-archive), full meetings (build-meeting)
+  review-page/       the review page: page.js puts markup.js, styles.css, and client/ (its script, by feature)
+                     into each session's thumbnails/index.html
+server/              the web server: library database, scan, capture jobs, and routes/ (api, files, session jobs, app)
+web/                 the web app (Vite, React, TypeScript)
+docs/                how each command works, by area
+```
 
 ## Providers
 
-Any plain HLS stream works. A source's `provider` adds knowledge of a particular streaming service; [Swagit](https://swagit.com), used by many local governments, is built in (finding the live stream from a government's video page, its hourly stream identifier renewals, its standby slide, and downloading its archived meetings). See [capture: Providers](scripts/capture.md#providers) and [`scripts/providers`](scripts/providers/).
+Any plain HLS stream works. A source's `provider` adds knowledge of a particular streaming service; [Swagit](https://swagit.com), used by many local governments, is built in (finding the live stream from a government's video page, its hourly stream identifier renewals, its standby slide, and downloading its archived meetings). See [capture: Providers](docs/capture/capture.md#providers) and [`scripts/providers`](src/providers/).
 
 ## Data layout
 
