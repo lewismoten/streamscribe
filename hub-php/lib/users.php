@@ -38,7 +38,7 @@ function hub_viewer(array $config, PDO $db): array {
   $key = hub_caller($config);
   if ($key) {
     // Editor keys act as editors of shared records; recorder keys as recorders.
-    $permissions = $key['scope'] === 'editor' ? ['edit.schedules', 'edit.sources', 'view.meetings', 'publish'] : [];
+    $permissions = $key['scope'] === 'editor' ? ['edit.schedules', 'edit.sources', 'edit.bodies', 'view.meetings', 'publish'] : [];
     return ['kind' => 'key', 'scope' => $key['scope'], 'user' => null, 'permissions' => $permissions, 'name' => $key['name']];
   }
   $token = hub_header('X-Streamscribe-Token');

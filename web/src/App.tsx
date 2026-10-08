@@ -16,6 +16,8 @@ import AccountPage from './pages/AccountPage.tsx';
 import AccountsPage from './pages/AccountsPage.tsx';
 import PeoplePage from './people/PeoplePage.tsx';
 import PersonPage from './people/PersonPage.tsx';
+import BodiesPage from './civic/BodiesPage.tsx';
+import BodyPage from './civic/BodyPage.tsx';
 import AgentsPage from './pages/AgentsPage.tsx';
 import SetupPage from './pages/SetupPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
@@ -67,6 +69,7 @@ export default function App() {
           </NavLink>
           {(local || viewer) && <NavLink to="/meetings">Meetings</NavLink>}
           <NavLink to="/people">People</NavLink>
+          <NavLink to="/bodies">Bodies</NavLink>
           {viewer && <NavLink to="/live">Live</NavLink>}
           {viewer && <NavLink to="/agents">Agents</NavLink>}
           <NavLink to="/schedules">Schedules</NavLink>
@@ -106,6 +109,8 @@ export default function App() {
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/people" element={<PeoplePage />} />
             <Route path="/people/:source/:id" element={<PersonPage />} />
+            <Route path="/bodies" element={<BodiesPage />} />
+            <Route path="/bodies/:id" element={<BodyPage />} />
             <Route
               path="*"
               element={

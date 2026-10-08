@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { hubCall } from '../data/hub.ts';
-import { syncNow } from '../data/sync.ts';
-import { listedPerson, type Directory } from './directory.ts';
+import { listedPerson, savePublic, type Directory } from './directory.ts';
 import { shownName, type MeetingPerson } from './usePeople.ts';
 
 // For people who may publish: whether a person is listed on the public People page, and whether their photo may be
@@ -22,22 +20,7 @@ export default function PublicToggles({
     setBusy(true);
     setProblem('');
     try {
-      await hubCall('people-public', {
-        sourceKey: person.sourceKey,
-        sourceName: person.sourceName,
-        groups,
-        person: {
-          id: person.id,
-          name: person.name || '',
-          role: person.role || '',
-          group: person.group || '',
-          icon: person.icon || '',
-          nameUnknown: Boolean(person.nameUnknown)
-        },
-        listed,
-        photo
-      });
-      await syncNow();
+      await savePublic(person, groups, listed, photo);
     } catch (error) {
       setProblem((error as Error).message);
     } finally {

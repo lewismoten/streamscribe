@@ -15,7 +15,7 @@ function hub_db(array $config): PDO {
 
 // Brings a database of any earlier version up to date (schema.sql only creates what's missing; columns added later
 // are added here). Cheap when there's nothing to do.
-const HUB_SCHEMA_VERSION = 4;
+const HUB_SCHEMA_VERSION = 5;
 function hub_migrate(PDO $db): void {
   if ((int)$db->query('PRAGMA user_version')->fetchColumn() >= HUB_SCHEMA_VERSION) return;
   $db->exec('BEGIN IMMEDIATE');
@@ -25,7 +25,17 @@ function hub_migrate(PDO $db): void {
       $db->exec("ALTER TABLE records ADD COLUMN owner INTEGER NOT NULL DEFAULT 0");
       $db->exec("ALTER TABLE records ADD COLUMN layer TEXT NOT NULL DEFAULT 'shared'");
     }
+    $version = (int)$db->query('PRAGMA user_version')->fetchColumn();
     $db->exec(file_get_contents(__DIR__ . '/../schema.sql'));
+    // Version 5: public bodies. The built-in Editor group (made before) may edit them, as a new Editor group does.
+    if ($version > 0 && $version < 5) {
+      $editor = $db->query('SELECT permissions FROM groups WHERE id = 2 AND builtin = 1')->fetchColumn();
+      $list = $editor === false ? null : json_decode($editor, true);
+      if (is_array($list) && in_array('edit.sources', $list, true) && !in_array('edit.bodies', $list, true)) {
+        $list[] = 'edit.bodies';
+        $db->prepare('UPDATE groups SET permissions = ? WHERE id = 2')->execute([json_encode($list)]);
+      }
+    }
     $db->exec('CREATE INDEX IF NOT EXISTS records_owner ON records (owner)');
     $db->exec('PRAGMA user_version = ' . HUB_SCHEMA_VERSION);
     $db->exec('COMMIT');

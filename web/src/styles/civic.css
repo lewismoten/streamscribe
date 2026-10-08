@@ -1,0 +1,86 @@
+/* Public bodies: organizations and their bodies, a body's members, a person's service, and meeting attendance. */
+.organization {
+  margin-bottom: 24px;
+}
+.organization h2 .card-kind {
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
+.body-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.body-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--fg);
+}
+.body-card:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+}
+.committees {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.9rem;
+}
+.member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.person-link {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: inherit;
+}
+.service-body h3 {
+  margin: 12px 0 4px;
+  font-size: 1rem;
+}
+.service-body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.service-body li {
+  margin: 4px 0;
+}
+.service-body li.current strong {
+  color: var(--accent);
+}
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--code);
+  font-size: 0.75rem;
+}
+.attendance-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.attendance-list li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+.attendance-list select {
+  font: inherit;
+  padding: 2px 4px;
+}

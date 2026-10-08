@@ -2,7 +2,7 @@
 // What a group may do; mirrors src/sync/permissions.js. Admin (group 1) has all of them, always.
 //   contribute.*    changes to a meeting's marks that everyone sees (while the person is trusted). Without the
 //                   permission, the same change is kept for that person only.
-//   edit.*          changing shared records directly (schedules; sources and settings)
+//   edit.*          changing shared records directly (schedules; sources and settings; public bodies and terms)
 //   review          seeing untrusted people's contributions, and marking people trusted or not
 //   view.meetings   seeing full meetings, which are private: recordings, transcripts, stills, marks, the live view,
 //                   and the audio and video files
@@ -16,6 +16,7 @@ const PERMISSIONS = [
   'contribute.other' => 'Camera views, audio boosts, and clips',
   'edit.schedules' => 'Edit schedules',
   'edit.sources' => 'Edit sources and site settings',
+  'edit.bodies' => 'Edit public bodies: their members, officers, staff, and candidates',
   'review' => 'Review people: see untrusted changes, mark people trusted or not',
   'view.meetings' => 'See full meetings (private: recordings, transcripts, the live view)',
   'publish' => 'Publish clips and transcripts',
@@ -34,6 +35,7 @@ const MARK_PERMISSIONS = [
   'views' => 'contribute.other',
   'audio-boosts' => 'contribute.other',
   'playlist' => 'contribute.other',
+  'attendance' => 'contribute.speakers',
 ];
 
 // Collections of meetings, which only viewers with view.meetings (and keys) see. Everyone sees schedules, sources,
@@ -47,6 +49,9 @@ const EDIT_PERMISSIONS = [
   'schedules' => 'edit.schedules',
   'sources' => 'edit.sources',
   'settings' => 'edit.sources',
+  'organizations' => 'edit.bodies',
+  'bodies' => 'edit.bodies',
+  'terms' => 'edit.bodies',
 ];
 
 // The kind of a mark id: the last part of recordingId:part:kind or sourceKey:people.

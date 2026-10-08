@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS groups (
 );
 INSERT OR IGNORE INTO groups (id, name, permissions, position, builtin) VALUES
   (1, 'Admin', '[]', 0, 1),
-  (2, 'Editor', '["contribute.transcript","contribute.speakers","contribute.chapters","contribute.votes","contribute.other","edit.schedules","edit.sources","review"]', 1, 1),
+  (2, 'Editor', '["contribute.transcript","contribute.speakers","contribute.chapters","contribute.votes","contribute.other","edit.schedules","edit.sources","edit.bodies","review"]', 1, 1),
   (3, 'Reporter', '["contribute.transcript","contribute.speakers","contribute.chapters","contribute.votes"]', 2, 1),
   (4, 'Member', '["contribute.transcript","contribute.speakers"]', 3, 1),
   (5, 'Limited', '[]', 4, 1);

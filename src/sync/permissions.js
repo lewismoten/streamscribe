@@ -8,6 +8,7 @@ export const PERMISSIONS = {
   'contribute.other': 'Camera views, audio boosts, and clips',
   'edit.schedules': 'Edit schedules',
   'edit.sources': 'Edit sources and site settings',
+  'edit.bodies': 'Edit public bodies: their members, officers, staff, and candidates',
   review: 'Review people: see untrusted changes, mark people trusted or not',
   'view.meetings': 'See full meetings (private: recordings, transcripts, the live view)',
   publish: 'Publish clips and transcripts',
@@ -24,7 +25,8 @@ export const MARK_PERMISSIONS = {
   votes: 'contribute.votes',
   views: 'contribute.other',
   'audio-boosts': 'contribute.other',
-  playlist: 'contribute.other'
+  playlist: 'contribute.other',
+  attendance: 'contribute.speakers'
 };
 
 export const markKind = (markId) => String(markId).split(':').at(-1);

@@ -1,4 +1,5 @@
 import { SyncClient } from '../../../src/sync/client.js';
+import { COLLECTIONS } from '../../../src/sync/collections.js';
 import { idbStore, publicStore } from './idb-store.ts';
 import { isPreviewing, onPreviewChange } from './preview.ts';
 import { hubSettings } from './hub.ts';
@@ -63,20 +64,7 @@ const activeStore = () => (isPreviewing() ? publicStore : idbStore);
 
 // Switching between the admin's view and the public one: every page reloads its records from the other copy, which
 // is brought up to date.
-const ALL_COLLECTIONS = [
-  'sources',
-  'schedules',
-  'settings',
-  'recorders',
-  'recordings',
-  'transcript_chunks',
-  'stills',
-  'media',
-  'marks',
-  'publications',
-  'jobs',
-  'directory'
-];
+const ALL_COLLECTIONS = Object.keys(COLLECTIONS);
 onPreviewChange(() => {
   announce(
     ALL_COLLECTIONS.map((collection) => ({ collection, id: '*' })),

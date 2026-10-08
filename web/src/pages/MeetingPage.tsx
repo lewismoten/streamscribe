@@ -8,6 +8,8 @@ import { mediaUrlOf, type RecordingData } from './MeetingsPage.tsx';
 import MediaPlayer, { type MediaData, type PlayerControl } from '../meeting/MediaPlayer.tsx';
 import PublishPanel, { type PublishLine } from '../meeting/PublishPanel.tsx';
 import OfficialPanel, { type Official } from '../meeting/OfficialPanel.tsx';
+import AttendancePanel from '../meeting/AttendancePanel.tsx';
+import type { Attendance } from '../people/usePeople.ts';
 import MeetingHeader from '../meeting/MeetingHeader.tsx';
 import Transcript from '../meeting/Transcript.tsx';
 import { Chapters, Votes, type Chapter, type Vote } from '../meeting/Chapters.tsx';
@@ -76,6 +78,8 @@ export default function MeetingPage() {
   // Chapters (agenda items), each with any official files of its own (links: draft minutes, attachments).
   const chapters = markList<Omit<Chapter, 'markId'>>(stacks, id, 'agenda', 'items');
   const votes = markList<Vote>(stacks, id, 'votes', 'votes');
+  const spoke = [...new Set(markList<Turn>(stacks, id, 'speakers', 'turns').flatMap((turn) => turn.speakers || []))];
+  const attendanceId = `${id}:attendance`;
 
   // Published audio and video (npm run publish-media), per part; the player follows the transcript's clicks.
   const media = (mediaRecords || [])
@@ -292,6 +296,15 @@ export default function MeetingPage() {
             onAddFile={editChapters ? addChapterFile : null}
           />
           <Votes votes={votes} playAt={playChapterAt} />
+          <AttendancePanel
+            recordingId={id}
+            recording={data}
+            attendance={markData<Attendance>(attendanceId) || {}}
+            spoke={spoke}
+            nameOf={nameOf}
+            canEdit={Boolean(account.user)}
+            onSave={(next, message) => save(attendanceId, { ...next }, message)}
+          />
         </div>
         <Transcript
           kind={kind}

@@ -28,22 +28,25 @@ Recorders and the web app use `https://example.com/hub/api.php` as the hub addre
 
 Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, owner, layer }`, the same in the hub's SQLite and in the web app's IndexedDB. `rev` is one counter for every change. Clients fetch everything changed after the last `rev` they saw.
 
-| Collection          | What it holds                                                                                                           | Who writes it                                            |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `sources`           | streams to record (public fields only)                                                                                  | Edit sources permission                                  |
-| `schedules`         | when meetings happen, one-off or recurring                                                                              | Edit schedules permission                                |
-| `settings`          | public settings (never secrets)                                                                                         | Edit sources permission                                  |
-| `recorders`         | machines that record                                                                                                    | recorders                                                |
-| `recordings`        | each recorded meeting: its occurrence, parts, times, status, title, official sources                                    | recorders                                                |
-| `transcript_chunks` | transcript lines a few minutes at a time, quick (live) or final                                                         | recorders (written once)                                 |
-| `stills`            | pictures from a recording                                                                                               | recorders (written once)                                 |
-| `media`             | a recording's private audio and silent video on the hub                                                                 | recorders                                                |
-| `marks`             | review marks: speakers, chapters, votes, views, boosts, meeting name and official sources, word edits, playlist, people | recorders (shared); people (their own layers, see below) |
-| `publications`      | what's published for everyone: notes, transcript excerpts, clips                                                        | the Publish permission; agents (a clip's files)          |
-| `directory`         | the public directory of people: who is listed, and their public photo                                                   | the Publish permission                                   |
-| `jobs`              | work for agents: clips to cut, recordings to encode                                                                     | the Publish permission; agents (progress)                |
+| Collection          | What it holds                                                                                                                       | Who writes it                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `sources`           | streams to record (public fields only)                                                                                              | Edit sources permission                                  |
+| `schedules`         | when meetings happen, one-off or recurring                                                                                          | Edit schedules permission                                |
+| `settings`          | public settings (never secrets)                                                                                                     | Edit sources permission                                  |
+| `recorders`         | machines that record                                                                                                                | recorders                                                |
+| `recordings`        | each recorded meeting: its occurrence, parts, times, status, title, official sources                                                | recorders                                                |
+| `transcript_chunks` | transcript lines a few minutes at a time, quick (live) or final                                                                     | recorders (written once)                                 |
+| `stills`            | pictures from a recording                                                                                                           | recorders (written once)                                 |
+| `media`             | a recording's private audio and silent video on the hub                                                                             | recorders                                                |
+| `marks`             | review marks: speakers, chapters, votes, views, boosts, meeting name and official sources, word edits, playlist, people, attendance | recorders (shared); people (their own layers, see below) |
+| `publications`      | what's published for everyone: notes, transcript excerpts, clips                                                                    | the Publish permission; agents (a clip's files)          |
+| `directory`         | the public directory of people: who is listed, and their public photo                                                               | the Publish permission                                   |
+| `jobs`              | work for agents: clips to cut, recordings to encode                                                                                 | the Publish permission; agents (progress)                |
+| `organizations`     | counties, towns, school divisions, nonprofits with public bodies; their districts                                                   | Edit public bodies permission                            |
+| `bodies`            | public bodies (boards, committees, staff): how members are chosen, which meetings are theirs                                        | Edit public bodies permission                            |
+| `terms`             | who served on a body, as what, and when: elected, appointed, officer, staff, interim, candidate                                     | Edit public bodies permission                            |
 
-Anyone can read schedules, sources, settings, recorders, and publications. Meetings (`recordings`, `transcript_chunks`, `stills`, `media`, `marks`) and the work queue (`jobs`) go only to keys and to people whose group may see meetings. Everyone else's browser gets them as deleted. Writing needs a key (the `X-Streamscribe-Key` header) or a signed-in person (the `X-Streamscribe-Token` header, which the web app sends) whose group allows it.
+Anyone can read schedules, sources, settings, recorders, publications, the directory, and public bodies. Meetings (`recordings`, `transcript_chunks`, `stills`, `media`, `marks`) and the work queue (`jobs`) go only to keys and to people whose group may see meetings. Everyone else's browser gets them as deleted. Writing needs a key (the `X-Streamscribe-Key` header) or a signed-in person (the `X-Streamscribe-Token` header, which the web app sends) whose group allows it.
 
 ## People, groups, and layers
 
@@ -60,6 +63,7 @@ Anyone can read schedules, sources, settings, recorders, and publications. Meeti
 | Camera views, audio boosts, and clips                             | ✓     | ✓      |          |        |         |
 | Edit schedules                                                    | ✓     | ✓      |          |        |         |
 | Edit sources and site settings                                    | ✓     | ✓      |          |        |         |
+| Edit public bodies (members, officers, staff, candidates)         | ✓     | ✓      |          |        |         |
 | Review people (see untrusted changes, mark people trusted or not) | ✓     | ✓      |          |        |         |
 | See full meetings (private)                                       | ✓     |        |          |        |         |
 | Publish clips and transcripts                                     | ✓     |        |          |        |         |
@@ -188,6 +192,24 @@ The People page lists the people in meetings. It draws on each source's roster f
 - **Published transcripts:** show a public photo beside the speaker's name.
 
 **Previewing the public view:** an admin sees a small 👁️ button in the corner of every page. It switches the site to what a signed-out visitor sees (a separate signed-out copy in the browser, with no private files), and the button (now 🙈) stays to switch back. The preview lasts for that browser tab, and ends on sign-out.
+
+## Public bodies
+
+The Bodies page lists public bodies by the organization they belong to: a county, a town, a school division, or a nonprofit whose meetings are public (such as a library whose trustees are chosen by the board itself). It's public; people whose group may edit public bodies (Editors, by default) change it.
+
+- **Organizations** have districts (such as Fork, Happy Creek, North River, Shenandoah, South River).
+- **Bodies** belong to an organization, or sit under another body (a committee). Each says how its members are chosen (elected, appointed, chosen by the body itself, mixed, or hired staff) and which recordings are its meetings: a source's meetings, or those whose title contains some words, when one source streams several bodies.
+- **Terms** say who served on a body, as what, and from when to when (blank until it ends), with a district and how it ended (term ended, resigned, replaced…). A person has as many as they need:
+  - **Elected** or **Appointed** to a seat (appointed before an election, or after someone resigns), a **Citizen appointee**, or **Ex officio**.
+  - An **Officer** of the body, such as Chair or Vice Chair, for a year at a time.
+  - **Staff** or **Interim** staff, such as the County Administrator or County Attorney; someone moving between Interim County Administrator and Assistant to the County Administrator has one term for each stretch.
+  - A **Candidate** running for a seat, with the election day and its result (won, lost, withdrew), whether or not they're elected.
+
+People in terms are the ones on each source's roster. Saving a term lists the person in the public directory (for people who may publish), since a public official's name is public; their photo stays as chosen on the People page.
+
+**Person pages** show a person's public service body by body, then (for people who may see meetings) the meetings they presided at, attended, or missed, or were expected at (on the body that day) and spoke in.
+
+**Attendance.** A meeting's Attendance panel lists the people on its body that day (from their terms) and anyone who spoke, to mark present or absent, and who presided. It's a mark (`<recording>:attendance`) with layers like the others, made public by the "Choose who is speaking" permission. When a recording isn't matched to the right body, choose it there.
 
 ## Schedules
 

@@ -1,0 +1,189 @@
+import { dayKey } from '../format.ts';
+
+// Public bodies and who serves on them (collections organizations, bodies, and terms; public, edited with
+// edit.bodies). An organization (a county, a town, a school division, a nonprofit) has districts and bodies; a body
+// (a board, a committee under it, its staff) says how its members are chosen and which sources' meetings are its
+// own; a term says who served on a body, as what, from when to when. A person holds many terms over the years:
+// appointed to a seat, then elected to it, Chair for a year, interim administrator between hires, or running for a
+// seat (a candidate) whether or not they win. People are the ones on each source's roster (see ../people).
+
+export type OrganizationKind = 'county' | 'town' | 'city' | 'school-division' | 'nonprofit' | 'other';
+export interface District {
+  id: string;
+  name: string;
+}
+export interface Organization {
+  name: string;
+  kind: OrganizationKind;
+  districts: District[];
+  website?: string;
+  note?: string;
+}
+
+export type BodyKind = 'governing' | 'board' | 'committee' | 'commission' | 'staff' | 'other';
+export type Selection = 'elected' | 'appointed' | 'self-selected' | 'mixed' | 'hired';
+// Which recordings are this body's: a source's meetings, or only those whose title contains some text.
+export interface MeetingMatch {
+  sourceKey: string;
+  match: string;
+}
+export interface Body {
+  organizationId: string;
+  name: string;
+  kind: BodyKind;
+  parentId?: string;
+  selection: Selection;
+  meetings: MeetingMatch[];
+  website?: string;
+  note?: string;
+}
+
+export type TermKind =
+  'elected' | 'appointed' | 'citizen' | 'ex-officio' | 'officer' | 'staff' | 'interim' | 'candidate';
+export type EndReason = '' | 'term-ended' | 'resigned' | 'replaced' | 'removed' | 'died' | 'other';
+export type Result = '' | 'won' | 'lost' | 'withdrew';
+export interface Term {
+  sourceKey: string;
+  personId: string;
+  bodyId: string;
+  kind: TermKind;
+  title: string;
+  districtId?: string;
+  start: string; // YYYY-MM-DD
+  end?: string; // YYYY-MM-DD, inclusive; none while it lasts
+  endReason?: EndReason;
+  election?: string; // candidates: the election's date
+  result?: Result;
+  note?: string;
+}
+
+export const ORGANIZATION_KINDS: Record<OrganizationKind, string> = {
+  county: 'County',
+  town: 'Town',
+  city: 'City',
+  'school-division': 'School division',
+  nonprofit: 'Nonprofit',
+  other: 'Other'
+};
+export const BODY_KINDS: Record<BodyKind, string> = {
+  governing: 'Governing body',
+  board: 'Board',
+  committee: 'Committee',
+  commission: 'Commission or authority',
+  staff: 'Staff',
+  other: 'Other'
+};
+export const SELECTIONS: Record<Selection, string> = {
+  elected: 'Members elected by the public',
+  appointed: 'Members appointed (by another body or official)',
+  'self-selected': 'Members chosen by the body itself',
+  mixed: 'Some elected, some appointed',
+  hired: 'Hired staff'
+};
+export const TERM_KINDS: Record<TermKind, string> = {
+  elected: 'Elected',
+  appointed: 'Appointed',
+  citizen: 'Citizen appointee',
+  'ex-officio': 'Ex officio',
+  officer: 'Officer',
+  staff: 'Staff',
+  interim: 'Interim',
+  candidate: 'Candidate'
+};
+export const TERM_HELP: Record<TermKind, string> = {
+  elected: 'A seat won in an election',
+  appointed: 'A seat filled by appointment (such as before an election, or after a resignation), not elected',
+  citizen: 'A member of the public appointed to the body (often a committee)',
+  'ex-officio': 'A member because of another office they hold',
+  officer: 'An office on the body, such as Chair or Vice Chair, held by a member',
+  staff: 'A staff position, such as County Administrator or County Attorney',
+  interim: 'A staff position held for now, until someone is hired',
+  candidate: 'Running for a seat (whether or not they win)'
+};
+export const END_REASONS: Record<EndReason, string> = {
+  '': '',
+  'term-ended': 'Term ended',
+  resigned: 'Resigned',
+  replaced: 'Replaced',
+  removed: 'Removed',
+  died: 'Died',
+  other: 'Other'
+};
+export const RESULTS: Record<Result, string> = {
+  '': 'Not decided yet',
+  won: 'Won',
+  lost: 'Lost',
+  withdrew: 'Withdrew'
+};
+// Titles to suggest for each kind of term (any title may be typed).
+export const TITLE_SUGGESTIONS: Record<TermKind, string[]> = {
+  elected: ['Supervisor', 'Council member', 'Mayor', 'School board member', 'Member'],
+  appointed: ['Supervisor', 'Council member', 'Trustee', 'Member'],
+  citizen: ['Citizen member', 'Member'],
+  'ex-officio': ['Member (ex officio)'],
+  officer: ['Chair', 'Vice Chair', 'Vice Mayor', 'Secretary', 'Treasurer', 'President', 'Vice President'],
+  staff: [
+    'County Administrator',
+    'Assistant to the County Administrator',
+    'Deputy County Administrator',
+    'County Attorney',
+    'Town Manager',
+    'Town Attorney',
+    'Clerk',
+    'Superintendent',
+    'Director'
+  ],
+  interim: ['Interim County Administrator', 'Interim Town Manager', 'Interim Superintendent', 'Interim Director'],
+  candidate: ['Supervisor', 'Council member', 'Mayor', 'School board member']
+};
+
+// Kinds that make someone a member of the body (officers are members too; staff and candidates are not).
+export const MEMBER_KINDS: TermKind[] = ['elected', 'appointed', 'citizen', 'ex-officio'];
+export const STAFF_KINDS: TermKind[] = ['staff', 'interim'];
+
+export const today = () => dayKey(new Date().toISOString());
+export const activeOn = (term: Term, day: string) => term.start <= day && (!term.end || day <= term.end);
+// A candidate is current until the election has a result (or has passed, with an end date).
+export const isCurrent = (term: Term, day = today()) =>
+  term.kind === 'candidate' ? !term.result && activeOn(term, day) : activeOn(term, day);
+
+export const personKeyOf = (term: Term) => `${term.sourceKey}/${term.personId}`;
+
+// The bodies a recording belongs to: chosen on its attendance mark, else matched by source and title.
+export function bodiesOfRecording(
+  bodies: { id: string; data: Body }[],
+  recording: { sourceKey: string; title: string },
+  chosen?: string
+) {
+  if (chosen) return bodies.filter((body) => body.id === chosen);
+  const title = (recording.title || '').toLowerCase();
+  return bodies.filter((body) =>
+    (body.data.meetings || []).some(
+      (item) =>
+        item.sourceKey === recording.sourceKey &&
+        (!item.match.trim() || title.includes(item.match.trim().toLowerCase()))
+    )
+  );
+}
+
+// "Jan 2024", "Mar 4, 2025": a term's dates, shown as precisely as they were given.
+export function shortDate(day: string | undefined) {
+  if (!day) return '';
+  const [year, month, dayOfMonth] = day.split('-').map(Number);
+  const value = new Date(Date.UTC(year, (month || 1) - 1, dayOfMonth || 1));
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    year: 'numeric',
+    ...(dayOfMonth ? { day: 'numeric' } : {})
+  }).format(value);
+}
+export const span = (term: Term) =>
+  `${shortDate(term.start)} – ${term.end ? shortDate(term.end) : term.kind === 'candidate' ? '' : 'now'}`.trim();
+
+export const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);

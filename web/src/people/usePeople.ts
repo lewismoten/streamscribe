@@ -6,7 +6,8 @@ import type { RecordingData } from '../pages/MeetingsPage.tsx';
 
 // The people in meetings, from each source's roster (the `<source>:people` mark the review page keeps), their photos
 // (`<source>:people-photos`, sent by publish-library), and every meeting's speaker marks: who spoke in which meetings,
-// when first, and for how long. Marks are seen as the viewer sees them (people's own layers applied).
+// when first, and for how long; and each meeting's attendance. Marks are seen as the viewer sees them (people's own
+// layers applied).
 export interface RosterPerson {
   id: string;
   name?: string;
@@ -31,6 +32,14 @@ export interface MeetingPerson extends RosterPerson {
   photo: string | null;
   meetings: Appearance[];
   seconds: number;
+}
+// Who was at a meeting (an `<recordingId>:attendance` mark, edited on the meeting page): present, absent, and who
+// presided; and the body it was a meeting of, when matching by source and title isn't right.
+export interface Attendance {
+  bodyId?: string;
+  present?: string[];
+  absent?: string[];
+  presiding?: string;
 }
 interface Turn {
   at: number;
@@ -58,11 +67,17 @@ export function usePeople() {
   const { records: recordings } = useRecords<RecordingData>('recordings');
   const viewerId = account.user?.id || 0;
   return useMemo(() => {
-    if (!marks || !recordings) return { people: null, groups: [] as string[] };
+    if (!marks || !recordings)
+      return { people: null, groups: [] as string[], attendance: new Map<string, Attendance>() };
     const stacks = stackMarks(marks, viewerId) as Map<string, { data: Record<string, unknown> | null }>;
     const byRecording = new Map(recordings.map((record) => [record.id, record.data]));
     const people = new Map<string, MeetingPerson>();
     const groups: string[] = [];
+    const attendance = new Map<string, Attendance>();
+    for (const [markId, stack] of stacks) {
+      const match = markId.match(/^([^:]+):attendance$/);
+      if (match && stack.data) attendance.set(match[1], stack.data as Attendance);
+    }
 
     for (const [markId, stack] of stacks) {
       const match = markId.match(/^([^:]+):people$/);
@@ -121,6 +136,6 @@ export function usePeople() {
     }
     for (const person of people.values())
       person.meetings.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
-    return { people: [...people.values()], groups };
+    return { people: [...people.values()], groups, attendance };
   }, [marks, recordings, viewerId]);
 }

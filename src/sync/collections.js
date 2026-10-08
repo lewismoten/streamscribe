@@ -54,6 +54,21 @@ export const COLLECTIONS = {
     mode: 'mutable',
     doc: 'The public directory of people per source: who is listed for everyone, and whose photo is public (see hub-php/lib/people-routes.php).'
   },
+  organizations: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: 'Places and organizations with public bodies: a county, a town, a school division, a nonprofit; their districts (see web/src/civic).'
+  },
+  bodies: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: "Public bodies of an organization (a board, a committee under it, its staff): how members are chosen, and which sources' meetings are theirs."
+  },
+  terms: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: 'Who served on a body, as what, and when: elected or appointed members, officers (Chair), staff (interim or not), and candidates running for a seat.'
+  },
   jobs: {
     writers: ['editor', 'recorder'],
     mode: 'mutable',
