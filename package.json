@@ -25,7 +25,8 @@
     "backfill-from-archive": "node bin/backfill-from-archive.js",
     "build-meeting": "node bin/build-meeting.js",
     "retranscribe-range": "node bin/retranscribe-range.js",
-    "classify-swagit-standby": "node bin/classify-swagit-standby.js"
+    "classify-swagit-standby": "node bin/classify-swagit-standby.js",
+    "test": "node --test test/"
   },
   "engines": {
     "node": ">=24"

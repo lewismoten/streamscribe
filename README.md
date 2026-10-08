@@ -81,8 +81,11 @@ src/
   media/             thumbnails/ (frames, camera changes, title cards), clips/ (clips, playlists),
                      render-mp4/, slides, audio, text recognition
   archive/           official recordings: download and alignment (backfill-from-archive), full meetings (build-meeting)
+  sync/              records shared with a hub: collections, schedules and recurrence, merging, the sync client
   review-page/       the review page: page.js puts markup.js, styles.css, and client/ (its script, by feature)
                      into each session's thumbnails/index.html
+hub-php/             the hub: a PHP API with SQLite that recorders report to and web apps sync with (docs/hub/hub.md)
+test/                npm test: recurrence, merging, and the hub's API against a local PHP server
 server/              the web server: library database, scan, capture jobs, and routes/ (api, files, session jobs, app)
 web/                 the web app (Vite, React, TypeScript)
 docs/                how each command works, by area

@@ -6,3 +6,6 @@
 node_modules/
 .DS_Store
 /web/dist/
+/hub-php/config.php
+/hub-php/data/
+/hub-php/media/

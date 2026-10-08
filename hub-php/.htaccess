@@ -1,0 +1,8 @@
+# Only api.php and media/ are meant to be reached from the web.
+Options -Indexes
+<FilesMatch "^(config\.php|config\.example\.php|schema\.sql)$">
+  Require all denied
+</FilesMatch>
+RedirectMatch 403 ^.*/(lib|tools|data)/
+# Some hosts drop the custom key header unless it is passed through explicitly.
+SetEnvIf X-Streamscribe-Key "(.*)" HTTP_X_STREAMSCRIBE_KEY=$1
