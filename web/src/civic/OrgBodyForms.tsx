@@ -141,6 +141,7 @@ export function BodyForm({
     await putRecord('bodies', id || `${form.organizationId}-${slug(form.name)}`, {
       ...form,
       name: form.name.trim(),
+      memberTitle: form.memberTitle?.trim() || '',
       meetings,
       offices: [
         ...new Set(
@@ -224,6 +225,14 @@ export function BodyForm({
           />
         </label>
       </div>
+      <label className="block">
+        Members are called
+        <input
+          value={form.memberTitle || ''}
+          onChange={(event) => setForm({ ...form, memberTitle: event.target.value })}
+          placeholder="Supervisor"
+        />
+      </label>
       <label className="block">
         Its offices, one per line (held by members, usually a year at a time)
         <textarea

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { can } from '../data/account.ts';
 import { putRecord, removeRecord } from '../data/useRecords.ts';
-import { listedPerson, savePublic } from '../people/directory.ts';
 import { shownName } from '../people/usePeople.ts';
+import { listPublicly } from './listing.ts';
 import { FormButtons } from './OrgBodyForms.tsx';
 import {
   ELECTED_KINDS,
@@ -12,6 +11,7 @@ import {
   RESULTS,
   activeOn,
   MEMBER_KINDS,
+  memberKindFor,
   officesOf,
   TERM_HELP,
   TERM_KINDS,
@@ -43,14 +43,19 @@ export default function TermForm({
   civic: Civic;
   onDone: (message: string) => void;
 }) {
-  const [form, setForm] = useState<Term>({
-    sourceKey: '',
-    personId: '',
-    bodyId: '',
-    kind: 'elected',
-    title: '',
-    start: today(),
-    ...value
+  const [form, setForm] = useState<Term>(() => {
+    // A new term on a body starts as one of its members, by the title they have there.
+    const startingBody = civic.bodies?.find((item) => item.id === value.bodyId)?.data;
+    const kind = value.kind || (id ? 'elected' : memberKindFor(startingBody));
+    return {
+      sourceKey: '',
+      personId: '',
+      bodyId: '',
+      kind,
+      title: MEMBER_KINDS.includes(kind) ? startingBody?.memberTitle || '' : '',
+      start: today(),
+      ...value
+    };
   });
   const [message, setMessage] = useState('');
   // Opened from further down the page (such as the Officers panel): brought into view, ready to fill in.
@@ -61,6 +66,25 @@ export default function TermForm({
   }, []);
   const [newElection, setNewElection] = useState({ date: '', kind: 'general' as ElectionKind });
   const change = (patch: Partial<Term>) => setForm({ ...form, ...patch });
+  // Choosing a body (or a kind) fills in what its members are, and are called (such as an elected Supervisor),
+  // unless something else was typed.
+  const memberTitleOf = (bodyId: string) => civic.bodies?.find((item) => item.id === bodyId)?.data.memberTitle || '';
+  const chooseBody = (bodyId: string) => {
+    const chosen = civic.bodies?.find((item) => item.id === bodyId)?.data;
+    const untouched = !form.title || form.title === memberTitleOf(form.bodyId);
+    change({
+      bodyId,
+      ...(untouched && MEMBER_KINDS.includes(form.kind)
+        ? { kind: id ? form.kind : memberKindFor(chosen), title: chosen?.memberTitle || form.title }
+        : {})
+    });
+  };
+  const chooseKind = (kind: TermKind) => {
+    const memberTitle = memberTitleOf(form.bodyId);
+    if (MEMBER_KINDS.includes(kind) && !form.title) change({ kind, title: memberTitle });
+    else if (!MEMBER_KINDS.includes(kind) && form.title === memberTitle) change({ kind, title: '' });
+    else change({ kind });
+  };
   const bodies = civic.bodies || [];
   const body = bodies.find((item) => item.id === form.bodyId);
   const organizationId = form.bodyId.startsWith('org:') ? form.bodyId.slice(4) : body?.data.organizationId;
@@ -92,7 +116,7 @@ export default function TermForm({
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!personKey || !form.bodyId) return setMessage('Choose a person and a body');
-    if (form.end && form.end < form.start) return setMessage('It ends before it starts');
+    if (form.start && form.end && form.end < form.start) return setMessage('It ends before it starts');
     if (form.electionId === NEW_ELECTION && !newElection.date) return setMessage("Give the new election's day");
     const term: Term = { ...form, title: form.title.trim() || TERM_KINDS[form.kind] };
     // An organization chosen as the body becomes a body of its own (the office itself).
@@ -122,13 +146,7 @@ export default function TermForm({
     await putRecord('terms', id, term);
     // A public figure: listed publicly, if they aren't yet (their photo stays as chosen).
     const person = civic.people.get(personKey);
-    if (person && !listedPerson(civic.directories, person.sourceKey, person.id) && can('publish', civic.account)) {
-      try {
-        await savePublic(person, civic.roster.groups, true, false);
-      } catch {
-        /* the term is saved; listing can be done on the People page */
-      }
-    }
+    await listPublicly(civic, [person]);
     onDone(`Saved ${term.title}${person ? ` for ${shownName(person)}` : ''}`);
   };
   const remove = async () => {
@@ -179,7 +197,7 @@ export default function TermForm({
         </label>
         <label>
           Body
-          <select value={form.bodyId} onChange={(event) => change({ bodyId: event.target.value })} required>
+          <select value={form.bodyId} onChange={(event) => chooseBody(event.target.value)} required>
             <option value="">Choose…</option>
             {withoutBodies.map((org) => (
               <option key={org.id} value={`org:${org.id}`}>
@@ -201,7 +219,7 @@ export default function TermForm({
         </label>
         <label>
           As
-          <select value={form.kind} onChange={(event) => change({ kind: event.target.value as TermKind })}>
+          <select value={form.kind} onChange={(event) => chooseKind(event.target.value as TermKind)}>
             {Object.entries(TERM_KINDS).map(([kind, label]) => (
               <option key={kind} value={kind}>
                 {label}
@@ -240,8 +258,8 @@ export default function TermForm({
           </label>
         )}
         <label>
-          {form.kind === 'candidate' ? 'Running from' : 'From'}
-          <input type="date" value={form.start} onChange={(event) => change({ start: event.target.value })} required />
+          {form.kind === 'candidate' ? 'Running from' : 'From (blank if not known yet)'}
+          <input type="date" value={form.start} onChange={(event) => change({ start: event.target.value })} />
         </label>
         <label>
           Until (blank while it lasts)

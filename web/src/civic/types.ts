@@ -35,6 +35,8 @@ export interface Body {
   parentId?: string;
   selection: Selection;
   meetings: MeetingMatch[];
+  // What its members are called (such as Supervisor): the title new members' terms get.
+  memberTitle?: string;
   // The body's offices, such as Chair and Vice Chair; officer terms hold them, usually a year at a time.
   offices?: string[];
   website?: string;
@@ -61,7 +63,7 @@ export interface Term {
   kind: TermKind;
   title: string;
   districtId?: string;
-  start: string; // YYYY-MM-DD
+  start: string; // YYYY-MM-DD, or '' when not known yet (someone known to have served, dates to come)
   end?: string; // YYYY-MM-DD, inclusive; none while it lasts
   endReason?: EndReason;
   electionId?: string; // candidates: the election they ran in; elected members: the one they won
@@ -172,7 +174,18 @@ export const MEMBER_KINDS: TermKind[] = ['elected', 'appointed', 'citizen', 'ex-
 export const STAFF_KINDS: TermKind[] = ['staff', 'interim'];
 
 export const today = () => dayKey(new Date().toISOString());
-export const activeOn = (term: Term, day: string) => term.start <= day && (!term.end || day <= term.end);
+export const activeOn = (term: Term, day: string) =>
+  Boolean(term.start) && term.start <= day && (!term.end || day <= term.end);
+// Whether a term covers any day of a year (one with unknown dates may have).
+export const servedIn = (term: Term, year: number) =>
+  !term.start || (term.start.slice(0, 4) <= String(year) && (!term.end || term.end.slice(0, 4) >= String(year)));
+// The kind of term a new member of a body gets, from how its members are chosen.
+export const memberKindFor = (body: Body | undefined): TermKind =>
+  body?.selection === 'hired'
+    ? 'staff'
+    : body?.selection === 'elected' || body?.selection === 'mixed'
+      ? 'elected'
+      : 'appointed';
 // A candidate is current until the election has a result (or has passed, with an end date).
 export const isCurrent = (term: Term, day = today()) =>
   term.kind === 'candidate' ? !term.result && activeOn(term, day) : activeOn(term, day);
@@ -220,7 +233,11 @@ export function shortDate(day: string | undefined) {
   }).format(value);
 }
 export const span = (term: Term) =>
-  `${shortDate(term.start)} – ${term.end ? shortDate(term.end) : term.kind === 'candidate' ? '' : 'now'}`.trim();
+  term.start
+    ? `${shortDate(term.start)} – ${term.end ? shortDate(term.end) : term.kind === 'candidate' ? '' : 'now'}`.trim()
+    : term.end
+      ? `until ${shortDate(term.end)}`
+      : 'dates not known yet';
 
 export const slug = (text: string) =>
   text

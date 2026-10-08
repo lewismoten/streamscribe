@@ -6,6 +6,7 @@ import type { RecordingData } from '../pages/MeetingsPage.tsx';
 import type { Publication } from '../published/types.ts';
 import { BodyForm } from './OrgBodyForms.tsx';
 import { districtName, kindTag, MemberCard, PersonLink } from './parts.tsx';
+import MemberPicker from './MemberPicker.tsx';
 import OfficersPanel from './OfficersPanel.tsx';
 import TermForm from './TermForm.tsx';
 import {
@@ -26,7 +27,7 @@ import {
 } from './types.ts';
 import { useCivic } from './useCivic.ts';
 
-type Editing = { type: 'term'; id: string | null; value: Partial<Term> } | { type: 'body' };
+type Editing = { type: 'term'; id: string | null; value: Partial<Term> } | { type: 'body' } | { type: 'members' };
 
 // One public body: who serves now (members with their seats and offices, staff, people running for a seat), its
 // committees, everyone who has served and when, and its meetings (for people who may see them) and published items.
@@ -64,6 +65,13 @@ export default function BodyPage() {
   );
   const staff = current.filter((term) => STAFF_KINDS.includes(term.data.kind));
   const candidates = current.filter((term) => term.data.kind === 'candidate');
+  // Members known to have served, whose dates aren't given yet (and who have no dated term here).
+  const undated = terms.filter(
+    (term) =>
+      MEMBER_KINDS.includes(term.data.kind) &&
+      !term.data.start &&
+      !terms.some((other) => other.data.start && personKeyOf(other.data) === personKeyOf(term.data))
+  );
   const meetings = (recordings || [])
     .filter((record) => bodiesOfRecording([body], record.data).length > 0)
     .sort((a, b) => String(b.data.startedAt).localeCompare(String(a.data.startedAt)));
@@ -105,12 +113,15 @@ export default function BodyPage() {
             <button type="button" className="button" onClick={() => setEditing({ type: 'body' })}>
               Change
             </button>
+            <button type="button" className="button primary" onClick={() => setEditing({ type: 'members' })}>
+              ＋ Members
+            </button>
             <button
               type="button"
-              className="button primary"
+              className="button"
               onClick={() => setEditing({ type: 'term', id: null, value: { bodyId: body.id } })}
             >
-              ＋ Someone on it
+              ＋ One term
             </button>
           </>
         )}
@@ -135,6 +146,7 @@ export default function BodyPage() {
           onDone={done}
         />
       )}
+      {editing?.type === 'members' && <MemberPicker body={body} civic={civic} onDone={done} />}
       {editing?.type === 'body' && (
         <BodyForm
           id={body.id}
@@ -170,11 +182,20 @@ export default function BodyPage() {
           </ul>
         </section>
       )}
-      <OfficersPanel
-        body={body}
-        civic={civic}
-        onEdit={(termId, value) => setEditing({ type: 'term', id: termId, value })}
-      />
+      {undated.length > 0 && (
+        <section className="panel">
+          <h2>Also served (dates not known yet)</h2>
+          <ul className="member-list">
+            {undated.map((term) => (
+              <li key={term.id}>
+                <MemberCard person={personOf(term.data)} title={term.data.title} details={district(term.data)} />
+                {civic.editor && edit(term)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <OfficersPanel body={body} civic={civic} />
       {staff.length > 0 && (
         <section className="panel">
           <h2>Staff</h2>
