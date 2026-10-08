@@ -210,14 +210,46 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
   .transcript-list figure { position: relative; width: 160px; margin: 6px 10px; cursor: pointer; }
   .transcript-list figure img { display: block; width: 100%; height: auto; border-radius: 4px; background: #000; }
   .transcript-list figcaption { position: absolute; left: 4px; bottom: 4px; padding: 1px 5px; border-radius: 4px; font-size: 0.7rem; color: #fff; background: rgba(0, 0, 0, 0.65); font-variant-numeric: tabular-nums; }
-  .transcript-list p.has-who { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; }
-  .transcript-list p.has-who > time, .transcript-list p.has-who > span:not(.who) { grid-column: 1; }
-  .who { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 4px; align-self: start; }
-  .who > span { display: flex; flex-direction: column; align-items: center; width: 52px; }
-  .who .avatar { width: 36px; height: 36px; }
+  /* The transcript as a conversation: voting members on the right, everyone else on the left. */
+  .turn { display: flex; gap: 6px; align-items: flex-start; padding: 2px 8px; cursor: pointer; }
+  .turn.first { padding-top: 8px; }
+  .turn.right { flex-direction: row-reverse; }
+  .turn .face { flex: 0 0 52px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .turn .face > span { display: flex; flex-direction: column; align-items: center; width: 52px; }
+  .turn .face .avatar { width: 36px; height: 36px; }
+  .turn .face small { max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; color: var(--muted); }
+  .bubble { max-width: calc(100% - 64px); padding: 3px 10px 5px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+  .turn.left .bubble { border-top-left-radius: 4px; }
+  .turn.right .bubble { border-top-right-radius: 4px; background: color-mix(in srgb, var(--start) 10%, var(--card)); }
+  .turn:not(.first) .bubble { border-top-left-radius: 12px; border-top-right-radius: 12px; }
+  .bubble time { display: block; font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .turn.right .bubble time { text-align: right; }
+  .turn.active .bubble { border-color: var(--start); box-shadow: 0 0 0 1px var(--start); }
+  .turn.match .bubble { box-shadow: 0 0 0 2px var(--end); }
+  .turn.retranscribed time::after { content: '  🔊 re-transcribed'; }
+  .w { border-radius: 3px; }
+  .w:hover { background: color-mix(in srgb, var(--fg) 12%, transparent); }
+  .w.now { background: color-mix(in srgb, var(--start) 40%, transparent); }
+  .w.change { box-shadow: inset 2px 0 0 var(--end); padding-left: 2px; }
+  .turn:hover .line-boost { display: inline-block; }
   .who-person, .figure-speakers .avatar { cursor: pointer; }
   .who-person:hover .avatar, .figure-speakers .avatar:hover { outline: 2px solid var(--end); outline-offset: 1px; }
-  .who small { max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; color: var(--muted); }
+  .word-picker { position: fixed; z-index: 50; width: min(420px, calc(100vw - 16px)); max-height: 70vh; overflow: auto; padding: 8px 10px;
+    background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+  .word-picker[hidden] { display: none; }
+  .picker-head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
+  .picker-head button { margin-left: auto; }
+  .picker-row > small { display: block; color: var(--muted); font-size: 0.72rem; margin: 4px 0 2px; }
+  .picker-faces { display: flex; flex-wrap: wrap; gap: 4px; }
+  .picker-faces button { display: flex; flex-direction: column; align-items: center; width: 60px; padding: 3px 2px; border: 1px solid transparent; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+  .picker-faces button:hover { border-color: var(--line); }
+  .picker-faces button.current { border-color: var(--start); }
+  .picker-faces button.picked { background: color-mix(in srgb, var(--start) 25%, transparent); }
+  .picker-faces small { max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; }
+  .picker-faces .avatar { width: 36px; height: 36px; }
+  .picker-more { margin: 6px 0 2px; }
+  .picker-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+  .picker-actions small { margin-left: auto; color: var(--muted); font-size: 0.72rem; }
   .avatar.icon { background: color-mix(in srgb, var(--fg) 14%, #445); font-size: 1.15em; line-height: 1; }
   .avatar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%;
     object-fit: cover; background: color-mix(in srgb, var(--start) 35%, #777); color: #fff; font-size: 0.8em; font-weight: 600; }
@@ -287,7 +319,7 @@ export function renderScrubber(thumbnails, sessionDir = '', playback = { segment
   #person-photo { display: block; width: 128px; height: 128px; margin: 8px 0; border-radius: 50%; }
   .figure-speakers { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
   .figure-speakers .avatar { width: 48px; height: 48px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); font-size: 1rem; }
-  .transcript-list p.retranscribed time::after { content: '  🔊 re-transcribed'; }
+
   #boost-dialog .row label { display: inline-flex; gap: 6px; align-items: center; }
   #boost-dialog input[type=text] { width: 7.5em; min-width: 0; font-variant-numeric: tabular-nums; }
   #boost-dialog input[type=range] { width: 220px; margin: 0; }
@@ -1466,8 +1498,12 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   // Sets who is speaking from the current position on. A change within a second of an existing one edits that one
   // (so picking several people in a row makes one change), and a change that repeats the one before is dropped.
   function setSpeakersNow(ids) {
-    const at = Math.round(position * 10) / 10;
-    const existing = turns.find((turn) => Math.abs(turn.at - at) <= 1);
+    setSpeakersAt(Math.round(position * 10) / 10, ids, 1);
+  }
+  // Sets who is speaking from a moment on; a change within tolerance seconds of an existing one edits that one.
+  function setSpeakersAt(moment, ids, tolerance) {
+    const at = Math.round(moment * 100) / 100;
+    const existing = turns.find((turn) => Math.abs(turn.at - at) <= tolerance);
     if (existing) existing.speakers = ids; else turns.push({ at, speakers: ids });
     turns.sort((a, b) => a.at - b.at);
     turns = turns.filter((turn, index) => turn.speakers.join(',') !== (index ? turns[index - 1].speakers.join(',') : ''));
@@ -1958,15 +1994,35 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
   // Transcript panel: the line being spoken is highlighted and kept in view; clicking a line jumps there.
   // Served pages load the latest transcript (with current corrections); otherwise the copy built into the page.
   let transcript = page.transcript;
-  let activeLine = -1;
   let userScrolledAt = 0;
   const transcriptList = $('transcript-list');
   // Lines are grouped into sections, one per camera or slide change, each opened by a small image of the change.
+  // Each line is split wherever the speaker changes within it, into pieces shown like a conversation: voting members
+  // on the right, everyone else on the left. pieceList holds every piece in order ({ start, end, el, words: [[at,
+  // span]] }); lineElements holds each line's first piece (for find).
   let lineElements = [];
+  let pieceList = [];
+  let activePiece = -1;
+  let nowWord = null;
+  // A line's words with estimated times (whisper times whole lines): the line's time shared out by word length.
+  function lineWords(startSeconds, endSeconds, text) {
+    const parts = String(text).split(' ').filter(Boolean);
+    const total = parts.reduce((sum, word) => sum + word.length + 1, 0) || 1;
+    const span = Math.max(0.01, endSeconds - startSeconds);
+    let used = 0;
+    return parts.map((word) => {
+      const at = Math.round((startSeconds + span * used / total) * 100) / 100;
+      used += word.length + 1;
+      return { text: word, at };
+    });
+  }
   function renderTranscript() {
     const keepScroll = transcriptList.scrollTop;
     transcriptList.textContent = '';
     lineElements = [];
+    pieceList = [];
+    nowWord = null;
+    const votingIds = new Set(voteData.members.map((member) => member.id));
     $('transcript').hidden = transcript.length === 0;
     nowScene = -2;
     const scenes = page.scenes;
@@ -2044,46 +2100,82 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
         const event = sortedVotes[voteIndex++];
         if (!range || event.at >= range.min - 0.01) voteRow(event);
       }
-      const line = document.createElement('p');
-      line.dataset.index = index;
-      if (retranscribed) line.classList.add('retranscribed');
-      const stamp = document.createElement('time');
-      stamp.textContent = fmt(startSeconds) + (clockMs(startSeconds) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(startSeconds))));
-      // On hover: boost just this line (and a moment either side).
-      const lineBoost = document.createElement('button');
-      lineBoost.type = 'button';
-      lineBoost.className = 'line-boost';
-      lineBoost.textContent = '🔊';
-      lineBoost.title = 'Boost this line and transcribe it again';
-      lineBoost.addEventListener('click', (event) => { event.stopPropagation(); openBoostDialog(Math.max(0, startSeconds - 0.5), endSeconds + 0.5); });
-      stamp.appendChild(lineBoost);
-      const words = document.createElement('span');
-      words.textContent = text;
-      line.append(stamp, words);
-      // Who is speaking, beside the first line of each speaker change (and again under each new image).
-      const ids = speakersAt((startSeconds + endSeconds) / 2);
-      if (ids.length && ids.join(',') !== previousSpeakers) {
-        const who = document.createElement('span');
-        who.className = 'who';
-        ids.forEach((id) => {
-          const person = peopleMap.get(id) || { id, name: id };
-          const item = document.createElement('span');
-          item.className = 'who-person';
-          item.title = nameAndRole(person) + ' — click to clip everything they say here';
-          item.addEventListener('click', (event) => { event.stopPropagation(); clipSpeaker(id, (startSeconds + endSeconds) / 2); });
-          const label = document.createElement('small');
-          label.textContent = lastName(person);
-          item.append(avatar(person), label);
-          who.appendChild(item);
+      // Split the line at every speaker change inside it, at the first word said after the change.
+      const words = lineWords(startSeconds, endSeconds, text);
+      const breaks = turns.map((turn) => turn.at).filter((at) => at > startSeconds + 0.15 && at < endSeconds - 0.05);
+      const groups = [[]];
+      let nextBreak = 0;
+      words.forEach((word) => {
+        while (nextBreak < breaks.length && word.at >= breaks[nextBreak] - 0.05) {
+          if (groups[groups.length - 1].length) groups.push([]);
+          nextBreak += 1;
+        }
+        groups[groups.length - 1].push(word);
+      });
+      groups.forEach((group, groupIndex) => {
+        if (!group.length) return;
+        const pieceStart = groupIndex === 0 ? startSeconds : group[0].at;
+        const pieceEnd = groupIndex + 1 < groups.length && groups[groupIndex + 1].length ? groups[groupIndex + 1][0].at : endSeconds;
+        const ids = speakersAt(pieceStart + 0.01);
+        const row = document.createElement('div');
+        row.className = 'turn ' + (ids.length && ids.every((id) => votingIds.has(id)) ? 'right' : 'left');
+        row.dataset.index = index;
+        if (retranscribed) row.classList.add('retranscribed');
+        // Faces beside the first piece of each speaker change (and again under each new image or heading).
+        const face = document.createElement('div');
+        face.className = 'face';
+        if (ids.length && ids.join(',') !== previousSpeakers) {
+          ids.forEach((id) => {
+            const person = peopleMap.get(id) || { id, name: id };
+            const item = document.createElement('span');
+            item.className = 'who-person';
+            item.title = nameAndRole(person) + ' — click to clip everything they say here';
+            item.addEventListener('click', (event) => { event.stopPropagation(); clipSpeaker(id, pieceStart + 0.01); });
+            const label = document.createElement('small');
+            label.textContent = lastName(person);
+            item.append(avatar(person), label);
+            face.appendChild(item);
+          });
+          row.classList.add('first');
+        }
+        previousSpeakers = ids.join(',');
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        const stamp = document.createElement('time');
+        stamp.textContent = fmt(pieceStart) + (clockMs(pieceStart) === null ? '' : '  ~' + clockFormat.format(new Date(clockMs(pieceStart))));
+        // On hover: boost just this piece (and a moment either side).
+        const lineBoost = document.createElement('button');
+        lineBoost.type = 'button';
+        lineBoost.className = 'line-boost';
+        lineBoost.textContent = '🔊';
+        lineBoost.title = 'Boost this and transcribe it again';
+        lineBoost.addEventListener('click', (event) => { event.stopPropagation(); openBoostDialog(Math.max(0, pieceStart - 0.5), pieceEnd + 0.5); });
+        stamp.appendChild(lineBoost);
+        stamp.addEventListener('click', (event) => { event.stopPropagation(); showPosition(pieceStart); });
+        const said = document.createElement('span');
+        said.className = 'words';
+        const wordRefs = [];
+        group.forEach((word) => {
+          const span = document.createElement('span');
+          span.className = 'w';
+          span.textContent = word.text;
+          if (turns.some((turn) => Math.abs(turn.at - word.at) < 0.06)) span.classList.add('change');
+          span.addEventListener('click', (event) => {
+            event.stopPropagation();
+            showPosition(word.at);
+            openWordPicker(word, span);
+          });
+          said.append(span, ' ');
+          wordRefs.push([word.at, span]);
         });
-        line.classList.add('has-who');
-        line.appendChild(who);
-      }
-      previousSpeakers = ids.join(',');
-      line.addEventListener('click', () => { showPosition(startSeconds); });
-      section.appendChild(line);
-      lineElements[index] = line;
-      if (index === findIndex) line.classList.add('match');
+        bubble.append(stamp, said);
+        row.append(face, bubble);
+        row.addEventListener('click', () => showPosition(pieceStart));
+        if (index === findIndex) row.classList.add('match');
+        section.appendChild(row);
+        pieceList.push({ start: pieceStart, end: pieceEnd, el: row, words: wordRefs });
+        if (!lineElements[index]) lineElements[index] = row;
+      });
       shownLines += 1;
     });
     if (!shownLines && transcript.length) {
@@ -2093,7 +2185,7 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
       transcriptList.appendChild(empty);
     }
     transcriptList.scrollTop = keepScroll;
-    activeLine = -1;
+    activePiece = -1;
     syncTranscript();
     updateNowScene();
   }
@@ -2102,28 +2194,166 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
     const offset = line.getBoundingClientRect().top - transcriptList.getBoundingClientRect().top;
     transcriptList.scrollTo({ top: Math.max(0, transcriptList.scrollTop + offset - transcriptList.clientHeight / 3), behavior: 'smooth' });
   }
-  function lineAt(seconds) {
-    let low = 0, high = transcript.length - 1, found = -1;
+  function pieceAt(seconds) {
+    let low = 0, high = pieceList.length - 1, found = -1;
     while (low <= high) {
       const middle = (low + high) >> 1;
-      if (transcript[middle][0] <= seconds + 0.05) { found = middle; low = middle + 1; } else high = middle - 1;
+      if (pieceList[middle].start <= seconds + 0.05) { found = middle; low = middle + 1; } else high = middle - 1;
     }
     return found;
   }
   function syncTranscript() {
     if (!transcript.length) return;
-    const index = lineAt(position);
-    if (index === activeLine) return;
-    lineElements[activeLine]?.classList.remove('active');
-    activeLine = index;
-    const line = lineElements[index];
-    if (!line) return;
-    line.classList.add('active');
-    // Don't pull the list away while someone is reading or scrolling it.
-    if (Date.now() - userScrolledAt > 4000) {
-      scrollToLine(line);
+    const index = pieceAt(position);
+    if (index !== activePiece) {
+      pieceList[activePiece]?.el.classList.remove('active');
+      activePiece = index;
+      const piece = pieceList[index];
+      if (piece) {
+        piece.el.classList.add('active');
+        // Don't pull the list away while someone is reading or scrolling it.
+        if (Date.now() - userScrolledAt > 4000) scrollToLine(piece.el);
+      }
     }
+    updateNowWord();
   }
+  // The word being said, highlighted (smoothly while playing).
+  function updateNowWord() {
+    const piece = pieceList[activePiece];
+    let found = null;
+    if (piece && position <= piece.end + 0.3) {
+      for (const [at, span] of piece.words) { if (at <= position + 0.02) found = span; else break; }
+    }
+    if (found === nowWord) return;
+    nowWord?.classList.remove('now');
+    found?.classList.add('now');
+    nowWord = found;
+  }
+  function followWords() {
+    if (video.paused || !playerReady) return;
+    const current = toPosition(video.currentTime);
+    if (Math.abs(current - position) < 1) { position = current; updateNowWord(); }
+    requestAnimationFrame(followWords);
+  }
+  video.addEventListener('play', () => requestAnimationFrame(followWords));
+
+  // Who starts speaking at a word: clicking a word opens this. Picking a face makes that person the speaker from the
+  // word on (Cmd/Ctrl-click to pick several people speaking together); Nobody marks silence or no one in particular.
+  const wordPicker = document.createElement('div');
+  wordPicker.className = 'word-picker';
+  wordPicker.hidden = true;
+  document.body.appendChild(wordPicker);
+  let pickerSelection = [];
+  function openWordPicker(word, anchor) {
+    const existing = turns.find((turn) => Math.abs(turn.at - word.at) < 0.06);
+    const current = speakersAt(word.at);
+    pickerSelection = [];
+    wordPicker.textContent = '';
+    const head = document.createElement('div');
+    head.className = 'picker-head';
+    head.textContent = 'Who starts speaking at “' + word.text + '” (' + fmt(word.at) + ')?';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '✕';
+    close.title = 'Close (Escape)';
+    close.addEventListener('click', closeWordPicker);
+    head.appendChild(close);
+    wordPicker.appendChild(head);
+    const choose = (id, event) => {
+      if (event.metaKey || event.ctrlKey) {
+        pickerSelection = pickerSelection.includes(id) ? pickerSelection.filter((item) => item !== id) : [...pickerSelection, id];
+        wordPicker.querySelectorAll('[data-id]').forEach((button) => button.classList.toggle('picked', pickerSelection.includes(button.dataset.id)));
+        setSpeakersAt(word.at, pickerSelection, 0.05);
+      } else {
+        setSpeakersAt(word.at, [id], 0.05);
+        closeWordPicker();
+      }
+    };
+    const faceRow = (title, ids) => {
+      if (!ids.length) return null;
+      const block = document.createElement('div');
+      block.className = 'picker-row';
+      const label = document.createElement('small');
+      label.textContent = title;
+      block.appendChild(label);
+      const faces = document.createElement('div');
+      faces.className = 'picker-faces';
+      ids.forEach((id) => {
+        const person = peopleMap.get(id) || { id, name: id };
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.id = id;
+        button.title = nameAndRole(person) + (current.includes(id) ? ' (speaking here now)' : '');
+        if (current.includes(id)) button.classList.add('current');
+        const name = document.createElement('small');
+        name.textContent = lastName(person);
+        button.append(avatar(person), name);
+        button.addEventListener('click', (event) => choose(id, event));
+        faces.appendChild(button);
+      });
+      block.appendChild(faces);
+      wordPicker.appendChild(block);
+      return block;
+    };
+    const voting = voteData.members.map((member) => member.id).filter((id) => peopleMap.has(id));
+    const spoken = [...new Set(turns.flatMap((turn) => turn.speakers))].filter((id) => !voting.includes(id) && peopleMap.has(id));
+    const others = people.map((person) => person.id).filter((id) => !voting.includes(id) && !spoken.includes(id));
+    faceRow('Voting members', voting);
+    faceRow('Spoke in this meeting', spoken);
+    if (others.length) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'picker-more';
+      more.textContent = 'Everyone else (' + others.length + ')…';
+      more.addEventListener('click', () => {
+        const row = faceRow('Everyone else', others);
+        if (row) wordPicker.insertBefore(row, more);
+        more.remove();
+        placePicker(anchor);
+      });
+      wordPicker.appendChild(more);
+    }
+    const actions = document.createElement('div');
+    actions.className = 'picker-actions';
+    const nobody = document.createElement('button');
+    nobody.type = 'button';
+    nobody.textContent = 'Nobody';
+    nobody.title = 'No one (or no one in particular) speaks from this word';
+    nobody.addEventListener('click', () => { setSpeakersAt(word.at, [], 0.05); closeWordPicker(); });
+    actions.appendChild(nobody);
+    if (existing) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = 'Remove the change here';
+      remove.addEventListener('click', () => {
+        turns = turns.filter((turn) => turn !== existing);
+        speakersChanged();
+        saveTurns();
+        closeWordPicker();
+      });
+      actions.appendChild(remove);
+    }
+    const hint = document.createElement('small');
+    hint.textContent = 'Cmd/Ctrl-click to pick several';
+    actions.appendChild(hint);
+    wordPicker.appendChild(actions);
+    wordPicker.hidden = false;
+    placePicker(anchor);
+  }
+  function placePicker(anchor) {
+    const rect = anchor.getBoundingClientRect();
+    const width = wordPicker.offsetWidth;
+    const height = wordPicker.offsetHeight;
+    const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left - width / 2 + rect.width / 2));
+    const below = rect.bottom + 6;
+    wordPicker.style.left = left + 'px';
+    wordPicker.style.top = (below + height > window.innerHeight - 8 ? Math.max(8, rect.top - height - 6) : below) + 'px';
+  }
+  function closeWordPicker() { wordPicker.hidden = true; }
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !wordPicker.hidden) closeWordPicker(); });
+  document.addEventListener('mousedown', (event) => {
+    if (!wordPicker.hidden && !wordPicker.contains(event.target) && !event.target.classList?.contains('w')) closeWordPicker();
+  });
   ['wheel', 'touchmove', 'keydown'].forEach((type) => transcriptList.addEventListener(type, () => { userScrolledAt = Date.now(); }, { passive: true }));
   transcriptList.addEventListener('mousedown', (event) => { if (event.target === transcriptList) userScrolledAt = Date.now(); });
 
