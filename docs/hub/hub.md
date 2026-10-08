@@ -41,6 +41,7 @@ Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, o
 | `media`             | a recording's private audio and silent video on the hub                                                                 | recorders                                                |
 | `marks`             | review marks: speakers, chapters, votes, views, boosts, meeting name and official sources, word edits, playlist, people | recorders (shared); people (their own layers, see below) |
 | `publications`      | what's published for everyone: notes, transcript excerpts, clips                                                        | the Publish permission; agents (a clip's files)          |
+| `directory`         | the public directory of people: who is listed, and their public photo                                                   | the Publish permission                                   |
 | `jobs`              | work for agents: clips to cut, recordings to encode                                                                     | the Publish permission; agents (progress)                |
 
 Anyone can read schedules, sources, settings, recorders, and publications. Meetings (`recordings`, `transcript_chunks`, `stills`, `media`, `marks`) and the work queue (`jobs`) go only to keys and to people whose group may see meetings. Everyone else's browser gets them as deleted. Writing needs a key (the `X-Streamscribe-Key` header) or a signed-in person (the `X-Streamscribe-Token` header, which the web app sends) whose group allows it.
@@ -173,7 +174,19 @@ How agents share the work:
 
 ## People
 
-The People page lists the people in meetings: each source's roster from the review page (names, roles, groups), with photos (`publish-library` sends them, to the private folder) and what each has said. Speaking time and appearances come from the meetings' speaker marks, counting each turn until the next one. A person's page lists their meetings, each linked to the moment they first spoke (`/meetings/<id>?part=…&t=…` opens a meeting there). Speaker names in transcripts link to their person. Like the meetings, it's only for people whose group may see meetings.
+The People page lists the people in meetings. It draws on each source's roster from the review page (names, roles, groups), the photos `publish-library` sends (to the private folder), and what each person has said. Speaking time and appearances come from the meetings' speaker marks, counting each turn until the next one. A person's page links each meeting at the moment they first spoke (`/meetings/<id>?part=…&t=…` opens a meeting there), and speaker names in transcripts link to their person.
+
+**Who sees what:**
+
+- **People who may see meetings:** everyone on the rosters, with their speaking time.
+- **People who may publish:** also choose, person by person, who is **Public** (listed on the public People page, usually the public body and its officials) and whose **photo** is public.
+- **Everyone else:** the public directory, and on each person's page, the published items they speak in.
+
+**How the public directory works:**
+
+- **Where it lives:** a public record per source (collection `directory`).
+- **Photos:** a public photo is a copy of the private one in `media/people/<source>/`, removed when it stops being public.
+- **Published transcripts:** show a public photo beside the speaker's name.
 
 ## Schedules
 

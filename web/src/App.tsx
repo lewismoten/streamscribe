@@ -64,7 +64,7 @@ export default function App() {
             Published
           </NavLink>
           {(local || viewer) && <NavLink to="/meetings">Meetings</NavLink>}
-          {(local || viewer) && <NavLink to="/people">People</NavLink>}
+          <NavLink to="/people">People</NavLink>
           {viewer && <NavLink to="/live">Live</NavLink>}
           {viewer && <NavLink to="/agents">Agents</NavLink>}
           <NavLink to="/schedules">Schedules</NavLink>

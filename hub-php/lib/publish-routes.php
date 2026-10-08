@@ -85,7 +85,9 @@ if ($method === 'POST' && $route === 'publish') {
     $start = (float)($line['start'] ?? 0);
     if ($start < $from - 0.01 || $start >= $to) continue;
     $lines[] = ['start' => round($start - $from, 2), 'end' => round(min($to, (float)($line['end'] ?? $start)) - $from, 2),
-      'speaker' => mb_substr(trim((string)($line['speaker'] ?? '')), 0, 120), 'text' => mb_substr(trim((string)($line['text'] ?? '')), 0, 5000)];
+      'speaker' => mb_substr(trim((string)($line['speaker'] ?? '')), 0, 120), 'text' => mb_substr(trim((string)($line['text'] ?? '')), 0, 5000),
+      // Who is speaking, by roster id: the public page shows the photos the directory makes public.
+      'speakers' => array_values(array_filter(array_map('strval', array_slice((array)($line['speakers'] ?? []), 0, 12)), fn ($id) => (bool)preg_match('/^[A-Za-z0-9._-]{1,120}$/', $id)))];
   }
   $chapters = [];
   foreach ((array)($input['chapters'] ?? []) as $chapter) {
@@ -145,6 +147,8 @@ if ($method === 'POST' && $route === 'publish') {
     'recordingId' => $recordingId, 'part' => $part, 'meeting' => $meetingTitle, 'sourceKey' => $recording['sourceKey'] ?? '', 'sourceName' => $sourceName,
     'recordedAt' => $recording['startedAt'] ?? null, 'from' => $from, 'to' => $to, 'seconds' => round($to - $from, 2),
     'officialUrl' => $official,
+    // Everyone speaking in it, by roster id (a public person's page lists what they're in).
+    'speakers' => array_values(array_unique(array_merge([], ...array_map(fn ($line) => $line['speakers'], $lines ?: [['speakers' => []]])))),
     'official' => $officialSources,
     'transcript' => $lines ? ['path' => "media/$folder/transcript.json", 'text' => "media/$folder/transcript.txt", 'captions' => "media/$folder/captions.srt", 'vtt' => "media/$folder/captions.vtt", 'lines' => count($lines)] : null,
     'chapters' => $chapters, 'poster' => $poster,

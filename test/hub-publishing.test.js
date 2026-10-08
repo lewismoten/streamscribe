@@ -1,5 +1,6 @@
 // The hub's publishing: meetings are private; notes, transcript excerpts, and clips are public; a clip is cut by an
 // agent from the work queue; the podcast of clips. See test/hub/server.js for the test hub.
+import crypto from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -207,3 +208,61 @@ test(
     assert.equal((await signedOut.list('publications')).length, 2);
   }
 );
+
+test('the public directory: who is listed for everyone, and whose photo is public', { skip: external }, async () => {
+  const boss = await signIn('boss');
+  // A roster photo, private like the meetings (publish-library uploads it as a recorder).
+  const picture = Buffer.from(`a face ${Date.now()}`);
+  const hash = crypto.createHash('sha256').update(picture).digest('hex');
+  const uploaded = await (
+    await fetch(`${hub}/media?sha256=${hash}&type=image/png`, {
+      method: 'POST',
+      headers: { 'x-streamscribe-key': recorderKey, 'content-type': 'image/png' },
+      body: picture
+    })
+  ).json();
+  const recorder = client(recorderKey);
+  await recorder.put('marks', 'town:people-photos', { photos: { mayor: { path: uploaded.path, version: 1 } } });
+  await recorder.sync();
+  const person = { id: 'mayor', name: 'Pat Lee', role: 'Mayor', group: 'Elected officials' };
+  const share = (listed, photo) =>
+    json(
+      'people-public',
+      { sourceKey: 'town', sourceName: 'Town', groups: ['Elected officials'], person, listed, photo },
+      boss
+    );
+  assert.equal(
+    (await json('people-public', { sourceKey: 'town', person, listed: true }, await signIn('jane'))).status,
+    403,
+    'publishing takes the publish permission'
+  );
+
+  const listed = await share(true, true);
+  assert.equal(listed.entry.name, 'Pat Lee');
+  assert.match(listed.entry.photo, /^media\/people\/town\/mayor-[0-9a-f]{10}\.png$/);
+  assert.equal(
+    Buffer.from(await (await fetch(hub.replace('api.php', listed.entry.photo))).arrayBuffer()).toString(),
+    picture.toString(),
+    'the public copy is the photo'
+  );
+  const signedOut = client();
+  await signedOut.pull();
+  const directory = (await signedOut.get('directory', 'town')).data;
+  assert.deepEqual(
+    directory.people.map((item) => [item.id, Boolean(item.photo)]),
+    [['mayor', true]],
+    'everyone sees who is listed'
+  );
+  assert.equal((await signedOut.list('marks')).length, 0, 'the private roster stays private');
+
+  const noPhoto = await share(true, false);
+  assert.equal(noPhoto.entry.photo, null);
+  assert.equal(
+    (await fetch(hub.replace('api.php', listed.entry.photo))).status,
+    404,
+    'a photo no longer public is removed'
+  );
+  await share(false, false);
+  await signedOut.pull();
+  assert.deepEqual((await signedOut.get('directory', 'town')).data.people, [], 'unlisted');
+});

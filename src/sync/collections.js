@@ -49,6 +49,11 @@ export const COLLECTIONS = {
     mode: 'mutable',
     doc: 'Clips and transcripts published for everyone (meetings themselves are private): title, range, and public files (see hub-php/lib/publish-routes.php).'
   },
+  directory: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: 'The public directory of people per source: who is listed for everyone, and whose photo is public (see hub-php/lib/people-routes.php).'
+  },
   jobs: {
     writers: ['editor', 'recorder'],
     mode: 'mutable',

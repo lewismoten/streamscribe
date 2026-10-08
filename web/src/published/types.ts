@@ -14,6 +14,7 @@ export interface Publication {
   to: number;
   seconds: number;
   officialUrl: string | null;
+  speakers?: string[];
   // `captions` is the .srt for download; `vtt` the same captions as WebVTT for the player (newer publications).
   transcript: { path: string; text: string; captions: string; vtt?: string; lines: number } | null;
   chapters: { at: number; title: string; links?: { label: string; url: string }[]; official?: string | null }[];
@@ -40,6 +41,7 @@ export interface Line {
   start: number;
   end: number;
   speaker: string;
+  speakers?: string[];
   text: string;
 }
 

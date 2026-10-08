@@ -7,6 +7,7 @@ import { syncNow } from '../data/sync.ts';
 import { clock, duration } from '../format.ts';
 import OfficialSources from './OfficialSources.tsx';
 import { KIND_LABEL, day, type Line, type Publication } from './types.ts';
+import { listedPerson, useDirectory } from '../people/directory.ts';
 
 // One publication's page: its player (with captions) and downloads, its text, the official sources, chapters, and
 // a transcript that follows the player. Those who may publish can unpublish it.
@@ -43,6 +44,7 @@ export function PublicationPage() {
   const navigate = useNavigate();
   const account = useAccount();
   const { records } = useRecords<Publication>('publications');
+  const directories = useDirectory();
   const record = records?.find((item) => item.id === id);
   const item = record?.data;
   // The transcript's lines, with the path they came from: a different publication's lines aren't shown while its
@@ -254,7 +256,22 @@ export function PublicationPage() {
                   )}
                   <span>
                     {(index === 0 || lines[index - 1].speaker !== line.speaker) && line.speaker && (
-                      <strong className="speaker-label">{line.speaker}: </strong>
+                      <strong className="speaker-label">
+                        {(line.speakers || []).map((speakerId) => {
+                          // A listed person's public photo, linking to their public page.
+                          const listed = listedPerson(directories, item.sourceKey, speakerId);
+                          return listed?.photo ? (
+                            <Link
+                              key={speakerId}
+                              to={`/people/${encodeURIComponent(item.sourceKey)}/${encodeURIComponent(speakerId)}`}
+                              title={listed.name}
+                            >
+                              <img className="avatar speaker-photo" src={mediaUrl(listed.photo)} alt="" />
+                            </Link>
+                          ) : null;
+                        })}
+                        {line.speaker}:{' '}
+                      </strong>
                     )}
                     {line.text}
                   </span>

@@ -173,6 +173,7 @@ export default function MeetingPage() {
         speaker: speakersAt(part, line.start + 0.01)
           .map(nameOf)
           .join(', '),
+        speakers: speakersAt(part, line.start + 0.01),
         text: lineText(line)
       }));
   const firstPart = data.parts?.[0]?.name || lines[0]?.part || '';

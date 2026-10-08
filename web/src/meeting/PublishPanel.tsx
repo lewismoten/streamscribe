@@ -15,6 +15,8 @@ export interface PublishLine {
   start: number;
   end: number;
   speaker: string;
+  // Who is speaking, by roster id (public pages show the photos the public directory allows).
+  speakers: string[];
   text: string;
 }
 

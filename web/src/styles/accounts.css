@@ -99,3 +99,14 @@ table.permissions th {
   align-items: center;
   margin-bottom: 16px;
 }
+.public-toggles {
+  display: flex;
+  gap: 14px;
+  padding: 4px 12px 0;
+}
+.speaker-photo {
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
