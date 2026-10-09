@@ -175,7 +175,7 @@ function renderTranscript() {
       found = -1;
     while (low <= high) {
       const middle = (low + high) >> 1;
-      if (turnTimes[middle] <= seconds + 0.15) {
+      if (turnTimes[middle] <= seconds + 0.05) {
         found = middle;
         low = middle + 1;
       } else high = middle - 1;

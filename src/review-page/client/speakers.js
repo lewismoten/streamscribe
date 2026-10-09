@@ -8,7 +8,9 @@ let peopleMap = mapPeople();
 let lastSpeakerKey = null;
 function turnIndexAt(seconds) {
   let found = -1;
-  for (let index = 0; index < turns.length && turns[index].at <= seconds + 0.15; index += 1) found = index;
+  // A change counts from its own word only (it's saved at the word's time, to the hundredth): more slack would give a
+  // quick word's speaker to the word before it, as in a roll call.
+  for (let index = 0; index < turns.length && turns[index].at <= seconds + 0.05; index += 1) found = index;
   return found;
 }
 function speakersAt(seconds) {

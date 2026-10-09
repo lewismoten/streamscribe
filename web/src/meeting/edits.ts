@@ -1,5 +1,5 @@
 import { clock } from '../format.ts';
-import { personName, round, type Person, type Turn, type Word, type WordEdit } from './words.ts';
+import { personName, round, SAME_MOMENT, type Person, type Turn, type Word, type WordEdit } from './words.ts';
 
 // The changes a signed-in person makes from the transcript: correcting (or deleting, or restoring) a word, saying who
 // is speaking from a word on, and adding someone new to the source's people. Each is saved as their own layer of the
@@ -50,12 +50,13 @@ export function transcriptEdits({
     );
   };
 
-  // Who is speaking from a word on: a change within a second of another edits it; one repeating the turn before goes.
+  // Who is speaking from a word on, at the word's own time: a change already on that word is replaced (only that one:
+  // in a quick roll call, the clerk's change on the word before stays); one repeating the turn before goes.
   const saveSpeakers = (word: Word, speakers: string[], names: Record<string, string> = {}) => {
     const markId = `${id}:${word.part}:speakers`;
     const current = markData<{ turns?: Turn[] }>(markId) || {};
-    const at = round(word.at, 10);
-    let turns = (current.turns || []).filter((turn) => Math.abs(turn.at - at) >= 1);
+    const at = round(word.at);
+    let turns = (current.turns || []).filter((turn) => Math.abs(turn.at - at) > SAME_MOMENT);
     turns.push({ at, speakers });
     turns.sort((a, b) => a.at - b.at);
     turns = turns.filter(

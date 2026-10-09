@@ -69,6 +69,10 @@ export type Stack = {
 export type Stacks = Map<string, Stack>;
 
 export const round = (seconds: number, places = 100) => Math.round(seconds * places) / places;
+// How close a speaker change must be to a word to start at it: a change is saved at its word's time (to the
+// hundredth), so only rounding is allowed for. Any more, and a change on a word also takes the word before it when
+// people speak quickly (a roll call: "Mr. Carter?" "Aye.").
+export const SAME_MOMENT = 0.05;
 
 // What a mark holds for the viewer, all layers applied.
 export const dataOf = <T>(stacks: Stacks, markId: string) => (stacks.get(markId)?.data || null) as T | null;
@@ -128,7 +132,7 @@ export function buildLines(chunks: HubRecord<Chunk>[], kind: Chunk['kind'], id: 
 // Who is speaking at a moment, from a part's speaker turns (sorted by time).
 export function speakersIn(turns: Turn[], seconds: number) {
   let found: string[] = [];
-  for (const turn of turns) if (turn.at <= seconds + 0.15) found = turn.speakers;
+  for (const turn of turns) if (turn.at <= seconds + SAME_MOMENT) found = turn.speakers;
   return found;
 }
 
