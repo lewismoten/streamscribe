@@ -30,6 +30,13 @@ test('agent settings: storage, Ollama, pings, and peers', async () => {
   // Another agent at the same address (this one answers for both).
   const hubGet = async () => ({
     recorders: [
+      // Not heard from in an hour: offline, not pinged.
+      {
+        recorderId: 'gone',
+        name: 'Gone',
+        updatedAt: new Date(Date.now() - 3600000).toISOString(),
+        status: { name: 'Gone', settings: { tailscale: { ip: '127.0.0.1', port: 47199 } } }
+      },
       {
         recorderId: 'other',
         name: 'Other',
@@ -61,7 +68,12 @@ test('agent settings: storage, Ollama, pings, and peers', async () => {
     assert.equal(report.tailscale.port, 47199);
     const answer = await (await fetch('http://127.0.0.1:47199/ping')).json();
     assert.equal(answer.version, '1.2.3');
-    assert.equal(report.peers[0].agentId, 'other');
+    assert.deepEqual(
+      report.peers.map((peer) => peer.agentId),
+      ['other'],
+      'offline agents are left out'
+    );
+    assert.ok(report.peers[0].checkedAt);
     assert.equal(report.peers[0].ok, true, JSON.stringify(report.peers));
     // The same network (by the path tailscale takes), and a transfer timed from it.
     assert.equal(report.peers[0].host, 'pi5-03', 'the machine it runs on');

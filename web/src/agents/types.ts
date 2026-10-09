@@ -111,6 +111,7 @@ export interface Peer {
   via?: string | null;
   pathMs?: number | null;
   speed?: { ok: boolean; mbps?: number; error?: string; at: string };
+  checkedAt?: string;
 }
 // What an agent is told (collection agent_settings, id = its id).
 export interface AgentSettingsData {

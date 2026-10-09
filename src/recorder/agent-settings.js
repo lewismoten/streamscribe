@@ -19,13 +19,16 @@ import { measureSpeed } from './peers.js';
 //                (peer-server.js: pings, and its recordings' files); it pings the other agents (their addresses from
 //                the hub's live view) and reports who it reached, by which path (peer-net.js: the same network, a
 //                direct connection elsewhere, or a relay), and how fast a transfer from each goes
-//   peerTestAt   asks for the transfers to be timed again now (they are every six hours; relayed agents only when asked)
+//   peerTestAt   asks for the other agents to be checked again now, and transfers timed (they are every six hours;
+//                relayed agents only when asked): the website can't reach agents, so it asks through the hub
+// The website shows who reaches whom from these reports (the hub's server needn't be on the tailnet).
 //   tools        tools to install on itself (tools.js): { whisper: { model, at } }, a new `at` asking again; its
 //                progress and what's installed are reported as tools
 //   keepsCopies  keeps a copy of every recording (a storage agent; copies.js), in copiesDir (its data folder's copies/
 //                unless set)
 // The report: { workDir, data, storage, ollama, tailscale, peers, checkedAt }.
 const SPEED_EVERY_MS = 6 * 3600000;
+const OFFLINE_MS = 5 * 60000;
 
 const statusOf = (folder) => {
   try {
@@ -144,7 +147,8 @@ export function agentSettings({
       ...answer,
       path: route.ok ? route.path : null,
       via: route.ok ? route.via : null,
-      pathMs: route.ok ? route.ms : null
+      pathMs: route.ok ? route.ms : null,
+      checkedAt: new Date().toISOString()
     };
     const last = speeds.get(peer.agentId);
     const due = timeSpeed && (asked || !last || Date.now() - Date.parse(last.at) > SPEED_EVERY_MS);
@@ -183,8 +187,12 @@ export function agentSettings({
       // The other agents, by the addresses they report.
       try {
         const live = await hubGet('live');
+        // (Agents not heard from in five minutes are offline: not pinged.)
         const others = (live.recorders || []).filter(
-          (agent) => agent.recorderId !== RECORDER.id && agent.status?.settings?.tailscale?.ip
+          (agent) =>
+            agent.recorderId !== RECORDER.id &&
+            agent.status?.settings?.tailscale?.ip &&
+            !(Date.now() - Date.parse(agent.updatedAt) > OFFLINE_MS)
         );
         allowed = new Set(others.map((agent) => agent.status.settings.tailscale.ip));
         holdings = new Map(others.map((agent) => [agent.recorderId, new Set(agent.status.holds || [])]));

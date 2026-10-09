@@ -131,9 +131,11 @@ who may edit sources) its settings, kept in the hub's `agent_settings` record fo
 - **Ollama server**: its address on the network (such as `http://100.64.0.5:11434`); the agent lists its models every
   15 minutes, and at once with **Test Ollama**.
 - **Pings**: on [Tailscale](https://tailscale.com), the agent answers `GET /ping` on its Tailscale address (port 4874
-  unless set, or the next free one when another agent on the machine has it; on no other address), pings the other
-  agents at the addresses they report, and says which it reached and how (see below). **Ping from the hub** asks the
-  hub to ping it, which works when the hub's server is on the same tailnet.
+  unless set, or the next free one when another agent on the machine has it; on no other address). Each minute it reads
+  the list of agents from the hub, pings the ones heard from in the last five minutes, and reports what it found (see
+  below). The hub's server doesn't need to be on the tailnet: the Agents page's **Who reaches whom** grid is made from
+  the agents' own reports, and **Check now** (or **Check the other agents now** on a card) asks through the hub, so
+  each agent checks again and times its transfers when it next syncs, within a minute.
 
 ## Taking turns at websites
 
@@ -158,7 +160,7 @@ that look like different networks):
 - **elsewhere, connected directly**: straight to a public address (a laptop taken to a meeting, say)
 - **elsewhere, through Tailscale's relay**: the slowest; used only when no nearer agent has what's needed
 
-Every six hours (or at once with **Time transfers now** on its card) it times a transfer from each agent it reaches
+Every six hours (or when asked with **Check now**) it times a transfer from each agent it reaches
 directly: 16 MB from those on the same network, 4 MB from others; relayed ones only when asked. The Agents page shows
 each agent's own network addresses, and for each other agent the path, the ping time, and the speed.
 

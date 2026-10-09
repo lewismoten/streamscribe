@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react';
-import { hubCall } from '../data/hub.ts';
 import { putRecord, useRecords } from '../data/useRecords.ts';
 import {
   WHISPER_MODELS,
@@ -13,8 +12,8 @@ import {
 
 // An agent's settings (where its working files go, more storage to watch, an Ollama server, the port it answers pings
 // on) and what it found: each place there and writable, with its free space; the Ollama server's models; its
-// Tailscale address and which other agents it reaches (on the same network or elsewhere, and how fast a transfer goes);
-// and a ping from the hub. People who may edit sources change
+// Tailscale address and which other agents it reaches (on the same network or elsewhere, and how fast a transfer goes),
+// checked again when asked (through the hub, which needn't reach the agents itself). People who may edit sources change
 // the settings; the agent picks them up within a minute.
 const KINDS = { local: 'Local drive', usb: 'USB drive', network: 'Network folder' } as const;
 
@@ -103,7 +102,6 @@ export default function AgentSettings({
   const { records } = useRecords<AgentSettingsData>('agent_settings');
   const saved = records?.find((record) => record.id === agentId)?.data || {};
   const [draft, setDraft] = useState<AgentSettingsData | null>(null);
-  const [ping, setPing] = useState('');
   const settings = draft || saved;
   const set = (patch: Partial<AgentSettingsData>) => setDraft({ ...settings, ...patch });
   const save = async (event: FormEvent) => {
@@ -129,16 +127,9 @@ export default function AgentSettings({
       tools: { ...saved.tools, whisper: { model: chosenModel, at: new Date().toISOString() } }
     });
   const installing = report?.tools?.whisper?.state === 'installing';
-  const timeTransfers = () => putRecord('agent_settings', agentId, { ...saved, peerTestAt: new Date().toISOString() });
-  const pingFromHub = async () => {
-    setPing('Pinging…');
-    try {
-      const answer = await hubCall<{ ok: boolean; ms?: number; error?: string }>('agent-ping', { agentId });
-      setPing(answer.ok ? `Answered in ${answer.ms} ms` : answer.error || 'No answer');
-    } catch (error) {
-      setPing((error as Error).message);
-    }
-  };
+  // (The website can't reach agents: the request goes through the hub, and the agent picks it up when it next syncs.)
+  const checkNow = () => putRecord('agent_settings', agentId, { ...saved, peerTestAt: new Date().toISOString() });
+  const asked = saved.peerTestAt && (!report?.checkedAt || report.checkedAt < saved.peerTestAt);
 
   return (
     <details className="agent-settings small">
@@ -177,13 +168,9 @@ export default function AgentSettings({
         <p className="muted">Not reported yet (agents check their settings each minute).</p>
       )}
       <div className="toolbar">
-        <button type="button" className="button" onClick={pingFromHub} disabled={!report?.tailscale}>
-          Ping from the hub
-        </button>
-        {ping && <output>{ping}</output>}
-        {canEdit && (report?.peers || []).length > 0 && (
-          <button type="button" className="button" onClick={timeTransfers}>
-            Time transfers now
+        {canEdit && report?.tailscale && (
+          <button type="button" className="button" onClick={checkNow} disabled={Boolean(asked)}>
+            {asked ? 'Asked: checking within a minute' : 'Check the other agents now'}
           </button>
         )}
         {canEdit && saved.ollama?.url && (

@@ -68,3 +68,16 @@ pre.command {
   display: grid;
   gap: 2px;
 }
+
+/* Who reaches whom: a grid of the agents' own checks, scrolling sideways on a narrow screen. */
+.table-scroll {
+  overflow-x: auto;
+}
+.reach-grid th,
+.reach-grid td {
+  white-space: nowrap;
+  text-align: center;
+}
+.reach-grid tbody th {
+  text-align: left;
+}
