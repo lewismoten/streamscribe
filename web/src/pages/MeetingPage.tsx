@@ -11,6 +11,9 @@ import OfficialPanel, { type Official } from '../meeting/OfficialPanel.tsx';
 import AttendancePanel from '../meeting/AttendancePanel.tsx';
 import PrayerPanel from '../meeting/PrayerPanel.tsx';
 import RoomPanel from '../meeting/RoomPanel.tsx';
+import ConsentPanel from '../meeting/ConsentPanel.tsx';
+import DocumentDialog from '../meeting/DocumentDialog.tsx';
+import { consentMarkId, meetingDocuments, type ConsentItem, type DocumentLink } from '../meeting/documents.ts';
 import type { CameraView } from '../rooms/types.ts';
 import Dialog from '../Dialog.tsx';
 import ClipForm from '../videos/ClipForm.tsx';
@@ -41,7 +44,7 @@ import {
   type Turn,
   type Word
 } from '../meeting/words.ts';
-import { mergeOfficial, parseOfficialUrl } from '../../../src/sync/official.js';
+import { mergeOfficial, officialLinks, parseOfficialUrl } from '../../../src/sync/official.js';
 
 // One meeting from the hub: its stills, chapters, votes, and transcript (the final one when it's ready, the quick
 // one while recording), with the word corrections and speakers everyone may see. Signed in, a click on a word of the
@@ -66,6 +69,10 @@ export default function MeetingPage() {
   const [status, setStatus] = useState('');
   // Words selected in the transcript, being saved as a clip.
   const [clipDraft, setClipDraft] = useState<{ part: string; from: number; to: number; title: string } | null>(null);
+  // The documents dialog: open (for a consent item or chapter to start with, or neither).
+  const [addingDocuments, setAddingDocuments] = useState<
+    { kind: 'consent'; itemId: string } | { kind: 'chapter'; chapterId: string } | 'open' | null
+  >(null);
   const recording = recordings?.find((record) => record.id === id);
   const { stacks, markData, save } = useMeetingMarks({
     id,
@@ -212,22 +219,20 @@ export default function MeetingPage() {
   ) as Official | null;
   const saveOfficial = (next: Official) => save(infoId, { ...info, official: next }, 'Official sources saved');
   const editChapters = can('contribute.chapters', account);
-  const addChapterFile = async (chapter: Chapter) => {
-    const url = prompt(`An official file for “${chapter.title}” (such as its draft minutes or attachment):`);
-    if (!url?.trim()) return;
-    if (!/^https?:\/\//.test(url.trim())) {
-      setStatus("That isn't a web address");
-      return;
-    }
-    const label = prompt('What is it?', 'Attachment') || 'Attachment';
+  // A chapter's own file (its draft minutes, an attachment), added in the documents dialog.
+  const addChapterLink = async (chapter: Chapter, link: DocumentLink) => {
     const current = markData<{ items?: { id: string }[] }>(chapter.markId) || {};
     const items = (current.items || []).map((item) =>
       item.id === chapter.id
-        ? { ...item, links: [...(chapter.links || []), { label: label.trim(), url: url.trim() }] }
+        ? { ...item, links: [...(chapter.links || []).filter((other) => other.url !== link.url), link] }
         : item
     );
-    await save(chapter.markId, { ...current, items }, `Added “${label.trim()}” to ${chapter.title}`);
+    await save(chapter.markId, { ...current, items }, `Added “${link.label}” to ${chapter.title}`);
   };
+  // The consent agenda (a mark of the meeting), and every document of the meeting, to link transcript words to.
+  const consent = markData<{ items?: ConsentItem[] }>(consentMarkId(id))?.items || [];
+  const saveConsent = (items: ConsentItem[], done: string) => save(consentMarkId(id), { items }, done);
+  const documents = meetingDocuments({ consent, chapters, official: officialLinks(official) });
   // The transcript as shown (corrections, speaker names), for publishing and for the player's captions.
   const linesFor = (part: string): PublishLine[] =>
     lines
@@ -274,6 +279,16 @@ export default function MeetingPage() {
   });
   return (
     <article className="recording">
+      {addingDocuments && (
+        <DocumentDialog
+          consent={consent}
+          chapters={chapters}
+          start={addingDocuments === 'open' ? null : addingDocuments}
+          onConsent={saveConsent}
+          onChapterLink={addChapterLink}
+          onClose={() => setAddingDocuments(null)}
+        />
+      )}
       {clipDraft && (
         <Dialog title="Save as a clip" onClose={() => setClipDraft(null)}>
           <ClipForm
@@ -383,7 +398,17 @@ export default function MeetingPage() {
             chapters={chapters}
             official={official}
             playAt={playChapterAt}
-            onAddFile={editChapters ? addChapterFile : null}
+            onAddFile={
+              editChapters ? (chapter) => setAddingDocuments({ kind: 'chapter', chapterId: chapter.id }) : null
+            }
+          />
+          <ConsentPanel
+            items={consent}
+            canEdit={editChapters}
+            playerTime={follow.currentTime}
+            playAt={playChapterAt}
+            onSave={saveConsent}
+            onAdd={(item) => setAddingDocuments(item ? { kind: 'consent', itemId: item.id } : 'open')}
           />
           <Votes votes={votes} playAt={playChapterAt} />
           <RoomPanel
@@ -458,6 +483,7 @@ export default function MeetingPage() {
           scriptureSite={scriptureSite}
           onLink={saveLink}
           onUnlink={removeLink}
+          documents={documents}
           onClip={(part, from, to, text) =>
             setClipDraft({ part, from, to, title: text.length > 60 ? `${text.slice(0, 57)}…` : text })
           }

@@ -39,7 +39,8 @@ export default function Transcript({
   scriptureSite,
   onLink,
   onUnlink,
-  onClip
+  onClip,
+  documents = []
 }: {
   kind: 'quick' | 'final';
   lines: ShownLine[];
@@ -75,6 +76,8 @@ export default function Transcript({
   onUnlink: (part: string, link: TranscriptLink) => void;
   // Saving selected words as a clip (for videos): their part, start and end, and what they say.
   onClip?: (part: string, from: number, to: number, text: string) => void;
+  // The meeting's documents (consent agenda, chapters, official), to link selected words to one.
+  documents?: { group: string; label: string; url: string }[];
 }) {
   const [filter, setFilter] = useState('');
   // Words selected in the transcript: the menu under them, and the dialog one of its choices opens.
@@ -114,6 +117,32 @@ export default function Transcript({
     onClip(menu.part, menu.words[0].at, end, text);
     setMenu(null);
     window.getSelection()?.removeAllRanges();
+  };
+  // Linking selected words to one of the meeting's documents (so it's at hand when that's discussed again).
+  const [picking, setPicking] = useState<{ part: string; words: Word[] } | null>(null);
+  const [pickFilter, setPickFilter] = useState('');
+  const pickDocument = () => {
+    if (!menu) return;
+    setPicking({ part: menu.part, words: menu.words });
+    setPickFilter('');
+    setMenu(null);
+    window.getSelection()?.removeAllRanges();
+  };
+  const linkDocument = (document: { label: string; url: string }) => {
+    if (!picking) return;
+    const [first, last] = [picking.words[0], picking.words.at(-1)!];
+    onLink(picking.part, {
+      from: { line: first.line, index: first.index },
+      to: { line: last.line, index: last.index },
+      at: first.at,
+      text: picking.words
+        .map((word) => word.shown)
+        .filter(Boolean)
+        .join(' '),
+      url: document.url,
+      label: document.label
+    });
+    setPicking(null);
   };
   const unlink = (part: string, link: TranscriptLink) => {
     onUnlink(part, link);
@@ -433,6 +462,11 @@ export default function Transcript({
           {/* Words already linked are changed or unlinked, not linked twice. */}
           {linksOn(menu.part, menu.words).length === 0 && (
             <>
+              {documents.length > 0 && (
+                <button type="button" role="menuitem" onClick={pickDocument}>
+                  Link to a meeting document…
+                </button>
+              )}
               <button type="button" role="menuitem" onClick={() => mark('passage')}>
                 Mark Bible passage…
               </button>
@@ -442,6 +476,45 @@ export default function Transcript({
             </>
           )}
         </div>
+      )}
+      {picking && (
+        <Dialog title="Link to a meeting document" onClose={() => setPicking(null)}>
+          <p className="muted small">
+            “
+            {picking.words
+              .map((word) => word.shown)
+              .filter(Boolean)
+              .join(' ')}
+            ”
+          </p>
+          <input
+            type="search"
+            value={pickFilter}
+            onChange={(event) => setPickFilter(event.target.value)}
+            placeholder="Find a document"
+            aria-label="Find a document"
+          />
+          {[...new Set(documents.map((document) => document.group))].map((group) => (
+            <div key={group} className="document-group">
+              <h3>{group}</h3>
+              <ul className="document-pick">
+                {documents
+                  .filter(
+                    (document) =>
+                      document.group === group &&
+                      (!pickFilter.trim() || document.label.toLowerCase().includes(pickFilter.trim().toLowerCase()))
+                  )
+                  .map((document) => (
+                    <li key={document.url}>
+                      <button type="button" className="link-button" onClick={() => linkDocument(document)}>
+                        {document.label}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
+        </Dialog>
       )}
       {marking && (
         <Dialog

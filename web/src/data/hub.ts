@@ -44,6 +44,35 @@ export function saveHubSettings(settings: Partial<HubSettings>) {
   );
 }
 
+// A hub from an address as given: the address itself when it answers as a hub (its info has a rev), else the site's
+// hub/api.php or api.php (so a website's address, such as https://example.com/, finds its hub). '' when none answers.
+export async function findHub(address: string) {
+  const given = resolve(address.trim());
+  if (!given) return '';
+  const site = given.replace(/\/api\.php$/, '');
+  const candidates = [...new Set([given, `${site}/hub/api.php`, `${site}/api.php`])];
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(`${candidate}/info`, { cache: 'no-store' });
+      const info = response.ok ? await response.json() : null;
+      if (info && typeof info.rev === 'number') return candidate;
+    } catch {
+      /* not this one */
+    }
+  }
+  return '';
+}
+
+// On start: a hub address that isn't an API address (a website's, say) is looked up once and kept as the hub's own.
+export async function settleHubAddress() {
+  const { url } = hubSettings();
+  if (!url || url.endsWith('/api.php')) return false;
+  const found = await findHub(url);
+  if (!found || found === url) return false;
+  saveHubSettings({ url: found });
+  return true;
+}
+
 // The hub's folder (published files are under it, at media/…): the API address without api.php.
 export const hubBase = (url = hubSettings().url) => url.replace(/api\.php$/, '');
 

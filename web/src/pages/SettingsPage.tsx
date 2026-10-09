@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { hubSettings, saveHubSettings } from '../data/hub.ts';
+import { defaultHubUrl, findHub, hubSettings, saveHubSettings } from '../data/hub.ts';
 import { idbStore } from '../data/idb-store.ts';
 import { onSyncState, syncClient, syncNow, type SyncState } from '../data/sync.ts';
 import { refreshAccount } from '../data/account.ts';
@@ -15,8 +15,21 @@ export default function SettingsPage() {
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
+    await connect(settings.url);
+  };
+  // Connecting to a hub (found from the address given: a website's address finds its hub), or to none.
+  const connect = async (address: string) => {
     const previous = hubSettings().url;
-    const next = settings.url.trim().replace(/\/+$/, '');
+    let next = address.trim().replace(/\/+$/, '');
+    if (next) {
+      setMessage(`Looking for the hub at ${next}…`);
+      const found = await findHub(next);
+      if (!found) {
+        setMessage(`No hub answered at ${next} (nor at its hub/api.php). Nothing changed.`);
+        return;
+      }
+      next = found;
+    }
     if (previous && next !== previous) {
       // A different hub: this browser's copy of the old one goes. Changes made without a hub are kept and sent to the
       // new one; changes waiting for the old hub would be sent against the wrong versions, so they go too.
@@ -31,10 +44,10 @@ export default function SettingsPage() {
       await idbStore.clearHubCopy();
     }
     // A session belongs to the hub it was made on.
-    saveHubSettings({ ...settings, token: next !== previous ? '' : hubSettings().token });
+    saveHubSettings({ ...settings, url: next, token: next !== previous ? '' : hubSettings().token });
     setSettings(hubSettings());
     refreshAccount();
-    if (!settings.url) {
+    if (!next) {
       setMessage('Saved: no hub, so this browser keeps its own copy only.');
       return;
     }
@@ -94,7 +107,7 @@ export default function SettingsPage() {
             <input
               value={settings.url}
               onChange={(event) => setSettings({ ...settings, url: event.target.value })}
-              placeholder="https://example.com/streamscribe/api.php"
+              placeholder="https://example.com/ (or its hub/api.php)"
             />
           </label>
           <details>
@@ -118,6 +131,23 @@ export default function SettingsPage() {
           <button type="button" className="button" onClick={() => syncNow()}>
             ↻ Sync now
           </button>
+          {hubSettings().url && (
+            <button
+              type="button"
+              className="button"
+              onClick={() =>
+                confirm("Disconnect from the hub? This browser keeps its own copy only (the hub's copy goes).") &&
+                connect('')
+              }
+            >
+              Disconnect
+            </button>
+          )}
+          {defaultHubUrl() && hubSettings().url !== defaultHubUrl() && (
+            <button type="button" className="button" onClick={() => connect(defaultHubUrl())}>
+              Reconnect to {defaultHubUrl().replace(/^https?:\/\//, '')}
+            </button>
+          )}
         </div>
         {message && <p className="note">{message}</p>}
         {state && (

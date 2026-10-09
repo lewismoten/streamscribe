@@ -232,6 +232,12 @@ The Rooms page lists where meetings are held, by building (with its address and 
 
 **A meeting's room** is the one chosen on its page (its Where panel; saved in its meeting-info mark), else its schedule's **Location**, else the room its body **usually meets in** (on the body's form). A schedule's location starts as its body's usual room. On a meeting's page, **Save this meeting's camera views to the room** shares them (people who may edit public bodies), and a meeting with none can **Use the room's camera views** (copied into its own views, so the review page has them too). A room's page shows its views, the bodies that usually meet there, what's coming up there, and (for people who may see meetings) the meetings held there.
 
+## Consent agenda and documents
+
+A meeting's **Consent agenda** panel lists its consent items in agenda order (I.1, I.2 … I.10, II.1), each with its files, usually approved together; an item **pulled for discussion** is marked, with when it was discussed. **＋ Documents** (or a chapter's **＋ file**) opens a dialog that stays open while you copy from another window: paste a document's name as copied from the agenda ("I.1. Authorization to Advertise … - Cover Sheet": the item's number, its title, and which file it is) and its address, and **Add** files it under its consent item (found by number, or a new one) or a chapter, ready for the next. The consent agenda is the meeting's `consent` mark (made public by "Chapters and the meeting name").
+
+Selecting words in the transcript also offers **Link to a meeting document…**: any of its consent items' or chapters' files, or its official documents, so the document is at hand when it's discussed.
+
 ## Clips and videos
 
 **Clips** are stretches of meetings saved to build videos from: on a meeting's page, select words in its transcript and choose **Save as a clip…** (its title starts as those words; its start and end can be adjusted). A meeting's **Clips** panel lists its clips (each plays from its start, can be changed or removed, or added to a video), and brings in the review page's playlist (**Bring in N clips…**) for clips there that aren't clips yet.

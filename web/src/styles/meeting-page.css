@@ -280,3 +280,38 @@ button.player-picture {
 .speaker-block .avatar {
   margin: 4px;
 }
+/* The consent agenda, adding documents, and picking one to link words to. */
+.consent-items {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.consent-items li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.consent-items li.pulled > div:first-child strong {
+  color: var(--live);
+}
+.chapter-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.document-form textarea {
+  width: 100%;
+}
+.document-group h3 {
+  margin: 12px 0 4px;
+  font-size: 0.95rem;
+}
+.document-pick {
+  margin: 0;
+  padding-left: 18px;
+}
+.document-pick li {
+  margin: 4px 0;
+}
+.document-pick .link-button {
+  text-align: left;
+}

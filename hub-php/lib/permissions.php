@@ -37,6 +37,7 @@ const MARK_PERMISSIONS = [
   'playlist' => 'contribute.other',
   'attendance' => 'contribute.speakers',
   'links' => 'contribute.transcript',
+  'consent' => 'contribute.chapters',
   'prayers' => 'contribute.speakers',
   'faith' => 'contribute.speakers',
 ];

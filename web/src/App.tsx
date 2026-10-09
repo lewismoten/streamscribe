@@ -30,6 +30,7 @@ import SetupPage from './pages/SetupPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
 import { setPreviewing } from './data/preview.ts';
+import { settleHubAddress } from './data/hub.ts';
 
 // Two ways to run: served by a recorder's streamscribe server (its library of local recordings, search, and capture,
 // plus the hub pages), or as a static site such as GitHub Pages or the hub's own server (the hub pages only, kept in
@@ -41,6 +42,10 @@ export default function App() {
   const [mode, setMode] = useState<'checking' | 'local' | 'static'>('checking');
   const account = useAccount();
   useEffect(() => {
+    // A hub given by its website's address: found once, then synced with.
+    settleHubAddress().then((changed) => {
+      if (changed) refreshAccount();
+    });
     refreshAccount();
     api
       .config()

@@ -17,6 +17,7 @@ export interface TranscriptLink {
   at: number; // when the phrase starts, in seconds
   text: string; // the phrase as it was when linked
   url?: string;
+  label?: string; // what a web link is (a meeting document's name)
   passage?: Passage;
 }
 
@@ -30,7 +31,8 @@ export const covers = (link: TranscriptLink, place: WordPlace) =>
 export const endsAt = (link: TranscriptLink, place: WordPlace) =>
   link.to.line === place.line && link.to.index === place.index;
 
-export const linkLabel = (link: TranscriptLink) => (link.passage ? passageName(link.passage) : link.url || '');
+export const linkLabel = (link: TranscriptLink) =>
+  link.passage ? passageName(link.passage) : link.label || link.url || '';
 export const linkHref = (link: TranscriptLink, scriptureSite: string) =>
   link.passage ? passageUrl(link.passage, scriptureSite) : link.url || '';
 
