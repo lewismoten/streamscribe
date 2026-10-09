@@ -2,7 +2,7 @@
 // county, and ZIP when they aren't where the meeting is), its coordinates, its tax map id, or what it is on the map.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hasAnything, placeName } from '../web/src/locations/types.ts';
+import { curved, hasAnything, placeName, placeText } from '../web/src/locations/types.ts';
 
 test("a place's name, by what's given", () => {
   const around = { city: 'Front Royal', postal: '22630' };
@@ -38,4 +38,22 @@ test("a place's name, by what's given", () => {
   );
   assert.equal(hasAnything({}), false, 'a place needs something');
   assert.equal(hasAnything({ circle: { center: [38.9, -78.2], radius: 200 } }), true);
+});
+
+test('roads: by name and route number; found by either; curved between points', () => {
+  assert.equal(placeName({ roadName: 'Poe Drive', routeNumber: '682' }), 'Poe Drive (Route 682)');
+  assert.equal(placeName({ routeNumber: 'SR 682' }), 'Route 682');
+  assert.equal(placeName({ roadName: 'Poe Drive' }), 'Poe Drive');
+  const poe = placeText({ roadName: 'Poe Drive', routeNumber: '682', aliases: ['Old Poe Road'] });
+  for (const words of ['682', 'route 682', 'poe drive', 'old poe']) assert.ok(poe.includes(words), words);
+  const points = [
+    [38.9, -78.2],
+    [38.91, -78.19],
+    [38.9, -78.18]
+  ];
+  assert.deepEqual(curved(points, 0), points, 'straight: the points themselves');
+  const smooth = curved(points, 1);
+  assert.equal(smooth.length, 21, 'a curve: ten steps between each pair');
+  assert.deepEqual(smooth.at(-1), points.at(-1), 'through the last point');
+  assert.ok(smooth[5][0] > 38.905, 'bowed outward between the first two points');
 });

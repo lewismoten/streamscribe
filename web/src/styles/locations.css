@@ -46,3 +46,44 @@
 .dialog .location-map .map-box {
   height: 300px !important;
 }
+/* Drawing on the map: a crosshair (not the hand for panning). */
+.map-box.drawing,
+.map-box.drawing .leaflet-interactive {
+  cursor: crosshair;
+}
+.map-roads {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+.map-roads li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 2px 0;
+}
+/* Handles to drag a road's or outline's points, and the GPS pin. */
+.map-handle {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #017f72;
+  box-shadow: 0 0 0 1px #0006;
+  cursor: move !important;
+}
+.map-pin {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: #c8412f;
+  transform: rotate(-45deg);
+  box-shadow: 0 1px 4px #0008;
+  cursor: move !important;
+}
+.place-group h2 {
+  margin: 16px 0 4px;
+  font-size: 1rem;
+}

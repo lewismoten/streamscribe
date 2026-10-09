@@ -5,7 +5,7 @@ import { removeRecord, useRecords } from '../data/useRecords.ts';
 import { clock, date } from '../format.ts';
 import LocationForm from './LocationForm.tsx';
 import LocationMap from './LocationMap.tsx';
-import { addressOf, coordinates, placeName, type Place } from './types.ts';
+import { addressOf, coordinates, PLACE_TYPES, placeName, roadOf, typeOf, type Place } from './types.ts';
 import { useMentions } from './useMentions.ts';
 
 // One place: its details, its shapes on a map, and (for people who may see meetings) each time it came up, linked to
@@ -28,6 +28,9 @@ export default function LocationPage() {
   const place = record.data;
   const editor = can('contribute.chapters', account);
   const details = [
+    ['Type', PLACE_TYPES[typeOf(place)].label],
+    ['Road', place.name ? roadOf(place) : ''],
+    ['Other names', (place.aliases || []).join(', ')],
     ['Address', addressOf(place, {})],
     ['GPS', coordinates(place)],
     ['Tax map', place.taxMap],

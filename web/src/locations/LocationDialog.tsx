@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Dialog from '../Dialog.tsx';
 import { useRecords } from '../data/useRecords.ts';
 import LocationForm from './LocationForm.tsx';
-import { placeName, type Around, type Place } from './types.ts';
+import { placeName, placeText, type Around, type Place } from './types.ts';
 
 // Marking words of a transcript as a place: one already known (found by any of its details), or a new one (its details
 // and its shapes on a map). A dialog that stays open while you look things up elsewhere.
@@ -24,13 +24,7 @@ export default function LocationDialog({
   const [filter, setFilter] = useState('');
   const needle = filter.trim().toLowerCase();
   const known = (places || [])
-    .filter(
-      (record) =>
-        !needle ||
-        [record.data.name, record.data.address, record.data.city, record.data.taxMap, record.data.note].some((text) =>
-          text?.toLowerCase().includes(needle)
-        )
-    )
+    .filter((record) => !needle || placeText(record.data).includes(needle))
     .sort((a, b) => placeName(a.data, around).localeCompare(placeName(b.data, around)));
 
   return (

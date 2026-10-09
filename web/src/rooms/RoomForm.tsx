@@ -51,7 +51,7 @@ export default function RoomForm({
     onDone('Removed');
   };
   return (
-    <form className="panel schedule-form" onSubmit={save}>
+    <form className="panel schedule-form" onSubmit={save} autoComplete="off" data-1p-ignore data-lpignore="true">
       <h2>{id ? `Change ${value.name}` : 'New room'}</h2>
       <div className="form-grid">
         <label>
@@ -77,19 +77,25 @@ export default function RoomForm({
         </label>
         <label>
           Street address
-          <input {...field('address')} placeholder="220 North Commerce Avenue" autoComplete="street-address" />
+          <input
+            {...field('address')}
+            placeholder="220 North Commerce Avenue"
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+          />
         </label>
         <label>
           City
-          <input {...field('city')} placeholder="Front Royal" autoComplete="address-level2" />
+          <input {...field('city')} placeholder="Front Royal" autoComplete="off" data-1p-ignore data-lpignore="true" />
         </label>
         <label>
           State
-          <input {...field('state')} placeholder="VA" autoComplete="address-level1" />
+          <input {...field('state')} placeholder="VA" autoComplete="off" data-1p-ignore data-lpignore="true" />
         </label>
         <label>
           ZIP code
-          <input {...field('postal')} placeholder="22630" autoComplete="postal-code" />
+          <input {...field('postal')} placeholder="22630" autoComplete="off" data-1p-ignore data-lpignore="true" />
         </label>
         <label>
           Note
