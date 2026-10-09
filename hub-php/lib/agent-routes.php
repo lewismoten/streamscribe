@@ -11,6 +11,8 @@
 //   GET  agent-install?token=…                   the install script
 //   GET  agent-download?token=… (or an agent's key)   the agent's code (made by bin/deploy-hub.sh)
 //   POST agent-enroll { token }                  → { key, agentId, name, hubUrl } (the token is used up)
+//   GET  agent-build (an agent's key, or view.meetings)  the package's build: { commit, builtAt, sha256, bytes }, so
+//                                                agents can tell they're behind and update themselves
 
 const ENROLL_HOURS = 48;
 
@@ -85,6 +87,19 @@ if ($method === 'GET' && $route === 'agent-install') {
     '@AGENT_ID@' => $quote($enrollment['agent_id']), '@AGENT_NAME@' => $quote($enrollment['name']),
   ]);
   exit;
+}
+
+if ($method === 'GET' && $route === 'agent-build') {
+  if ($viewer['kind'] !== 'key') hub_require_permission($viewer, 'view.meetings');
+  $package = hub_agent_package($config);
+  if (!is_file($package)) hub_send(200, ['commit' => null]);
+  $build = json_decode((string)@file_get_contents(dirname($package) . '/build.json'), true) ?: [];
+  hub_send(200, [
+    'commit' => $build['commit'] ?? null,
+    'builtAt' => $build['builtAt'] ?? null,
+    'sha256' => hash_file('sha256', $package),
+    'bytes' => filesize($package)
+  ]);
 }
 
 if ($method === 'GET' && $route === 'agent-download') {

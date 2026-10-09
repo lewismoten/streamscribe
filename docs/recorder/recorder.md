@@ -85,7 +85,14 @@ It takes that agent's sources, data folder, tools, and transcription settings (w
 
 The token works once and expires after 48 hours, and the key never appears in the command or your shell history. Within a minute the agent shows as online on the Agents page, with what its machine has (CPU, memory, ffmpeg, whisper.cpp) and so what it can do.
 
-To update the agent or give it a new key, use Reinstall command on the Agents page and run that; its other settings stay. Revoke stops its key at once. On the machine:
+**Updating agents.** After a deploy, an agent that's behind shows **update available** on its card. **Update now** on
+its card, or **Update all agents that are behind** at the top of the page, asks through the hub; each picks it up when
+it next syncs, waits until it's idle (not recording, not working on a job, not installing a tool), downloads the new
+package with its own key, checks it against the hub's checksum, swaps the new code in (its `config.local.js` and data
+are never touched; the old code is kept in `~/streamscribe/.update/previous/`), and restarts through its service on the
+new code. Tick **Updates itself when the hub has a newer build** on a card to have it do this after every deploy
+without asking. A copy run from a git repository never updates itself. Agents installed before this need their
+Reinstall command run once to get it. To give an agent a new key, use Reinstall command on the Agents page and run that;
 
 - **Logs:** `journalctl -u streamscribe-agent -f` (Mac: `tail -f ~/streamscribe-data/logs/agent.log`)
 - **Restart:** `sudo systemctl restart streamscribe-agent` (Mac: `launchctl kickstart -k gui/$(id -u)/com.streamscribe.agent`)

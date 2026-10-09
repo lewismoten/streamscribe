@@ -7,7 +7,8 @@ import { SqliteStore } from '../sync/stores/node-sqlite.js';
 import { upcoming } from '../sync/recurrence.js';
 import { isAlive } from '../capture/jobs.js';
 import { overrunSettings } from './overrun.js';
-import { hubConfigured, hubGet, hostTurn } from './hub-api.js';
+import { downloadAgent, hubBuild, hubConfigured, hubGet, hostTurn } from './hub-api.js';
+import { updater } from './updater.js';
 import { shareTurns } from '../net/fetch.js';
 import { quickTranscribe } from './quick-transcribe.js';
 import { syncMarks } from './marks.js';
@@ -124,6 +125,23 @@ export async function main() {
     taskModel: () => told.current().taskModel || null
   });
   context.jobs = jobs;
+  // Updating itself from the hub when asked (or by itself, if set), only while idle; it then exits so its service
+  // starts it again on the new code (updater.js).
+  const updates = updater({
+    hubBuild,
+    download: downloadAgent,
+    log,
+    isIdle: () =>
+      !Object.values(state.recordings).some((recording) => recording.status === 'recording') &&
+      !jobs.status() &&
+      !context.publishing &&
+      installer.report().whisper?.state !== 'installing',
+    restart: () => {
+      control.restarting = true;
+      control.stopping = true;
+    }
+  });
+  context.updates = updates;
   const { heartbeat, sendLiveThumbnail } = liveReports(context);
   // What this machine can do (shown on the Agents page), checked now and hourly.
   // (Reported at the next tick, rather than waiting for the next heartbeat.)
@@ -190,6 +208,8 @@ export async function main() {
   await save();
   store.close();
   fs.rmSync(path.join(STATE_ROOT, `recorder-${RECORDER.id}.pid`), { force: true });
+  // Updated: its service starts it again, on the new code.
+  if (control.restarting) process.exit(0);
 
   async function tick(now) {
     // 1. Keep the local copy in step with the hub (failures just wait for the next round).
@@ -260,6 +280,9 @@ export async function main() {
         log(`Settings: ${error.message}`);
       }
     }
+
+    // A newer build on the hub: updated when asked (or by itself), once idle.
+    if (hubConfigured()) await updates.tick(now, told.current());
 
     // Copies kept for the others (a storage agent), and which recordings it holds (reported with its state).
     if (hubConfigured()) copies.tick(now);

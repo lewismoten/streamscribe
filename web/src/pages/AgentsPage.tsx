@@ -8,6 +8,7 @@ import AddAgent from '../agents/AddAgent.tsx';
 import AgentCards from '../agents/AgentCards.tsx';
 import ReachGrid from '../agents/ReachGrid.tsx';
 import SiteTurns from '../agents/SiteTurns.tsx';
+import UpdateAll from '../agents/UpdateAll.tsx';
 import WorkQueue from '../agents/WorkQueue.tsx';
 import type { Agent, Job } from '../agents/types.ts';
 
@@ -52,6 +53,7 @@ export default function AgentsPage() {
       <div className="toolbar">
         <h1 className="grow">Agents</h1>
         {error && <span className="error">{error}</span>}
+        {can('edit.sources', account) && <UpdateAll agents={agents} />}
       </div>
       <p className="muted">
         Agents are the recorders: machines that record meetings and do the heavy work (cutting clips, encoding),

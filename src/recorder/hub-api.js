@@ -44,6 +44,17 @@ export const reportLive = (status) => call('live', { json: { recorderId: RECORDE
 export const hostTurn = async (host, intervalMs) =>
   (await call('turn', { json: { host, intervalMs, agentId: RECORDER.id }, timeoutMs: 10000 })).waitMs || 0;
 
+// The build of the agent package on the hub, and the package itself into a file (updater.js).
+export const hubBuild = () => call('agent-build', { method: 'GET' });
+export async function downloadAgent(file) {
+  const response = await fetch(`${hub.url}/agent-download`, {
+    headers: { 'x-streamscribe-key': hub.key },
+    signal: AbortSignal.timeout(300000)
+  });
+  if (!response.ok) throw new Error(`hub agent-download: ${response.status}`);
+  fs.writeFileSync(file, Buffer.from(await response.arrayBuffer()));
+}
+
 // Reading a hub route (the live view: other agents and their addresses).
 export const hubGet = (route) => call(route, { method: 'GET' });
 

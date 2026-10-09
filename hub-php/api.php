@@ -21,7 +21,7 @@
 // Agents' turns at websites, so together they keep to each site's rate (lib/turn-routes.php): POST turn (recorder
 //   keys), GET turns (view.meetings)
 // Adding agents (lib/agent-routes.php): GET agents, POST agents/create, agents/token, agents/revoke (manage.users);
-//   GET agent-install?token=, GET agent-download, POST agent-enroll
+//   GET agent-install?token=, GET agent-download, GET agent-build, POST agent-enroll
 // People (lib/users.php):
 //   POST register {username, password, displayName}, POST login {username, password} → { token, ...me }
 //   POST logout, GET me, POST password {current, password}

@@ -35,6 +35,8 @@ export interface AgentStatus {
   // The recordings it holds (the others fetch from it), and the copies it keeps as a storage agent.
   holds?: string[];
   copies?: CopiesReport | null;
+  // Its build against the hub's package, and an update under way (src/recorder/updater.js).
+  update?: UpdateStatus | null;
 }
 export interface PlaceStatus {
   path: string;
@@ -100,6 +102,16 @@ export const WHISPER_MODELS: Record<string, string> = {
   'large-v3-turbo': 'Large v3 Turbo, 1.6 GB: nearly as accurate, much faster',
   'large-v3': 'Large v3, 3.1 GB: the most accurate (a Mac with Apple Silicon)'
 };
+export interface UpdateStatus {
+  current: string | null;
+  latest?: string | null;
+  behind?: boolean;
+  canUpdate: boolean;
+  note?: string;
+  state?: 'waiting' | 'updating' | 'restarting' | 'failed' | 'up to date' | 'not updated (git)';
+  step?: string | null;
+  error?: string;
+}
 // A storage agent's copies (src/recorder/copies.js).
 export interface CopiesReport {
   dir: string;
@@ -141,6 +153,9 @@ export interface AgentSettingsData {
   // More language-model servers for tasks, and the model for tasks that don't name one.
   llmServers?: { label: string; url: string; kind: 'ollama' | 'openai' }[];
   taskModel?: string;
+  // Asks it to update itself from the hub (a new value asks again); autoUpdate: whenever the hub has a newer build.
+  updateAt?: string;
+  autoUpdate?: boolean;
   // Tools to install on itself: a new `at` asks again.
   tools?: { whisper?: { model: string; at: string } };
 }

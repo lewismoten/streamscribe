@@ -46,6 +46,8 @@ export function liveReports(context) {
       // The recordings it holds (the others fetch from it), and the copies it keeps if it's a storage agent.
       holds: context.holds || [],
       copies: context.copies?.report() || null,
+      // Its build against the hub's, and an update under way.
+      update: context.updates?.report() || null,
       version,
       freeGb: freeGigabytes(),
       clockSkewSeconds: hub.clockSkewSeconds,

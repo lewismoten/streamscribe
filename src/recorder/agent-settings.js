@@ -29,6 +29,8 @@ import { listModels } from './llm.js';
 //   taskModel    the model for tasks that don't name one (an agent without one leaves those to another)
 //   tools        tools to install on itself (tools.js): { whisper: { model, at } }, a new `at` asking again; its
 //                progress and what's installed are reported as tools
+//   updateAt     asks it to update itself from the hub now (when idle); autoUpdate: whenever the hub has a newer
+//                build (updater.js)
 //   keepsCopies  keeps a copy of every recording (a storage agent; copies.js), in copiesDir (its data folder's copies/
 //                unless set)
 // The report: { workDir, data, storage, ollama, tailscale, peers, checkedAt }.

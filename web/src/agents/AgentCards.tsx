@@ -1,5 +1,5 @@
 import { useNow } from '../useNow.ts';
-import { ago, type Agent, type Capabilities } from './types.ts';
+import { ago, type Agent, type Capabilities, type UpdateStatus } from './types.ts';
 import { Progress } from './WorkQueue.tsx';
 import AgentSettings from './AgentSettings.tsx';
 
@@ -37,6 +37,7 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
                   : `Offline · last heard from ${ago(agent.updatedAt, now)}`}
                 {status?.freeGb !== null && status?.freeGb !== undefined ? ` · ${status.freeGb} GB free` : ''}
                 {status?.version ? ` · v${status.version}` : ''}
+                {updateNote(status?.update)}
               </p>
               {online && status?.job && (
                 <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
@@ -46,6 +47,7 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
                 agentId={agent.recorderId}
                 report={status?.settings}
                 copies={status?.copies}
+                update={status?.update}
                 canEdit={canEdit}
               />
             </div>
@@ -54,6 +56,17 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
       )}
     </div>
   );
+}
+
+// Its build against the hub's: behind (and updating, or waiting to), or why an update failed.
+function updateNote(update: UpdateStatus | null | undefined) {
+  if (!update) return '';
+  if (update.state === 'waiting' || update.state === 'updating' || update.state === 'restarting')
+    return ` · ${update.step || 'updating'}`;
+  if (update.state === 'failed') return ` · update failed: ${update.error}`;
+  if (update.behind)
+    return update.canUpdate ? ` · update available (${update.latest})` : ` · behind the hub (${update.latest})`;
+  return '';
 }
 
 // The machine it runs on: its host name (as of its last report), and its Tailscale name when that differs.

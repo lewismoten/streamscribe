@@ -8,7 +8,8 @@ import {
   type Peer,
   type PlaceStatus,
   type SettingsReport,
-  type ToolStatus
+  type ToolStatus,
+  type UpdateStatus
 } from './types.ts';
 
 // An agent's settings (where its working files go, more storage to watch, an Ollama server, the port it answers pings
@@ -105,11 +106,13 @@ export default function AgentSettings({
   agentId,
   report,
   copies,
+  update,
   canEdit
 }: {
   agentId: string;
   report: SettingsReport | null | undefined;
   copies?: CopiesReport | null;
+  update?: UpdateStatus | null;
   canEdit: boolean;
 }) {
   const { records } = useRecords<AgentSettingsData>('agent_settings');
@@ -144,6 +147,7 @@ export default function AgentSettings({
     });
   const installing = report?.tools?.whisper?.state === 'installing';
   // (The website can't reach agents: the request goes through the hub, and the agent picks it up when it next syncs.)
+  const updateNow = () => putRecord('agent_settings', agentId, { ...saved, updateAt: new Date().toISOString() });
   const checkNow = () => putRecord('agent_settings', agentId, { ...saved, peerTestAt: new Date().toISOString() });
   const asked = saved.peerTestAt && (!report?.checkedAt || report.checkedAt < saved.peerTestAt);
 
@@ -182,6 +186,12 @@ export default function AgentSettings({
         <p className="muted">Not reported yet (agents check their settings each minute).</p>
       )}
       <div className="toolbar">
+        {canEdit && update?.canUpdate && update.behind && update.state !== 'waiting' && (
+          <button type="button" className="button" onClick={updateNow}>
+            Update now (to {update.latest})
+          </button>
+        )}
+        {update?.note && <span className="muted">{update.note}</span>}
         {canEdit && report?.tailscale && (
           <button type="button" className="button" onClick={checkNow} disabled={Boolean(asked)}>
             {asked ? 'Asked: checking within a minute' : 'Check the other agents now'}
@@ -282,6 +292,14 @@ export default function AgentSettings({
               ＋ A place to watch
             </button>
           </fieldset>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(settings.autoUpdate)}
+              onChange={(event) => set({ autoUpdate: event.target.checked })}
+            />{' '}
+            Updates itself when the hub has a newer build (when idle, then restarts)
+          </label>
           <label>
             <input
               type="checkbox"
