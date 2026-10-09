@@ -5,8 +5,8 @@ import type { TranscriptLink } from './links.ts';
 import { personName, type Person, type Word } from './words.ts';
 
 // Changing one word of the transcript, opened by clicking it: correct, delete, or restore the word, say who is
-// speaking from it on, add someone new speaking from it, or link a phrase from it (a web page, a Bible passage). It sits in the transcript beside the word (a dialog
-// that isn't modal); Escape closes it.
+// speaking from it on, add someone new speaking from it, or link a phrase from it (a web page, a Bible passage). It's
+// shown in a dialog (see Transcript); Escape closes it.
 export default function WordEditor({
   word,
   people,
@@ -43,14 +43,7 @@ export default function WordEditor({
   };
   const current = speakers.join();
   return (
-    <dialog
-      open
-      className="word-editor panel"
-      aria-label={`Change “${word.shown}”`}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') onClose();
-      }}
-    >
+    <div className="word-editor">
       <form onSubmit={submit}>
         <label>
           Word at {clock(word.at)}{' '}
@@ -116,6 +109,6 @@ export default function WordEditor({
       <button type="button" className="link-button" onClick={onClose}>
         Close
       </button>
-    </dialog>
+    </div>
   );
 }

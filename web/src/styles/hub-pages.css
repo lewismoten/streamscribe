@@ -295,3 +295,13 @@ fieldset.weekdays {
 .dialog .panel {
   margin: 0;
 }
+.dialog input:not([type='checkbox'], [type='radio']),
+.dialog select,
+.dialog textarea {
+  font: inherit;
+  color: var(--fg);
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}

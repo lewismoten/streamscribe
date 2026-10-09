@@ -29,11 +29,7 @@
 }
 .word-editor {
   display: grid;
-  gap: 8px;
-  margin: 6px 0;
-  padding: 10px;
-  max-width: 520px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+  gap: 10px;
 }
 .word-editor form {
   display: grid;
@@ -159,12 +155,6 @@ button.player-picture {
 .player-blank {
   display: block;
 }
-dialog.word-editor {
-  position: static;
-  inset: auto;
-  color: inherit;
-}
-
 /* Words are selectable text acting as buttons (see Transcript.tsx); the menu under selected words. */
 .word.readonly {
   cursor: text;
@@ -200,4 +190,39 @@ dialog.word-editor {
 .selection-menu button:hover,
 .selection-menu button:focus-visible {
   background: var(--mark);
+}
+
+/* Who is speaking: a block's heading (their picture and name) where someone starts, and a name within a line. */
+.lines li.speaker-block {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin: 14px 0 2px;
+  padding: 0;
+  font-weight: 700;
+  color: var(--violet);
+}
+.lines li.speaker-block:first-child {
+  margin-top: 0;
+}
+.speaker-name a,
+.speaker-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+}
+.speaker-name .avatar {
+  flex: none;
+}
+.speaker-label.inline,
+.speaker-label.inline .speaker-name,
+.speaker-label.inline .speaker-name a {
+  display: inline;
+}
+.speaker-label.inline .avatar {
+  display: inline-flex;
+  vertical-align: -0.3em;
+  margin-right: 4px;
 }

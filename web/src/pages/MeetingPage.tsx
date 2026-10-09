@@ -66,6 +66,14 @@ export default function MeetingPage() {
   const people = markData<{ people?: Person[] }>(peopleId)?.people || [];
   const peopleMap = new Map(people.map((person) => [person.id, person]));
   const nameOf = (speaker: string) => personName(peopleMap.get(speaker), speaker);
+  // Speakers' photos, private ones included (this page is only for people who may see meetings).
+  const photos =
+    markData<{ photos?: Record<string, { path: string }> }>(`${recording?.data.sourceKey}:people-photos`)?.photos || {};
+  const avatarOf = (speaker: string) => ({
+    ...(peopleMap.get(speaker) || { id: speaker }),
+    name: nameOf(speaker),
+    photo: photos[speaker]?.path || null
+  });
 
   // Lines with their words (corrections applied), and who is speaking at each word.
   const lines = useMemo(() => buildLines(mine, kind, id, stacks), [mine, kind, id, stacks]);
@@ -343,6 +351,7 @@ export default function MeetingPage() {
           editable={editable}
           people={people}
           nameOf={nameOf}
+          avatarOf={avatarOf}
           personHref={(speaker) =>
             peopleMap.has(speaker)
               ? `/people/${encodeURIComponent(data.sourceKey)}/${encodeURIComponent(speaker)}`

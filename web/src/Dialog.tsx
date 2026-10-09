@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 
 // A modal dialog (the browser's own <dialog>): open while it's shown, closed by Escape or its ✕ button. Focus goes inside when it opens and back where it was when it closes.
 export default function Dialog({
@@ -11,7 +11,8 @@ export default function Dialog({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
+  // Opened before what's inside it runs its own effects, so a form inside can put focus where it wants it.
+  useLayoutEffect(() => {
     const dialog = ref.current;
     if (dialog && !dialog.open) dialog.showModal();
     return () => dialog?.close();

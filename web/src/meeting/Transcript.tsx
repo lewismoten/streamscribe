@@ -1,5 +1,7 @@
 import { Link } from 'react-router';
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { Fragment, useEffect, useRef, useState, type Ref } from 'react';
+import { clock } from '../format.ts';
+import Avatar, { type AvatarPerson } from '../people/Avatar.tsx';
 import Dialog from '../Dialog.tsx';
 import LinkForm from './LinkForm.tsx';
 import TimeLink from './TimeLink.tsx';
@@ -20,6 +22,7 @@ export default function Transcript({
   people,
   nameOf,
   personHref,
+  avatarOf,
   speakersAt,
   correctedBy,
   canPlay,
@@ -45,6 +48,8 @@ export default function Transcript({
   nameOf: (speaker: string) => string;
   // Where a speaker's own page is (the People directory), when there's one.
   personHref?: (speaker: string) => string | null;
+  // A speaker as their picture shows them (their photo, private ones included: this page is private too).
+  avatarOf: (speaker: string) => AvatarPerson;
   speakersAt: (part: string, seconds: number) => string[];
   correctedBy: (word: Word) => string;
   canPlay: (part: string) => boolean;
@@ -139,8 +144,28 @@ export default function Transcript({
           .includes(needle)
       )
     : lines;
-  const isPicked = (word: Word) =>
-    picked !== null && picked.part === word.part && picked.line === word.line && picked.index === word.index;
+  // Speakers' pictures and names (each linking to their page when they have one).
+  const speakerNames = (speakers: string[], size: number) =>
+    speakers.map((speaker, index) => {
+      const href = personHref?.(speaker);
+      const face = <Avatar person={avatarOf(speaker)} size={size} />;
+      return (
+        <span key={speaker} className="speaker-name">
+          {index > 0 && ', '}
+          {href ? (
+            <Link to={href}>
+              {face}
+              {nameOf(speaker)}
+            </Link>
+          ) : (
+            <>
+              {face}
+              {nameOf(speaker)}
+            </>
+          )}
+        </span>
+      );
+    });
   // The words a phrase from the picked one can run through: the rest of its line and the next two.
   const followingOf = (word: Word) => {
     const at = lines.findIndex((line) => line.part === word.part && line.words.some((item) => item === word));
@@ -179,122 +204,124 @@ export default function Transcript({
       ) : (
         <ol className="lines" ref={listRef}>
           {shown.map((line, lineIndex) => {
-            // A speaker is named where they start: at a line's first word only when they weren't speaking already.
-            let last =
-              lineIndex > 0 ? speakersAt(shown[lineIndex - 1].part, shown[lineIndex - 1].end - 0.01).join() : '';
+            // Whoever is speaking when a line starts heads a block of lines, with their picture and name, when they
+            // weren't speaking already; someone starting during a line is named there.
+            const previous = shown[lineIndex - 1];
+            const before = previous
+              ? speakersAt(previous.part, previous.words.at(-1)?.at ?? previous.end - 0.01).join()
+              : '';
+            const opening = speakersAt(line.part, line.words[0]?.at ?? line.start);
+            const heads = opening.length > 0 && (opening.join() !== before || previous?.part !== line.part);
+            let last = opening.join();
             const key = lineKey(line);
             return (
-              <li key={key} data-line={key} className={nowLine === key ? 'now' : undefined}>
-                <TimeLink
-                  seconds={line.start}
-                  onPlay={canPlay(line.part) ? () => playAt(line.part, line.start) : null}
-                />
-                <span className="words">
-                  {line.words.map((word) => {
-                    const speakers = speakersAt(line.part, word.at);
-                    const changed = speakers.join() !== last;
-                    last = speakers.join();
-                    const by = word.edit ? correctedBy(word) : '';
-                    const partLinks = linksFor(line.part);
-                    const place = { line: word.line, index: word.index };
-                    const linked = partLinks.find((link) => covers(link, place)) || null;
-                    const ending = partLinks.filter((link) => endsAt(link, place));
-                    return (
-                      <span key={word.index}>
-                        {changed && speakers.length > 0 && (
-                          <strong className="speaker-label">
-                            {speakers.map((speaker, index) => {
-                              const href = personHref?.(speaker);
-                              return (
-                                <span key={speaker}>
-                                  {index > 0 && ', '}
-                                  {href ? <Link to={href}>{nameOf(speaker)}</Link> : nameOf(speaker)}
-                                </span>
-                              );
-                            })}
-                            :{' '}
-                          </strong>
-                        )}
-                        {word.edit && word.shown === '' ? (
-                          editable && (
-                            <button
-                              type="button"
-                              className="word deleted"
-                              title={`Deleted “${word.text}”${by ? ` by ${by}` : ''}`}
-                              aria-label={`Deleted word “${word.text}”`}
-                              onClick={() => onPick(word)}
-                            >
-                              ×
-                            </button>
-                          )
-                        ) : (
-                          // Selectable text (a button's isn't), acting as a button: a click (not ending a selection),
-                          // Enter, or Space opens the word's editor.
-                          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-                          <span
-                            className={`word${word.edit ? ' edited' : ''}${linked ? ' linked' : ''}${editable ? '' : ' readonly'}`}
-                            data-at={word.at}
-                            data-word={wordKey(word)}
-                            title={word.edit ? `Was “${word.text}”${by ? ` · corrected by ${by}` : ''}` : undefined}
-                            {...(editable
-                              ? {
-                                  role: 'button',
-                                  tabIndex: 0,
-                                  onClick: () => {
-                                    if (window.getSelection()?.isCollapsed !== false) onPick(word);
-                                  },
-                                  onKeyDown: (event: React.KeyboardEvent) => {
-                                    if (event.key === 'Enter' || event.key === ' ') {
-                                      event.preventDefault();
-                                      onPick(word);
+              <Fragment key={key}>
+                {heads && <li className="speaker-block">{speakerNames(opening, 32)}</li>}
+                <li data-line={key} className={nowLine === key ? 'now' : undefined}>
+                  <TimeLink
+                    seconds={line.start}
+                    onPlay={canPlay(line.part) ? () => playAt(line.part, line.start) : null}
+                  />
+                  <span className="words">
+                    {line.words.map((word) => {
+                      const speakers = speakersAt(line.part, word.at);
+                      const changed = speakers.join() !== last;
+                      last = speakers.join();
+                      const by = word.edit ? correctedBy(word) : '';
+                      const partLinks = linksFor(line.part);
+                      const place = { line: word.line, index: word.index };
+                      const linked = partLinks.find((link) => covers(link, place)) || null;
+                      const ending = partLinks.filter((link) => endsAt(link, place));
+                      return (
+                        <span key={word.index}>
+                          {changed && speakers.length > 0 && (
+                            <strong className="speaker-label inline">{speakerNames(speakers, 18)}: </strong>
+                          )}
+                          {word.edit && word.shown === '' ? (
+                            editable && (
+                              <button
+                                type="button"
+                                className="word deleted"
+                                title={`Deleted “${word.text}”${by ? ` by ${by}` : ''}`}
+                                aria-label={`Deleted word “${word.text}”`}
+                                onClick={() => onPick(word)}
+                              >
+                                ×
+                              </button>
+                            )
+                          ) : (
+                            // Selectable text (a button's isn't), acting as a button: a click (not ending a selection),
+                            // Enter, or Space opens the word's editor.
+                            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+                            <span
+                              className={`word${word.edit ? ' edited' : ''}${linked ? ' linked' : ''}${editable ? '' : ' readonly'}`}
+                              data-at={word.at}
+                              data-word={wordKey(word)}
+                              title={word.edit ? `Was “${word.text}”${by ? ` · corrected by ${by}` : ''}` : undefined}
+                              {...(editable
+                                ? {
+                                    role: 'button',
+                                    tabIndex: 0,
+                                    onClick: () => {
+                                      if (window.getSelection()?.isCollapsed !== false) onPick(word);
+                                    },
+                                    onKeyDown: (event: React.KeyboardEvent) => {
+                                      if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        onPick(word);
+                                      }
                                     }
                                   }
-                                }
-                              : {})}
-                          >
-                            {word.shown}
-                          </span>
-                        )}
-                        {ending.map((link) => (
-                          <a
-                            key={link.id}
-                            className="transcript-link"
-                            href={linkHref(link, scriptureSite)}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            ↗ {linkLabel(link)}
-                          </a>
-                        ))}{' '}
-                        {isPicked(word) && (
-                          <WordEditor
-                            word={word}
-                            people={people}
-                            speakers={speakers}
-                            onWord={edits.saveWord}
-                            onSpeakers={edits.saveSpeakers}
-                            onAdd={edits.addPerson}
-                            following={followingOf(word)}
-                            link={linked}
-                            onLink={(link) => {
-                              onLink(line.part, link);
-                              onPick(null);
-                            }}
-                            onUnlink={(link) => {
-                              onUnlink(line.part, link);
-                              onPick(null);
-                            }}
-                            onClose={() => onPick(null)}
-                          />
-                        )}
-                      </span>
-                    );
-                  })}
-                </span>
-              </li>
+                                : {})}
+                            >
+                              {word.shown}
+                            </span>
+                          )}
+                          {ending.map((link) => (
+                            <a
+                              key={link.id}
+                              className="transcript-link"
+                              href={linkHref(link, scriptureSite)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              ↗ {linkLabel(link)}
+                            </a>
+                          ))}{' '}
+                        </span>
+                      );
+                    })}
+                  </span>
+                </li>
+              </Fragment>
             );
           })}
         </ol>
+      )}
+      {picked && (
+        <Dialog title={`“${picked.shown || picked.text}” at ${clock(picked.at)}`} onClose={() => onPick(null)}>
+          <WordEditor
+            word={picked}
+            people={people}
+            speakers={speakersAt(picked.part, picked.at)}
+            onWord={edits.saveWord}
+            onSpeakers={edits.saveSpeakers}
+            onAdd={edits.addPerson}
+            following={followingOf(picked)}
+            link={
+              linksFor(picked.part).find((link) => covers(link, { line: picked.line, index: picked.index })) || null
+            }
+            onLink={(link) => {
+              onLink(picked.part, link);
+              onPick(null);
+            }}
+            onUnlink={(link) => {
+              onUnlink(picked.part, link);
+              onPick(null);
+            }}
+            onClose={() => onPick(null)}
+          />
+        </Dialog>
       )}
       {menu && (
         // Pressing a choice keeps the selection (it's what the choice is for).

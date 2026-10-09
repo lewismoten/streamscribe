@@ -224,6 +224,8 @@ People in terms are the ones on each source's roster. Saving a term lists the pe
 
 ## Links, prayer, and the Religion page
 
+**Who is speaking** heads each block of a meeting's transcript where someone starts (their picture and name, linking to their page; on this private page their photo shows whether or not it's public), and is named within a line where someone starts mid-line. Clicking a word (or Enter on it) opens its editor in a dialog: correct, delete, or restore it, say who is speaking from it, or link a phrase from it.
+
 **Links in transcripts.** Signed in, selecting words of a meeting's transcript (with the mouse, or Shift and the arrow keys) opens a menu under them: **Mark Bible passage…** or **Link to a web page…**, each opening a dialog for those words. A word's editor (a click on it, or Enter) can also link a phrase from that word through a later one. A link goes to a web page, or names a Bible passage (a book, and chapters and verses such as `121-122` or `3:16-18`). The phrase is underlined and followed by a ↗ link. Links are each part's `links` mark (made public by "Correct transcript words"); publishing a transcript excerpt carries them, so the phrase is a link on the public page too (the hub keeps only web addresses that fit the line).
 
 **Where passages link** is a setting (the settings record `scripture`): a web address with `{passage}` where the passage goes, `https://www.biblegateway.com/passage/?search={passage}` unless changed on the Religion page. Published transcripts keep the address they were published with.
