@@ -324,6 +324,7 @@ export function jobRunner({
     const controller = new AbortController();
     let reportedAt = Date.now();
     let reportedShare = 0;
+    let reportedMessage = '';
     current = {
       id: record.id,
       title: job.title || job.type,
@@ -336,10 +337,15 @@ export function jobRunner({
     const progress = (share, message = current.message) => {
       current.progress = Math.max(0, Math.min(1, share));
       current.message = message;
-      // Reported when it has moved on by a percent and ten seconds have passed (whichever comes later).
-      if (Date.now() - reportedAt < 10000 || Math.abs(current.progress - reportedShare) < 0.01) return;
+      // Reported when it has moved on (by a percent, or to another step) and ten seconds have passed.
+      if (
+        Date.now() - reportedAt < 10000 ||
+        (Math.abs(current.progress - reportedShare) < 0.01 && message === reportedMessage)
+      )
+        return;
       reportedAt = Date.now();
       reportedShare = current.progress;
+      reportedMessage = message;
       update(record.id, { progress: Number(current.progress.toFixed(3)), message })
         .then(() => client.sync())
         .catch(() => {});

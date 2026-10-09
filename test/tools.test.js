@@ -86,6 +86,44 @@ test('installing whisper.cpp and a model when asked, once per request', async ()
       installer.job().run({ type: 'install', tool: 'rm -rf' }, { progress: () => {} }),
       /Not a tool this agent installs/
     );
+    // A dropped connection: tried again, from where it stopped; a refusal (404) isn't, and says why.
+    const flakyDir = path.join(folder, 'flaky');
+    let calls = 0;
+    const flaky = toolInstaller({
+      install: async () => ({ command: tool, version: 'v1.10.0' }),
+      modelsDir: flakyDir,
+      retryWaitMs: 1,
+      fetchFile: async (url, options) => {
+        calls += 1;
+        if (calls === 2) throw new TypeError('fetch failed', { cause: { code: 'ETIMEDOUT', hostname: 'cdn.example' } });
+        return fetchFile(url, options);
+      }
+    });
+    await flaky.job().run({ type: 'install', tool: 'whisper', model: 'tiny.en' }, { progress: () => {} });
+    assert.equal(calls, 3, 'the model, then the voice-activity model on its second try');
+    assert.ok(fs.existsSync(path.join(flakyDir, 'ggml-silero-v5.1.2.bin')));
+    const refused = toolInstaller({
+      install: async () => ({ command: tool, version: 'v1.10.0' }),
+      modelsDir: path.join(folder, 'refused'),
+      retryWaitMs: 1,
+      fetchFile: async () => new Response('no', { status: 404 })
+    });
+    await assert.rejects(
+      refused.job().run({ type: 'install', tool: 'whisper', model: 'tiny.en' }, { progress: () => {} }),
+      /ggml-tiny\.en\.bin: 404 from huggingface\.co$/
+    );
+    const down = toolInstaller({
+      install: async () => ({ command: tool, version: 'v1.10.0' }),
+      modelsDir: path.join(folder, 'down'),
+      retryWaitMs: 1,
+      fetchFile: async () => {
+        throw new TypeError('fetch failed', { cause: { code: 'ENOTFOUND', hostname: 'huggingface.co' } });
+      }
+    });
+    await assert.rejects(
+      down.job().run({ type: 'install', tool: 'whisper', model: 'tiny.en' }, { progress: () => {} }),
+      /fetch failed \(ENOTFOUND, huggingface\.co\) \(after 4 tries\)/
+    );
     // A failure is reported, not thrown.
     const failing = toolInstaller({
       install: async () => {

@@ -120,9 +120,11 @@ async function installWhisper({ step, signal, platform = process.platform }) {
   if (!tag) throw new Error('No release found');
   const folder = path.join(BUILD_ROOT, 'whisper.cpp');
   const built = path.join(folder, 'build', 'bin', 'whisper-cli');
-  const record = readRecord();
   const version = nvcc ? `${tag} (CUDA)` : tag;
-  if (record.whisper?.version === version && fs.existsSync(built)) return { command: built, version };
+  // Already built from this release (by an install that then failed downloading a model, say): not built again.
+  const marker = path.join(folder, '.streamscribe-built');
+  const builtBefore = fs.existsSync(marker) ? fs.readFileSync(marker, 'utf8').trim() : readRecord().whisper?.version;
+  if (builtBefore === version && fs.existsSync(built)) return { command: built, version };
   fs.rmSync(folder, { recursive: true, force: true });
   fs.mkdirSync(BUILD_ROOT, { recursive: true });
   step(`Downloading whisper.cpp ${tag}`, 0.05);
@@ -160,18 +162,47 @@ async function installWhisper({ step, signal, platform = process.platform }) {
     }
   );
   if (!fs.existsSync(built)) throw new Error(`The build didn't make ${built}`);
+  fs.writeFileSync(marker, version);
   return { command: built, version };
 }
 
-// A file from the web into place (kept if already there at its size; resumed from a partial download).
-async function download(url, file, { signal, onShare = () => {}, fetchFile = fetch }) {
+// What went wrong with a request, with its cause (fetch says only "fetch failed"): "fetch failed (ETIMEDOUT,
+// us.aws.cdn.hf.co)".
+export function failure(error, url) {
+  const cause = error.cause;
+  const detail = [cause?.code || cause?.message, cause?.hostname || (url ? new URL(url).host : '')]
+    .filter(Boolean)
+    .join(', ');
+  return detail && !error.message.includes(detail) ? `${error.message} (${detail})` : error.message;
+}
+
+// A file from the web into place (kept if already there; resumed from a partial download). A dropped connection is
+// tried again, from where it stopped, up to `tries` times, waiting longer each time.
+async function download(url, file, { signal, onShare = () => {}, fetchFile = fetch, tries = 4, waitMs = 5000 }) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const partial = `${file}.part`;
   // (Already here, and not partly downloaded again since: kept.)
   if (fs.existsSync(file) && !fs.existsSync(partial)) return file;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await downloadOnce(url, file, partial, { signal, onShare, fetchFile });
+      return file;
+    } catch (error) {
+      // (A refusal from the server, 404 say, isn't tried again.)
+      if (signal?.aborted || attempt >= tries || /^[45]\d\d from /.test(error.message))
+        throw new Error(
+          `${path.basename(file)}: ${failure(error, url)}${attempt > 1 ? ` (after ${attempt} tries)` : ''}`,
+          { cause: error }
+        );
+      await new Promise((resolve) => setTimeout(resolve, waitMs * attempt));
+    }
+  }
+}
+
+async function downloadOnce(url, file, partial, { signal, onShare, fetchFile }) {
   const have = fs.existsSync(partial) ? fs.statSync(partial).size : 0;
   const response = await fetchFile(url, { signal, headers: have ? { range: `bytes=${have}-` } : {} });
-  if (!response.ok) throw new Error(`${path.basename(file)}: ${response.status} from ${new URL(url).host}`);
+  if (!response.ok) throw new Error(`${response.status} from ${new URL(url).host}`);
   const resumed = response.status === 206;
   const total = Number(response.headers.get('content-length') || 0) + (resumed ? have : 0);
   const out = fs.createWriteStream(partial, { flags: resumed ? 'a' : 'w' });
@@ -185,9 +216,8 @@ async function download(url, file, { signal, onShare = () => {}, fetchFile = fet
   } finally {
     await new Promise((resolve) => out.end(resolve));
   }
-  if (total && fs.statSync(partial).size !== total) throw new Error(`${path.basename(file)}: download cut short`);
+  if (total && fs.statSync(partial).size !== total) throw new Error('download cut short');
   fs.renameSync(partial, file);
-  return file;
 }
 
 // Uses what was installed here wherever the configured (or default) tool or model isn't there.
@@ -209,7 +239,8 @@ export function toolInstaller({
   onInstalled = () => {},
   install = installWhisper,
   fetchFile,
-  modelsDir = MODELS_DIR
+  modelsDir = MODELS_DIR,
+  retryWaitMs = 5000
 } = {}) {
   let running = null;
   let controller = null;
@@ -232,10 +263,15 @@ export function toolInstaller({
       await download(MODEL_URL(model), modelFile, {
         signal,
         fetchFile,
+        waitMs: retryWaitMs,
         onShare: (share) => step(`Downloading the ${model} model: ${Math.round(share * 100)}%`, 0.6 + share * 0.35)
       });
       step('Downloading the voice-activity model', 0.95);
-      const vadModel = await download(VAD_URL, path.join(modelsDir, VAD_NAME), { signal, fetchFile });
+      const vadModel = await download(VAD_URL, path.join(modelsDir, VAD_NAME), {
+        signal,
+        fetchFile,
+        waitMs: retryWaitMs
+      });
       const done = {
         command,
         version,
