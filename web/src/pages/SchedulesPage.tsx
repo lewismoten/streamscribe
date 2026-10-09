@@ -58,11 +58,12 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
     [sourceKeys, sources]
   );
   const now = useNow(60000);
-  // The first day of this month, and of the three months shown (in this browser's time zone).
+  // The three months shown: from this month, or earlier and later (past meetings found by agents are on the schedule).
+  const [shift, setShift] = useState(0);
   const months = useMemo(() => {
     const today = new Date(now);
-    return [0, 1, 2].map((offset) => new Date(today.getFullYear(), today.getMonth() + offset, 1).getTime());
-  }, [now]);
+    return [0, 1, 2].map((offset) => new Date(today.getFullYear(), today.getMonth() + shift + offset, 1).getTime());
+  }, [now, shift]);
   const until = useMemo(() => {
     const last = new Date(months[2]);
     return new Date(last.getFullYear(), last.getMonth() + 1, 1).getTime();
@@ -209,6 +210,17 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
         </Dialog>
       )}
 
+      <div className="toolbar small">
+        <button type="button" className="button" onClick={() => setShift(shift - 3)}>
+          ‹ Earlier
+        </button>
+        <button type="button" className="button" onClick={() => setShift(0)} disabled={shift === 0}>
+          This month
+        </button>
+        <button type="button" className="button" onClick={() => setShift(shift + 3)}>
+          Later ›
+        </button>
+      </div>
       <div className="month-grids">
         {months.map((month) => (
           <MonthGrid

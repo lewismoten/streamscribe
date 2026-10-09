@@ -65,7 +65,7 @@ export default function Transcript({
   progress
 }: {
   recordingId: string;
-  kind: 'quick' | 'final';
+  kind: 'quick' | 'final' | 'official';
   lines: ShownLine[];
   status: string;
   editable: boolean;
@@ -331,7 +331,14 @@ export default function Transcript({
   return (
     <section className="panel transcript" ref={area}>
       <div className="panel-head">
-        <h2>Transcript{kind === 'quick' ? ' (quick, while recording)' : ''}</h2>
+        <h2>
+          Transcript
+          {kind === 'quick'
+            ? ' (quick, while recording)'
+            : kind === 'official'
+              ? " (the provider's automated captions)"
+              : ''}
+        </h2>
         <input
           type="search"
           placeholder="Find in this transcript"

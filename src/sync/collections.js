@@ -13,7 +13,8 @@ export const COLLECTIONS = {
     doc: "Streams to record (public fields only; storage folders stay in each recorder's config)."
   },
   schedules: {
-    writers: ['editor'],
+    // (Agents add the past meetings they find; see src/recorder/discovery.js.)
+    writers: ['editor', 'recorder'],
     mode: 'mutable',
     doc: 'When meetings happen: one-off or recurring (see recurrence.js).'
   },

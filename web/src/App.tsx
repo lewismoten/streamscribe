@@ -39,6 +39,7 @@ import LawPage from './annotations/LawPage.tsx';
 import TasksPage from './prompts/TasksPage.tsx';
 import { MapPage, MapsPage } from './maps/MapsPage.tsx';
 import ExplorePage from './maps/ExplorePage.tsx';
+import SourcesPage from './sources/SourcesPage.tsx';
 import SetupPage from './pages/SetupPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
@@ -115,8 +116,9 @@ export default function App() {
             {/* An internal reference: never for the public. */}
             {viewer && can('edit.bodies', account) && <NavLink to="/religion">Religion</NavLink>}
           </NavMenu>
-          <NavMenu label="Manage" paths={['/agents', '/accounts', '/settings']}>
+          <NavMenu label="Manage" paths={['/agents', '/sources', '/accounts', '/settings']}>
             {viewer && <NavLink to="/agents">Agents</NavLink>}
+            {can('edit.sources', account) && <NavLink to="/sources">Sources</NavLink>}
             {(can('manage.users', account) || can('review', account)) && <NavLink to="/accounts">Accounts</NavLink>}
             <NavLink to="/settings">Settings</NavLink>
           </NavMenu>
@@ -170,6 +172,7 @@ export default function App() {
             <Route path="/laws" element={<LawsPage />} />
             <Route path="/laws/:id" element={<LawPage />} />
             <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/sources" element={<SourcesPage />} />
             <Route path="/maps" element={<MapsPage />} />
             <Route path="/maps/explore" element={<ExplorePage />} />
             <Route path="/maps/:id" element={<MapPage />} />

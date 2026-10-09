@@ -11,7 +11,7 @@ export interface Line {
 }
 export interface Chunk {
   recordingId: string;
-  kind: 'quick' | 'final';
+  kind: 'quick' | 'final' | 'official';
   part: string;
   partIndex: number;
   from: number;

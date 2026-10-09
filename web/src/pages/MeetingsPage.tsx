@@ -10,7 +10,7 @@ export interface RecordingData {
   sourceKey: string;
   sourceName?: string;
   recorderId: string;
-  status: 'recording' | 'publishing' | 'done' | 'failed' | 'skipped';
+  status: 'recording' | 'publishing' | 'done' | 'failed' | 'skipped' | 'official';
   scheduledStart: string;
   scheduledEnd: string;
   startedAt: string;
@@ -28,6 +28,7 @@ export const STATUS_LABEL: Record<string, string> = {
   publishing: 'Finishing up',
   done: 'Recorded',
   failed: 'Failed',
+  official: 'Official video (found)',
   skipped: 'Skipped'
 };
 export const dateTime = (iso: string | null) =>

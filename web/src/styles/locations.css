@@ -150,22 +150,25 @@
   display: grid;
   gap: 6px;
 }
-.map-scroll {
-  overflow: auto;
-  max-height: 80vh;
+.map-stage {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
-.map-zoom iframe {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border: 0;
-  display: block;
+.map-stage.dragging {
+  cursor: grabbing;
 }
-.map-zoom img {
-  width: 100%;
-  display: block;
+.map-picture {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  transform-origin: 0 0;
 }
 .map-layers,
 .map-shades {

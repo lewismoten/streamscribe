@@ -9,6 +9,7 @@ import { publishMedia } from '../media/publish-media.js';
 import { claim } from './hub-api.js';
 import { hubFiles, sha256 } from './hub-files.js';
 import { runPrompt } from './prompts.js';
+import { discover, firstPicture, officialTranscript } from './discovery.js';
 
 // Work for agents: the hub only keeps the queue (`jobs` records, written by the web app or by agents); agents (the
 // recorder service, on machines with the video) do the work. Each tick an idle agent takes the oldest queued job it
@@ -20,6 +21,8 @@ import { runPrompt } from './prompts.js';
 //   encode  { recordingId }  make and upload the recording's private audio and silent video (publish-media.js)
 //   video   { publicationId, items: [{ recordingId, part, from, to }] }  cut each clip (from recordings this agent has,
 //           all of them), join them into one MP4 and M4A (compose.js), upload them to the publication, and mark it ready
+//   discover, official-transcript, first-segment  past meetings found from each source's feeds (discovery.js): any
+//           agent can do them (they need the web, not the recordings)
 //   prompt  { recordingId, promptId }  run a task on the meeting with this agent's Ollama server (prompts.js), its
 //           answer saved in prompt_results (any agent whose Ollama server answers can do it)
 const LEASE_SECONDS = 180;
@@ -201,6 +204,18 @@ export function jobRunner({ client, findRecording, log, workDir = () => os.tmpdi
         if ((job.output?.destination || 'hub') === 'hub') await markFailed(job, error);
         await notify(job, `“${job.videoTitle || job.title}” couldn't be made`, error.message, { problem: true });
       }
+    },
+    discover: {
+      canDo: (job) => !job.forAgent || job.forAgent === RECORDER.id,
+      run: (job, { progress }) => discover(job, { client, progress, log })
+    },
+    'official-transcript': {
+      canDo: (job) => !job.forAgent || job.forAgent === RECORDER.id,
+      run: (job, { progress }) => officialTranscript(job, { client, progress })
+    },
+    'first-segment': {
+      canDo: (job) => !job.forAgent || job.forAgent === RECORDER.id,
+      run: (job, { progress }) => firstPicture(job, { client, progress, workDir: workDir() })
     },
     prompt: {
       canDo: (job) => Boolean(settings().ollama?.ok) && (!job.forAgent || job.forAgent === RECORDER.id),

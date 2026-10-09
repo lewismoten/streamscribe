@@ -49,6 +49,7 @@ The hub is a small PHP and SQLite service for ordinary shared hosting.
   - [Transcription](docs/transcription/transcribe.md)
   - [The review page](docs/review/extract-thumbnails.md)
   - [Full meetings from the archive](docs/archive/build-meeting.md)
+  - [Finding past meetings](docs/archive/discovery.md)
 - **Sharing it:**
   - [The hub](docs/hub/hub.md)
   - [Deploying](docs/hub/deploy.md)

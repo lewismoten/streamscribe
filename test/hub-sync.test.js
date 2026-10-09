@@ -17,8 +17,9 @@ test('reading needs no key; writing does, and keys are scoped', async () => {
   assert.equal((await fetch(`${hub}/changes?since=0`)).status, 200);
   assert.equal((await post('records', { records: [] })).status, 401);
   assert.equal((await post('records', { records: [] }, 'wrong-key')).status, 401);
+  // (Recorders may add schedules, past meetings they find; sources are for editors only.)
   const reply = await (
-    await post('records', { records: [{ collection: 'schedules', id: 'x', data: {}, base_rev: 0 }] }, recorderKey)
+    await post('records', { records: [{ collection: 'sources', id: 'x', data: {}, base_rev: 0 }] }, recorderKey)
   ).json();
   assert.equal(reply.results[0].status, 'error');
 });

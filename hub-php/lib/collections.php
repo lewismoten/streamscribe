@@ -2,7 +2,7 @@
 // Who may write each collection and how changes are reconciled; mirrors src/sync/collections.js.
 const COLLECTIONS = [
   'sources' => ['writers' => ['editor'], 'mode' => 'mutable'],
-  'schedules' => ['writers' => ['editor'], 'mode' => 'mutable'],
+  'schedules' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'recorders' => ['writers' => ['recorder'], 'mode' => 'mutable'],
   'recordings' => ['writers' => ['recorder', 'editor'], 'mode' => 'mutable'],
   'transcript_chunks' => ['writers' => ['recorder'], 'mode' => 'immutable'],

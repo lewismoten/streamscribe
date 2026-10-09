@@ -88,7 +88,12 @@ export default function MeetingPage() {
     onSaved: setStatus
   });
   const mine = useMemo(() => (chunks || []).filter((chunk) => chunk.data.recordingId === id), [chunks, id]);
-  const kind = mine.some((chunk) => chunk.data.kind === 'final') ? 'final' : 'quick';
+  // Whisper's final transcript, else the provider's automated one (a past meeting found elsewhere), else the quick one.
+  const kind = mine.some((chunk) => chunk.data.kind === 'final')
+    ? 'final'
+    : mine.some((chunk) => chunk.data.kind === 'official')
+      ? 'official'
+      : 'quick';
   const editable = Boolean(account.user) && kind === 'final';
 
   const peopleId = recording ? `${recording.data.sourceKey}:people` : '';

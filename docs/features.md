@@ -14,6 +14,8 @@ need [a hub](hub/hub.md) (accounts, private meetings, publishing); capture and t
   elections, and meetings held without a livestream (listed so they're known, never recorded)
   ([schedules](hub/hub.md#schedules)).
 - **Live view**: the latest picture and quick transcript of each meeting being recorded.
+- **Past meetings found** from each source's feeds (a Swagit archive, a YouTube channel, a calendar, a page of dates):
+  put on the schedule, with the provider's captions, chapters, and a first picture ([finding past meetings](archive/discovery.md)).
 - **Full meetings from the archive**: join the official recording and your capture into one meeting, lined up so links
   to the official video land at the same moment ([build-meeting](archive/build-meeting.md)).
 
