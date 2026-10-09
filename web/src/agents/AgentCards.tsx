@@ -40,7 +40,7 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
               {online && status?.job && (
                 <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
               )}
-              {status?.capabilities && <Capability value={status.capabilities} />}
+              {status?.capabilities && <Capability value={status.capabilities} sharing={sharedWith(agents, agent)} />}
               <AgentSettings agentId={agent.recorderId} report={status?.settings} canEdit={canEdit} />
             </div>
           );
@@ -50,8 +50,21 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
   );
 }
 
+// The other agents with the same files: on the same machine, with the same data folder.
+function sharedWith(agents: Agent[], agent: Agent) {
+  const mine = agent.status?.capabilities;
+  if (!mine?.dataDir) return [];
+  return agents
+    .filter((other) => other.recorderId !== agent.recorderId)
+    .filter(
+      (other) =>
+        other.status?.capabilities?.dataDir === mine.dataDir && other.status?.capabilities?.hostname === mine.hostname
+    )
+    .map((other) => other.status?.name || other.name || other.recorderId);
+}
+
 // What an agent's machine has, and so what it can do.
-function Capability({ value }: { value: Capabilities }) {
+function Capability({ value, sharing }: { value: Capabilities; sharing: string[] }) {
   return (
     <ul className="capabilities small">
       <li>{[value.machine, value.system].filter(Boolean).join(' · ')}</li>
@@ -71,6 +84,13 @@ function Capability({ value }: { value: Capabilities }) {
       <li className="muted">
         {value.sources.length ? `Records: ${value.sources.join(', ')}` : 'No sources set up to record yet'}
       </li>
+      {value.dataDir && (
+        <li className="muted">
+          Files: <code>{value.dataDir}</code>
+          {value.recordings !== undefined ? ` · ${value.recordings} recordings` : ''}
+          {sharing.length ? ` · the same files as ${sharing.join(', ')}` : ''}
+        </li>
+      )}
     </ul>
   );
 }

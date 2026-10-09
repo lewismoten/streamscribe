@@ -29,26 +29,33 @@ const readJson = (file) => {
 };
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
-// Session folders that recorders here recorded: they reach the hub as those recordings (publish.js), not again from
-// the library.
-function recorderFolders() {
-  const folders = new Set();
-  if (!fs.existsSync(STATE_ROOT)) return folders;
+// The meetings each recorder here (sharing this data folder: its state files are in STATE_ROOT) has recorded.
+export function recordersRecordings() {
+  const recordings = [];
+  if (!fs.existsSync(STATE_ROOT)) return recordings;
   for (const file of fs.readdirSync(STATE_ROOT).filter((name) => /^recorder-.+\.sqlite$/.test(name))) {
     try {
       const db = new DatabaseSync(path.join(STATE_ROOT, file), { readOnly: true });
       try {
         const row = db.prepare("SELECT value FROM meta WHERE name = 'recorder'").get();
-        for (const recording of Object.values(JSON.parse(row?.value || '{}').recordings || {})) {
-          const source = SOURCES.find((item) => item.key === recording.sourceKey);
-          for (const part of recording.parts || []) if (source) folders.add(`${source.key}:${part.dir}`);
-        }
+        recordings.push(...Object.values(JSON.parse(row?.value || '{}').recordings || {}));
       } finally {
         db.close();
       }
     } catch {
-      /* not readable now: nothing skipped */
+      /* not readable now: left out */
     }
+  }
+  return recordings;
+}
+
+// Session folders that recorders here recorded: they reach the hub as those recordings (publish.js), not again from
+// the library.
+function recorderFolders() {
+  const folders = new Set();
+  for (const recording of recordersRecordings()) {
+    const source = SOURCES.find((item) => item.key === recording.sourceKey);
+    for (const part of recording.parts || []) if (source) folders.add(`${source.key}:${part.dir}`);
   }
   return folders;
 }

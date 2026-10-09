@@ -11,6 +11,10 @@ export interface Capabilities {
   ffmpeg: string | null;
   whisper: 'ready' | 'no model' | null;
   sources: string[];
+  hostname?: string;
+  // Its data folder, and the recordings in it (agents with the same folder on one machine share them).
+  dataDir?: string;
+  recordings?: number;
 }
 export interface AgentStatus {
   state: string;

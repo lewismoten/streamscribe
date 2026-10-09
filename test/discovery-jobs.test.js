@@ -3,7 +3,7 @@
 // its own and its follow-up jobs; then the official transcript (lines, chapters, the agenda) and the first picture.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,23 +14,26 @@ import { discover, firstPicture, officialTranscript } from '../src/recorder/disc
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg')
   ? '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg'
   : 'ffmpeg';
+// Without ffmpeg (as on CI), the first picture isn't checked; the rest still is.
+const HAS_FFMPEG = spawnSync(FF, ['-version']).status === 0;
 
-test('discovery, then the official transcript and the first picture', async () => {
+test('discovery, then the official transcript and the first picture', async (t) => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-discover-'));
   const segment = path.join(folder, 'seg.ts');
-  execFileSync(FF, [
-    '-loglevel',
-    'error',
-    '-f',
-    'lavfi',
-    '-i',
-    'testsrc=s=320x180:d=6',
-    '-c:v',
-    'libx264',
-    '-pix_fmt',
-    'yuv420p',
-    segment
-  ]);
+  if (HAS_FFMPEG)
+    execFileSync(FF, [
+      '-loglevel',
+      'error',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=s=320x180:d=6',
+      '-c:v',
+      'libx264',
+      '-pix_fmt',
+      'yuv420p',
+      segment
+    ]);
   const pages = {
     'https://town.example/views/5/': `<h4 class="panel-title"><button aria-controls="collapse1">Council Meetings</button></h4>
       <div role="tabpanel" class="tab-pane" id="c-2025"><table><tbody>
@@ -99,6 +102,10 @@ test('discovery, then the official transcript and the first picture', async () =
       'https://attach.example/agenda_file/77/a.pdf'
     );
 
+    if (!HAS_FFMPEG) {
+      t.diagnostic('no ffmpeg: the first picture was not checked');
+      return;
+    }
     let uploaded = null;
     const picture = await firstPicture(
       { recordingId: schedule.id },

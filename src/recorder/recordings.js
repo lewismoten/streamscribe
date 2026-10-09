@@ -8,7 +8,15 @@ import { shouldStop } from './overrun.js';
 import { claim, hubConfigured } from './hub-api.js';
 import { quickTranscribe } from './quick-transcribe.js';
 import { publishRecording, recordingParts } from './publish.js';
-import { localRecordings } from './publish-library.js';
+import { localRecordings, recordersRecordings } from './publish-library.js';
+
+const safely = (read) => {
+  try {
+    return read();
+  } catch {
+    return [];
+  }
+};
 
 // The recorder's recordings (see service.js): starting each meeting's capture, following it while it records,
 // stopping it, and publishing it when it is over. The context is the service's shared state:
@@ -20,9 +28,9 @@ export function recordingControl(context) {
   // and the folder of one part. Null when it isn't here.
   function findRecording(recordingId, partName) {
     let items = [];
-    const own = Object.values(state.recordings).find(
-      (recording) => recording.id === recordingId && recording.parts?.length
-    );
+    // Its own, else one another agent sharing this data folder recorded.
+    const recorded = (recording) => recording.id === recordingId && recording.parts?.length;
+    const own = Object.values(state.recordings).find(recorded) || safely(recordersRecordings).find(recorded);
     const ownSource = own && SOURCES.find((item) => item.key === own.sourceKey);
     if (own && ownSource) {
       items = own.parts.map((part) => ({

@@ -1,11 +1,13 @@
 import fs from 'fs';
 import os from 'os';
-import { RECORDER, SOURCES, TOOLS, TRANSCRIPTION } from '../config/runtime-config.js';
+import { DATA_ROOT, RECORDER, SOURCES, TOOLS, TRANSCRIPTION } from '../config/runtime-config.js';
 import { run } from '../media/encode.js';
+import { libraryRecordings, recordersRecordings } from './publish-library.js';
 
 // What this agent's machine has, reported with its heartbeat (the hub's Agents page shows it): the machine and its
 // system, processors and memory, Node, ffmpeg (needed to record and encode), whisper.cpp and its model (needed to
-// transcribe), and the sources it's set up to record. Checked when the agent starts, then hourly.
+// transcribe), the sources it's set up to record, and its data folder with how many recordings are in it (agents on
+// one machine with the same folder share their recordings, which the Agents page says). Checked when the agent starts, then hourly.
 async function firstLine(command, args) {
   try {
     return (await run(command, args)).stdout.split('\n')[0].trim();
@@ -20,6 +22,17 @@ function readText(file) {
   } catch {
     return '';
   }
+}
+
+function countRecordings() {
+  let count = 0;
+  for (const read of [() => libraryRecordings({ all: true }), recordersRecordings])
+    try {
+      count += read().length;
+    } catch {
+      /* no library here */
+    }
+  return count;
 }
 
 export async function detectCapabilities() {
@@ -42,6 +55,8 @@ export async function detectCapabilities() {
     sources: SOURCES.filter((source) => !RECORDER.sources || RECORDER.sources.includes(source.key)).map(
       (source) => source.key
     ),
+    dataDir: DATA_ROOT,
+    recordings: countRecordings(),
     checkedAt: new Date().toISOString()
   };
 }

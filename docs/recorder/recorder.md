@@ -73,6 +73,14 @@ The script:
   - **Linux:** the `streamscribe-agent` systemd service, which starts with the machine
   - **Mac:** the `com.streamscribe.agent` launchd agent (`~/Library/LaunchAgents/com.streamscribe.agent.plist`), which starts when you log in and keeps the Mac from sleeping while it runs
 
+**Sharing another agent's recordings.** To give the new agent the same files as an agent already on this machine (one run with `npm run recorder` from a copy of the repository, say), name that agent's settings file:
+
+```bash
+curl -fsSL 'https://example.com/hub/api.php/agent-install?token=…' | STREAMSCRIBE_SHARE_FROM=~/dev/streamscribe/config.local.js bash
+```
+
+It takes that agent's sources, data folder, tools, and transcription settings (with folders made absolute) and keeps its own id and key. Either agent can then take work on any of those recordings, including ones the other recorded. Each agent card on the Agents page shows its files (the data folder and how many recordings are in it), and says when another agent has the same files. Run one of the two, or give them different sources to record, so they don't both follow the same schedules.
+
 **On a Mac,** install [Homebrew](https://brew.sh) first; the script stops and says so if it's missing. Run the command in Terminal on the Mac itself, or over ssh while someone is logged in to it, since launchd agents belong to a login session. A laptop still sleeps when its lid is closed.
 
 The token works once and expires after 48 hours, and the key never appears in the command or your shell history. Within a minute the agent shows as online on the Agents page, with what its machine has (CPU, memory, ffmpeg, whisper.cpp) and so what it can do.

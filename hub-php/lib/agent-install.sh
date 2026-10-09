@@ -6,9 +6,11 @@
 # or Homebrew), puts the agent in ~/streamscribe, its data in ~/streamscribe-data, joins the hub with this one-time
 # token, and sets up the agent's service (systemd's streamscribe-agent, or a launchd agent on a Mac, which also keeps
 # the Mac from sleeping while it runs), which restarts if it stops and starts when the machine does (on a Mac, when
-# the user logs in). Running it again (with a new command) updates the
-# agent and gives it a new key; its other settings are kept. It shows each step as it goes and keeps a log
-# (~/streamscribe-install.log); if a step fails, it says which and prints the log's last lines.
+# the user logs in). Running it again (with a new command) updates the agent and gives it a new key; its other
+# settings are kept. It shows each step as it goes and keeps a log (~/streamscribe-install.log); if a step fails, it
+# says which and prints the log's last lines. To share the recordings of another agent on this machine (one run from a
+# copy of the repository, say), give that agent's settings file:
+#   curl -fsSL '<hub>/api.php/agent-install?token=…' | STREAMSCRIBE_SHARE_FROM=~/path/to/config.local.js bash
 set -euo pipefail
 
 HUB=@HUB@
@@ -134,13 +136,39 @@ REPLY="$(curl -fsS -X POST -H 'content-type: application/json' --data "{\"token\
   || fail "The hub didn't accept the install command: it may have expired or already been used. Make a new one on the Agents page (Reinstall command)."
 CONFIG="$INSTALL_DIR/config.local.js"
 STREAMSCRIBE_REPLY="$REPLY" node --input-type=module - "$CONFIG" "$DATA_DIR" <<'JS'
-// The agent's settings: its hub, key, id, and name (kept: anything else already set, such as sources).
+// The agent's settings: its hub, key, id, and name (kept: anything else already set, such as sources). With
+// STREAMSCRIBE_SHARE_FROM (another agent's config.local.js on this machine), it takes that agent's settings but its
+// identity (sources, data folder, tools, transcription), with folders made absolute, so it has the same recordings.
 import fs from 'fs';
+import path from 'path';
 import { pathToFileURL } from 'url';
 const [file, dataDir] = process.argv.slice(2);
 const reply = JSON.parse(process.env.STREAMSCRIBE_REPLY);
+const load = async (from) => (await import(pathToFileURL(from).href + '?' + Date.now())).default || {};
 let settings = {};
-if (fs.existsSync(file)) settings = (await import(pathToFileURL(file).href + '?' + Date.now())).default || {};
+if (fs.existsSync(file)) settings = await load(file);
+const shareFrom = process.env.STREAMSCRIBE_SHARE_FROM ? path.resolve(process.env.STREAMSCRIBE_SHARE_FROM) : '';
+if (shareFrom) {
+  if (!fs.existsSync(shareFrom)) throw new Error(`STREAMSCRIBE_SHARE_FROM: no such file: ${shareFrom}`);
+  const other = await load(shareFrom);
+  const home = path.dirname(shareFrom);
+  const absolute = (value) => (value ? path.resolve(home, String(value).replace(/^~(?=\/|$)/, process.env.HOME)) : value);
+  const { recorder: { hubUrl, key, id, name, ...recorderRest } = {}, ...rest } = other;
+  settings = { ...settings, ...rest, recorder: { ...(settings.recorder || {}), ...recorderRest } };
+  settings.dataDir = absolute(other.dataDir || 'data');
+  if (other.stateDir) settings.stateDir = absolute(other.stateDir);
+  settings.sources = (other.sources || []).map((source) => ({
+    ...source,
+    ...(source.storageDir ? { storageDir: absolute(source.storageDir) } : {}),
+    ...(source.liveStorageDir ? { liveStorageDir: absolute(source.liveStorageDir) } : {})
+  }));
+  settings.transcription = {
+    ...(other.transcription || {}),
+    correctionsFile: absolute(other.transcription?.correctionsFile || 'transcription-corrections.local.json')
+  };
+  console.log(`      Shares the files of ${id || name || shareFrom}: ${settings.dataDir}`);
+  console.log(`      Sources: ${settings.sources.map((source) => source.key).join(', ') || 'none'}`);
+}
 settings.dataDir ??= dataDir;
 settings.sources ??= [];
 settings.recorder = { ...(settings.recorder || {}), hubUrl: reply.hubUrl, key: reply.key, id: reply.agentId, name: reply.name };
