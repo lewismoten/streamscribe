@@ -97,10 +97,10 @@ export interface ToolStatus {
 export const WHISPER_MODELS: Record<string, string> = {
   'tiny.en': 'Tiny (English), 75 MB: fastest, rough',
   'base.en': 'Base (English), 142 MB: for a Raspberry Pi',
-  'small.en': 'Small (English), 466 MB: a fast Pi or a small PC',
+  'small.en': 'Small (English), 466 MB: a fast Pi, or a PC without a GPU',
   'medium.en': 'Medium (English), 1.5 GB',
-  'large-v3-turbo': 'Large v3 Turbo, 1.6 GB: nearly as accurate, much faster',
-  'large-v3': 'Large v3, 3.1 GB: the most accurate (a Mac with Apple Silicon)'
+  'large-v3-turbo': 'Large v3 Turbo, 1.6 GB: nearly as accurate, much faster (best with a GPU)',
+  'large-v3': 'Large v3, 3.1 GB: the most accurate (practical with a GPU: NVIDIA or Apple Silicon)'
 };
 export interface UpdateStatus {
   current: string | null;

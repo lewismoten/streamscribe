@@ -127,7 +127,7 @@ who may edit sources) its settings, kept in the hub's `agent_settings` record fo
 - **Storage to watch**: more places (each a local drive, USB drive, or network folder), each reported as there and
   writable or not, with its free space; so is the working folder and the recordings' folder.
 - **Tools**: install whisper.cpp (so the agent can transcribe), with a model picked from a list (Base for a
-  Raspberry Pi, Small for a faster machine, Large v3 or Large v3 Turbo for a Mac with Apple Silicon). The agent installs
+  Raspberry Pi, Small for a machine without a GPU, Large v3 or Large v3 Turbo with an NVIDIA or Apple Silicon GPU). The agent installs
   it on itself without sudo: on a Mac with Homebrew (`brew install whisper-cpp`), elsewhere by building the newest
   release from source (several minutes on a Pi; it needs git, cmake, and a compiler, which the Linux install command
   adds), then downloads the model into `~/.cache/whisper-cpp`. Its card shows how far along it is, then the version
