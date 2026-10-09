@@ -1,8 +1,8 @@
 <?php
 // Turns at websites, shared by every agent, so together they ask a site no more often than its robots.txt (or the
 // agents' own rate settings) allows, however many are fetching from it at once:
-//   POST turn  (recorder key)   { host, intervalMs, agentId } → { waitMs }: the agent's turn at that host, waitMs from
-//                               now; the next turn is intervalMs after it (the agent asks for the longer of the
+//   POST turn  (recorder key)   { host, intervalMs, agentId } → { waitMs, at }: the agent's turn at that host, waitMs
+//                               from now (at: when, in ms on the hub's clock); the next turn is intervalMs after it (the agent asks for the longer of the
 //                               site's Crawl-delay and its rate setting)
 //   GET  turns (view.meetings)  the sites fetched from in the last day: { host, intervalMs, lastBy, lastAt, count,
 //                               queuedMs (how far ahead turns are booked) }
@@ -26,7 +26,7 @@ if ($method === 'POST' && $route === 'turn') {
       ON CONFLICT(host) DO UPDATE SET next_at = excluded.next_at, interval_ms = excluded.interval_ms,
       last_by = excluded.last_by, last_at = excluded.last_at, count = count + 1')
       ->execute([$host, $at + $interval, $interval, $agent, $at]);
-    return ['waitMs' => $at - $now];
+    return ['waitMs' => $at - $now, 'at' => $at];
   });
   hub_send(200, $answer);
 }

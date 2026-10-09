@@ -18,10 +18,16 @@ test('turns at a website: one at a time, spaced, whoever asks', async () => {
       )
     )
   );
-  const waits = answers.map((answer) => answer.waitMs).sort((a, b) => a - b);
-  assert.ok(waits[0] <= 50, `the first goes now (${waits[0]})`);
-  for (let index = 1; index < waits.length; index += 1)
-    assert.ok(waits[index] - waits[index - 1] >= 150, `turns are spaced: ${waits.join(', ')}`);
+  // Each its own turn, at least the interval after the one before (on the hub's clock: a slow server handling them one
+  // at a time may find a turn already due, so the waits alone can be 0).
+  const turns = answers.map((answer) => answer.at).sort((a, b) => a - b);
+  assert.equal(new Set(turns).size, 12);
+  for (let index = 1; index < turns.length; index += 1)
+    assert.ok(
+      turns[index] - turns[index - 1] >= 200,
+      `turns are spaced: ${turns.map((at) => at - turns[0]).join(', ')}`
+    );
+  assert.ok(answers.every((answer) => answer.waitMs >= 0 && answer.waitMs <= 12 * 200));
   // Another site isn't held up by this one.
   const other = await (
     await post('turn', { host: `other-${host}`, intervalMs: 200, agentId: 'a' }, recorderKey)
@@ -33,5 +39,5 @@ test('turns at a website: one at a time, spaced, whoever asks', async () => {
   const row = seen.turns.find((item) => item.host === host);
   assert.equal(row.count, 12);
   assert.equal(row.intervalMs, 200);
-  assert.ok(row.queuedMs > 1500, 'turns are booked ahead');
+  assert.ok(row.queuedMs >= 0 && row.queuedMs <= 12 * 200, 'how far ahead turns are booked');
 });
