@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { shownName } from '../people/usePeople.ts';
 import ElectionForm from './ElectionForm.tsx';
+import { PersonLink } from './parts.tsx';
 import { ELECTION_KINDS, personKeyOf, shortDate, type Election } from './types.ts';
 import { useCivic } from './useCivic.ts';
 
@@ -24,9 +24,9 @@ export default function ElectionsPage() {
               (term.data.kind === 'elected' || term.data.result === 'won') &&
               civic.people.has(personKeyOf(term.data))
           )
-          .map((term) => shownName(civic.people.get(personKeyOf(term.data))!))
+          .map((term) => personKeyOf(term.data))
       )
-    ].join(', ');
+    ].map((key) => civic.people.get(key)!);
 
   return (
     <section>
@@ -65,7 +65,15 @@ export default function ElectionsPage() {
                     {' '}
                     {[shortDate(item.data.date), ELECTION_KINDS[item.data.kind]].filter(Boolean).join(' · ')}
                   </span>
-                  {winners(item.id) && <div className="small">Elected: {winners(item.id)}</div>}
+                  {winners(item.id).length > 0 && (
+                    <ul className="winners">
+                      {winners(item.id).map((person) => (
+                        <li key={person.key}>
+                          <PersonLink person={person} size={28} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
           </ul>

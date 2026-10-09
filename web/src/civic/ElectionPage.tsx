@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { shownName } from '../people/usePeople.ts';
 import ElectionForm from './ElectionForm.tsx';
-import { personHref } from './parts.tsx';
+import { PersonLink } from './parts.tsx';
 import RaceForm, { raceKey, type Race } from './RaceForm.tsx';
 import { ELECTION_KINDS, personKeyOf, RESULTS, shortDate, takesOfficeOn } from './types.ts';
 import { useCivic } from './useCivic.ts';
@@ -123,7 +122,7 @@ export default function ElectionPage() {
             <ul className="race-entries">
               {race.people.map((item) => (
                 <li key={item.person.key} className={item.result === 'Won' ? 'won' : ''}>
-                  <Link to={personHref(item.person)}>{shownName(item.person)}</Link>
+                  <PersonLink person={item.person} size={36} />
                   <span className="small">{item.result}</span>
                   {item.notes.map((note) => (
                     <span key={note} className="tag">

@@ -19,9 +19,9 @@ import {
 import type { Civic } from './useCivic.ts';
 
 // A body's officers year by year: a row per year, a column per office (Chair, Vice Chair…). People who may edit pick
-// the member who held each office that year; the term starts at the body's first meeting that year (when the
-// meetings are known; members usually choose officers there) or January 1, and can be moved, and runs to the end of
-// the year. Years go back to the earliest year anyone is known to have served.
+// the member who held each office that year. A year's officers are chosen on one day, the same for every office:
+// the body's first meeting that year (when the meetings are known; members usually choose officers there) or
+// January 1, changed once for the year; their terms run to the end of the year. Years go back to the earliest year anyone is known to have served.
 export default function OfficersPanel({ body, civic }: { body: { id: string; data: Body }; civic: Civic }) {
   const [earlier, setEarlier] = useState(0);
   const { records: recordings } = useRecords<RecordingData>('recordings');
@@ -39,9 +39,13 @@ export default function OfficersPanel({ body, civic }: { body: { id: string; dat
     .filter((record) => bodiesOfRecording([body], record.data).length > 0)
     .map((record) => dayKey(record.data.startedAt))
     .sort();
-  const startOf = (year: number) => meetingDays.find((day) => day.startsWith(`${year}-`)) || `${year}-01-01`;
   const holder = (year: number, office: string) =>
     held.find((term) => term.data.title === office && term.data.start.startsWith(`${year}-`));
+  const heldIn = (year: number) => held.filter((term) => term.data.start.startsWith(`${year}-`));
+  // The day a year's officers were chosen, the same for every office: as already given that year, else the body's
+  // first meeting that year (when its meetings are known), else January 1.
+  const chosenOn = (year: number) =>
+    heldIn(year)[0]?.data.start || meetingDays.find((day) => day.startsWith(`${year}-`)) || `${year}-01-01`;
   // Who could hold an office in a year: members then (or whose dates aren't known yet), and whoever holds it.
   const eligible = (year: number, current?: Term) => {
     const keys = new Set(memberTerms.filter((term) => servedIn(term.data, year)).map((term) => personKeyOf(term.data)));
@@ -68,14 +72,17 @@ export default function OfficersPanel({ body, civic }: { body: { id: string; dat
           bodyId: body.id,
           kind: 'officer',
           title: office,
-          start: startOf(year),
+          start: chosenOn(year),
           end: `${year}-12-31`
         };
     await putRecord('terms', term?.id || null, next);
     await listPublicly(civic, [person]);
   };
-  const moveStart = (term: { id: string; data: Term }, start: string) =>
-    start && putRecord('terms', term.id, { ...term.data, start });
+  // Moving the year's day moves every office's term that year.
+  const moveYear = async (year: number, start: string) => {
+    if (!start.startsWith(`${year}-`)) return;
+    for (const term of heldIn(year)) await putRecord('terms', term.id, { ...term.data, start });
+  };
 
   return (
     <section className="panel officers">
@@ -92,7 +99,23 @@ export default function OfficersPanel({ body, civic }: { body: { id: string; dat
         <tbody>
           {years.map((year) => (
             <tr key={year}>
-              <th scope="row">{year}</th>
+              <th scope="row">
+                {year}
+                {civic.editor && heldIn(year).length > 0 && (
+                  <label className="office-from small">
+                    chosen{' '}
+                    <input
+                      type="date"
+                      value={chosenOn(year)}
+                      min={`${year}-01-01`}
+                      max={`${year}-12-31`}
+                      onChange={(event) => moveYear(year, event.target.value)}
+                      aria-label={`Officers chosen in ${year} on`}
+                      title={shortDate(chosenOn(year))}
+                    />
+                  </label>
+                )}
+              </th>
               {offices.map((office) => {
                 const term = holder(year, office);
                 const person = term && civic.people.get(personKeyOf(term.data));
@@ -112,18 +135,6 @@ export default function OfficersPanel({ body, civic }: { body: { id: string; dat
                         </option>
                       ))}
                     </select>
-                    {term && (
-                      <label className="office-from small">
-                        from{' '}
-                        <input
-                          type="date"
-                          value={term.data.start}
-                          onChange={(event) => moveStart(term, event.target.value)}
-                          aria-label={`${office} in ${year} from`}
-                          title={shortDate(term.data.start)}
-                        />
-                      </label>
-                    )}
                   </td>
                 );
               })}
