@@ -48,6 +48,8 @@ export function liveReports(context) {
       copies: context.copies?.report() || null,
       // Its build against the hub's, and an update under way.
       update: context.updates?.report() || null,
+      // The job types it does (the website asks newer agents through the work queue).
+      jobTypes: context.jobs.types(),
       version,
       freeGb: freeGigabytes(),
       clockSkewSeconds: hub.clockSkewSeconds,

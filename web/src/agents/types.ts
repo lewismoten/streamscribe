@@ -37,6 +37,8 @@ export interface AgentStatus {
   copies?: CopiesReport | null;
   // Its build against the hub's package, and an update under way (src/recorder/updater.js).
   update?: UpdateStatus | null;
+  // The job types it takes (newer agents take update and install jobs).
+  jobTypes?: string[];
 }
 export interface PlaceStatus {
   path: string;
@@ -181,7 +183,7 @@ export interface Agent {
   status: AgentStatus | null;
 }
 export interface Job {
-  type: 'clip' | 'encode';
+  type: 'clip' | 'encode' | 'video' | 'prompt' | 'update' | 'install' | string;
   status: 'queued' | 'working' | 'done' | 'failed' | 'cancelled';
   title: string;
   recordingId: string;
@@ -196,6 +198,8 @@ export interface Job {
   createdBy: string;
   startedAt?: string;
   finishedAt?: string;
+  tool?: string;
+  model?: string;
   updatedAt?: string;
 }
 

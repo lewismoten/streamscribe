@@ -122,7 +122,16 @@ export async function main() {
     log,
     workDir: () => told.workDir(),
     settings: () => told.report(),
-    taskModel: () => told.current().taskModel || null
+    taskModel: () => told.current().taskModel || null,
+    // Updating itself and installing tools, asked through the work queue (the updater is made just below).
+    more: {
+      update: {
+        canDo: (job) => updates.job().canDo(job),
+        run: (job, options) => updates.job().run(job, options),
+        done: (job, result) => updates.job().done(job, result)
+      },
+      install: installer.job()
+    }
   });
   context.jobs = jobs;
   // Updating itself from the hub when asked (or by itself, if set), only while idle; it then exits so its service
@@ -135,10 +144,26 @@ export async function main() {
       !Object.values(state.recordings).some((recording) => recording.status === 'recording') &&
       !jobs.status() &&
       !context.publishing &&
-      installer.report().whisper?.state !== 'installing',
+      !installer.busy(),
     restart: () => {
       control.restarting = true;
       control.stopping = true;
+    },
+    // (By itself, autoUpdate: an update job for itself, so it shows in the work queue.)
+    queueUpdate: async (commit) => {
+      const id = `update-${RECORDER.id}-${commit}`;
+      if (await client.get('jobs', id)) return;
+      await client.put('jobs', id, {
+        type: 'update',
+        forAgent: RECORDER.id,
+        status: 'queued',
+        title: `Update ${RECORDER.name || RECORDER.id} to ${commit}`,
+        progress: 0,
+        message: '',
+        agent: null,
+        createdAt: new Date().toISOString(),
+        createdBy: 'agent'
+      });
     }
   });
   context.updates = updates;

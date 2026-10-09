@@ -72,6 +72,20 @@ test('installing whisper.cpp and a model when asked, once per request', async ()
     await installer.settled();
     assert.equal(installs, 2);
     assert.equal(installer.report().whisper.model.endsWith('ggml-base.en.bin'), true, 'only models on the list');
+    // As an install job from the work queue: its progress, and what was installed.
+    const steps = [];
+    const result = await installer
+      .job()
+      .run(
+        { type: 'install', tool: 'whisper', model: 'base.en', createdAt: '2026-10-10T01:00:00Z' },
+        { signal: undefined, progress: (share, message) => steps.push(message) }
+      );
+    assert.deepEqual(result, { version: 'v1.10.0', model: 'ggml-base.en.bin' });
+    assert.ok(steps.includes('Building'));
+    await assert.rejects(
+      installer.job().run({ type: 'install', tool: 'rm -rf' }, { progress: () => {} }),
+      /Not a tool this agent installs/
+    );
     // A failure is reported, not thrown.
     const failing = toolInstaller({
       install: async () => {

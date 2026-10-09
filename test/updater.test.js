@@ -63,6 +63,34 @@ test('updating itself from the hub', async () => {
   assert.equal(restarts, 1);
 });
 
+test('an update job from the work queue: swapped in, then a restart once the job is done', async () => {
+  const { root, archive, sha256 } = setUp('four');
+  let restarts = 0;
+  const queued = [];
+  const updates = updater({
+    root,
+    hubBuild: async () => ({ commit: 'new', sha256 }),
+    download: async (file) => fs.copyFileSync(archive, file),
+    restart: () => (restarts += 1),
+    queueUpdate: async (commit) => queued.push(commit)
+  });
+  // By itself (autoUpdate): an update job for itself, queued once.
+  await updates.tick(Date.now(), { autoUpdate: true });
+  await updates.tick(Date.now(), { autoUpdate: true });
+  assert.deepEqual(queued, ['new']);
+  assert.equal(fs.readFileSync(path.join(root, 'src', 'a.js'), 'utf8'), 'old', 'not updated outside the job');
+  const job = updates.job();
+  assert.equal(job.canDo({}), true);
+  const steps = [];
+  const result = await job.run({}, { progress: (share, message) => steps.push(message) });
+  assert.deepEqual(result, { from: 'old', to: 'new' });
+  assert.equal(fs.readFileSync(path.join(root, 'src', 'a.js'), 'utf8'), 'new');
+  assert.ok(steps.includes('Unpacking'));
+  assert.equal(restarts, 0, 'not before the job shows as done');
+  job.done({}, result);
+  assert.equal(restarts, 1);
+});
+
 test("a download that doesn't match, and a copy run from git", async () => {
   const bad = setUp('two');
   const corrupt = updater({

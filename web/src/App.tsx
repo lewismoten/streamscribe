@@ -51,9 +51,11 @@ import { settleHubAddress } from './data/hub.ts';
 // this browser and synced with the hub). It's an independent archive: what's published (notes, transcripts, clips)
 // is for everyone; meetings themselves are private, for groups that may see them (Meetings, Live, Agents). Signing
 // in (Account) allows what the person's group may do.
+const STATIC_BUILD = import.meta.env.VITE_ROUTER === 'hash';
+
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
-  const [mode, setMode] = useState<'checking' | 'local' | 'static'>('checking');
+  const [mode, setMode] = useState<'checking' | 'local' | 'static'>(STATIC_BUILD ? 'static' : 'checking');
   const account = useAccount();
   useEffect(() => {
     // A hub given by its website's address: found once, then synced with.
@@ -61,14 +63,17 @@ export default function App() {
       if (changed) refreshAccount();
     });
     refreshAccount();
-    api
-      .config()
-      .then((value) => {
-        setTimeZone(value.timeZone);
-        setConfig(value);
-        setMode('local');
-      })
-      .catch(() => setMode('static'));
+    // A static site's build (hash routes: bin/deploy-hub.sh, GitHub Pages) has no local server to ask; a local build
+    // asks it (/api/config), and is static if nothing answers.
+    if (!STATIC_BUILD)
+      api
+        .config()
+        .then((value) => {
+          setTimeZone(value.timeZone);
+          setConfig(value);
+          setMode('local');
+        })
+        .catch(() => setMode('static'));
     startSyncing(30);
   }, []);
   const local = mode === 'local' && config;

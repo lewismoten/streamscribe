@@ -11,7 +11,8 @@ import { STATE_ROOT, TOOLS, TRANSCRIPTION } from '../config/runtime-config.js';
 //                 and a C++ compiler, which the Linux install command puts in) under ~/.local/share/streamscribe-tools,
 //                 for NVIDIA GPUs (CUDA) when NVIDIA's compiler (nvcc, from the CUDA toolkit) is there
 //   its model     one of WHISPER_MODELS from Hugging Face into ~/.cache/whisper-cpp, with the voice-activity model
-// What's installed is kept in <state>/tools.json and used when the configured (or default) tool or model isn't there
+// It's asked through the work queue (an install job for this agent: tools.job()), or by older websites through its
+// settings. What's installed is kept in <state>/tools.json and used when the configured (or default) tool or model isn't there
 // (applyInstalledTools), so a set path in config.local.js always wins.
 export const WHISPER_MODELS = {
   'tiny.en': { label: 'Tiny (English), 75 MB: fastest, rough' },
@@ -216,26 +217,25 @@ export function toolInstaller({
   const record = readRecord();
   if (record.whisper) report.whisper = { state: 'installed', ...record.whisper };
 
-  async function whisper(request) {
+  // Installs whisper.cpp and a model; throws when it can't (the report says why). onStep(message, share) follows it.
+  async function whisper(request, { signal, onStep = () => {} }) {
     const model = WHISPER_MODELS[request.model] ? request.model : 'base.en';
     const step = (message, share) => {
       report = { ...report, whisper: { ...report.whisper, state: 'installing', step: message, share } };
+      onStep(message, share);
     };
     report = { ...report, whisper: { state: 'installing', step: 'Starting', share: 0, at: request.at, model } };
     try {
-      const { command, version } = await install({ step, signal: controller.signal });
+      const { command, version } = await install({ step, signal });
       const modelFile = path.join(modelsDir, `ggml-${model}.bin`);
       step(`Downloading the ${model} model`, 0.6);
       await download(MODEL_URL(model), modelFile, {
-        signal: controller.signal,
+        signal,
         fetchFile,
         onShare: (share) => step(`Downloading the ${model} model: ${Math.round(share * 100)}%`, 0.6 + share * 0.35)
       });
       step('Downloading the voice-activity model', 0.95);
-      const vadModel = await download(VAD_URL, path.join(modelsDir, VAD_NAME), {
-        signal: controller.signal,
-        fetchFile
-      });
+      const vadModel = await download(VAD_URL, path.join(modelsDir, VAD_NAME), { signal, fetchFile });
       const done = {
         command,
         version,
@@ -251,12 +251,14 @@ export function toolInstaller({
       report = { ...report, whisper: { state: 'installed', ...done } };
       log(`Tools: whisper.cpp ${version} with the ${model} model installed`);
       onInstalled();
+      return { version, model: path.basename(modelFile) };
     } catch (error) {
       report = {
         ...report,
         whisper: { ...report.whisper, state: 'failed', error: error.message, requestedAt: request.at }
       };
       log(`Tools: installing whisper.cpp failed: ${error.message}`);
+      throw error;
     }
   }
 
@@ -268,10 +270,32 @@ export function toolInstaller({
       const handled = report.whisper?.requestedAt || readRecord().whisper?.requestedAt;
       if (handled === request.at) return;
       controller = new AbortController();
-      running = whisper(request).finally(() => {
-        running = null;
-      });
+      running = whisper(request, { signal: controller.signal })
+        .catch(() => {})
+        .finally(() => {
+          running = null;
+        });
     },
+    // An install job from the work queue (jobs.js: { type: 'install', tool: 'whisper', model }), run now.
+    job: () => ({
+      canDo: () => !running,
+      async run(job, { signal, progress }) {
+        if (job.tool !== 'whisper') throw new Error(`Not a tool this agent installs: ${job.tool}`);
+        running = whisper(
+          { model: job.model, at: job.createdAt || new Date().toISOString() },
+          {
+            signal,
+            onStep: (message, share) => progress(share, message)
+          }
+        );
+        try {
+          return await running;
+        } finally {
+          running = null;
+        }
+      }
+    }),
+    busy: () => Boolean(running),
     settled: () => running || Promise.resolve(),
     report: () => report,
     stop() {

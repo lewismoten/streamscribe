@@ -79,6 +79,7 @@ export default function AgentCards({
                 report={status?.settings}
                 copies={status?.copies}
                 update={status?.update}
+                agent={agent}
                 canEdit={canEdit}
               />
             </div>

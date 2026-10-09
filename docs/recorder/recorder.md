@@ -85,13 +85,18 @@ It takes that agent's sources, data folder, tools, and transcription settings (w
 
 The token works once and expires after 48 hours, and the key never appears in the command or your shell history. Within a minute the agent shows as online on the Agents page, with what its machine has (CPU, memory, ffmpeg, whisper.cpp) and so what it can do.
 
+**Maintenance** on the Agents page shows, for each agent, its version against the hub's agent package, where its
+update stands (queued, under way, restarting, failed, or up to date), its whisper.cpp (installing, or which model),
+and whether it updates itself. Agents take their update and install jobs before other work.
+
 **Updating agents.** After a deploy, an agent that's behind shows **update available** on its card. **Update now** on
-its card, or **Update all agents that are behind** at the top of the page, asks through the hub; each picks it up when
-it next syncs, waits until it's idle (not recording, not working on a job, not installing a tool), downloads the new
+its card, or **Update all agents that are behind** at the top of the page, queues an update job for each (with requests to install tools, in
+the **Maintenance** lists: In progress, Waiting, and Finished; or with the other work, by the checkbox above them); each takes it when it's
+next free, waits until it's idle (not recording, not working on a job, not installing a tool), downloads the new
 package with its own key, checks it against the hub's checksum, swaps the new code in (its `config.local.js` and data
 are never touched; the old code is kept in `~/streamscribe/.update/previous/`), and restarts through its service on the
-new code. Tick **Updates itself when the hub has a newer build** on a card to have it do this after every deploy
-without asking. A copy run from a git repository never updates itself. Agents installed before this need their
+new code once the job shows as done. Tick **Updates itself when the hub has a newer build** on a card to have it do this
+after every deploy without asking (it queues the update job for itself). A copy run from a git repository never updates itself. Agents installed before this need their
 Reinstall command run once to get it. To give an agent a new key, use Reinstall command on the Agents page and run that;
 
 - **Logs:** `journalctl -u streamscribe-agent -f` (Mac: `tail -f ~/streamscribe-data/logs/agent.log`)

@@ -25,6 +25,8 @@ import { discover, firstPicture, officialTranscript } from './discovery.js';
 //           all of them), join them into one MP4 and M4A (compose.js), upload them to the publication, and mark it ready
 //   discover, official-transcript, first-segment  past meetings found from each source's feeds (discovery.js): any
 //           agent can do them (they need the web, not the recordings)
+//   update, install  { forAgent }, { forAgent, tool, model }  the agent updating itself from the hub (updater.js), or
+//           installing a tool (tools.js): added by the service, and only for the agent named
 //   prompt  { recordingId, promptId }  run a task on the meeting with a language-model server of this agent's that has
 //           its model (prompts.js, llm.js), its answer saved in prompt_results
 const LEASE_SECONDS = 180;
@@ -39,7 +41,8 @@ export function jobRunner({
   log,
   workDir = () => os.tmpdir(),
   settings = () => ({}),
-  taskModel = () => null
+  taskModel = () => null,
+  more = {}
 }) {
   let current = null;
   // Here, or with an agent nearby.
@@ -294,7 +297,14 @@ export function jobRunner({
           fs.rmSync(tempDir, { recursive: true, force: true });
         }
       }
-    }
+    },
+    // Job types the service adds (updating itself, installing tools: only ever for one named agent).
+    ...Object.fromEntries(
+      Object.entries(more).map(([type, handler]) => [
+        type,
+        { ...handler, canDo: (job) => job.forAgent === RECORDER.id && handler.canDo(job) }
+      ])
+    )
   };
 
   async function start(record) {
@@ -345,6 +355,9 @@ export function jobRunner({
           finishedAt: new Date().toISOString()
         });
         log(`Job ${record.id} done`);
+        // (After it shows as done: an update restarts the agent here.)
+        await client.sync().catch(() => {});
+        await handlers[job.type].done?.(job, result);
       })
       .catch(async (error) => {
         const cancelled = controller.signal.aborted;
@@ -385,6 +398,8 @@ export function jobRunner({
             message: current.message
           }
         : null,
+    // The job types this agent does (reported, so the website knows what it can ask of it).
+    types: () => Object.keys(handlers),
     async tick() {
       if (current) {
         // Still ours? Renew the claim; stop if someone cancelled it.
@@ -406,7 +421,12 @@ export function jobRunner({
             handlers[record.data.type] &&
             (!record.data.forAgent || record.data.forAgent === RECORDER.id)
         )
-        .sort((left, right) => String(left.data.createdAt).localeCompare(String(right.data.createdAt)));
+        // Its own updates and installs first (they're quick to start and for it alone), then the oldest work.
+        .sort(
+          (left, right) =>
+            Number(Boolean(more[right.data.type])) - Number(Boolean(more[left.data.type])) ||
+            String(left.data.createdAt).localeCompare(String(right.data.createdAt))
+        );
       for (const record of queued) {
         if (!(await handlers[record.data.type].canDo(record.data))) continue;
         await start(record);

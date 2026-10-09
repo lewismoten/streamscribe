@@ -12,7 +12,16 @@ const STATUS = { queued: 'Waiting', working: 'Working', done: 'Done', failed: 'F
 const change = (id: string, job: Job, patch: Partial<Job>) =>
   putRecord('jobs', id, { ...job, ...patch, updatedAt: new Date().toISOString() });
 
-export default function WorkQueue({ jobs, manage }: { jobs: HubRecord<Job>[] | null | undefined; manage: boolean }) {
+export default function WorkQueue({
+  jobs,
+  manage,
+  label = ''
+}: {
+  jobs: HubRecord<Job>[] | null | undefined;
+  manage: boolean;
+  // Before each list's heading (such as "Maintenance: ").
+  label?: string;
+}) {
   const now = useNow(10000);
   const sorted = [...(jobs || [])].sort((a, b) => String(b.data.createdAt).localeCompare(String(a.data.createdAt)));
   const groups: [string, typeof sorted][] = [
@@ -25,6 +34,7 @@ export default function WorkQueue({ jobs, manage }: { jobs: HubRecord<Job>[] | n
       {groups.map(([title, list]) => (
         <section key={title} className="panel">
           <h2>
+            {label}
             {title} {list.length > 0 && <span className="muted">({list.length})</span>}
           </h2>
           {list.length === 0 ? (

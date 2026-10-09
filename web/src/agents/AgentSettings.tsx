@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { putRecord, useRecords } from '../data/useRecords.ts';
+import { useAccount } from '../data/account.ts';
+import { requestInstall, requestUpdate } from './agentRequests.ts';
 import {
   WHISPER_MODELS,
   type LlmServerStatus,
@@ -8,6 +10,7 @@ import {
   type Peer,
   type PlaceStatus,
   type SettingsReport,
+  type Agent,
   type ToolStatus,
   type UpdateStatus
 } from './types.ts';
@@ -107,9 +110,11 @@ export default function AgentSettings({
   report,
   copies,
   update,
+  agent,
   canEdit
 }: {
   agentId: string;
+  agent: Agent;
   report: SettingsReport | null | undefined;
   copies?: CopiesReport | null;
   update?: UpdateStatus | null;
@@ -138,16 +143,15 @@ export default function AgentSettings({
       ...saved,
       ollama: { ...saved.ollama, url: saved.ollama?.url || '', testAt: new Date().toISOString() }
     });
+  const account = useAccount();
   const [whisperModel, setWhisperModel] = useState('');
   const chosenModel = whisperModel || saved.tools?.whisper?.model || 'base.en';
+  const by = account.user?.displayName || account.user?.username || '';
   const installWhisper = () =>
-    putRecord('agent_settings', agentId, {
-      ...saved,
-      tools: { ...saved.tools, whisper: { model: chosenModel, at: new Date().toISOString() } }
-    });
+    requestInstall(agent, saved, chosenModel, WHISPER_MODELS[chosenModel] || chosenModel, by);
   const installing = report?.tools?.whisper?.state === 'installing';
   // (The website can't reach agents: the request goes through the hub, and the agent picks it up when it next syncs.)
-  const updateNow = () => putRecord('agent_settings', agentId, { ...saved, updateAt: new Date().toISOString() });
+  const updateNow = () => requestUpdate(agent, saved, by);
   const checkNow = () => putRecord('agent_settings', agentId, { ...saved, peerTestAt: new Date().toISOString() });
   const asked = saved.peerTestAt && (!report?.checkedAt || report.checkedAt < saved.peerTestAt);
 

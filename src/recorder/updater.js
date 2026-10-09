@@ -7,8 +7,9 @@ import { runStreaming } from './tools.js';
 
 // An installed agent updating itself from the hub, so nobody has to log in to each machine after a deploy. Every ten
 // minutes it asks the hub which build its agent package is (GET agent-build: the commit, and the package's sha256);
-// when that differs from its own build it's behind. It updates when asked on the Agents page (agent_settings updateAt:
-// a new value asks again), or by itself when its autoUpdate setting is on, and only while idle (not recording, not
+// when that differs from its own build it's behind. It updates when asked on the Agents page (an update job for it in
+// the work queue; older websites set agent_settings updateAt), or by itself when its autoUpdate setting is on (it
+// queues an update job for itself, so that shows in the queue too), and only while idle (not recording, not
 // working on a job, not installing a tool): it downloads the package with its own key, checks it against the sha256,
 // unpacks it beside itself, swaps the new code in (bin/, src/, package.json, …; config.local.js and its data are
 // never touched; the old code is kept in .update/previous/, and put back if the swap fails), and exits, so its service
@@ -32,6 +33,7 @@ export function updater({
   download,
   isIdle = () => true,
   restart = () => {},
+  queueUpdate = null,
   log = () => {},
   unpack = (archive, folder) => runStreaming('tar', ['-xzf', archive, '-C', folder])
 }) {
@@ -40,8 +42,10 @@ export function updater({
   let latest = null;
   let checkedAt = 0;
   let running = null;
-  // A build that failed to install isn't tried again by itself (only when asked, or for another build).
+  // A build that failed to install isn't tried again by itself (only when asked, or for another build); one queued as
+  // an update job (autoUpdate) isn't queued twice.
   let failedCommit = null;
+  let queuedCommit = null;
   let report = {
     current: current?.commit || null,
     canUpdate: managed,
@@ -60,24 +64,29 @@ export function updater({
     fs.writeFileSync(handledFile(), JSON.stringify({ updateAt }));
   };
 
-  async function update(updateAt) {
+  // The hub's package in place of this code (not restarted yet): { from, to }.
+  async function swapIn(onStep = () => {}) {
+    const step = (message, share) => {
+      report = { ...report, state: 'updating', step: message };
+      onStep(share, message);
+    };
     const work = path.join(root, '.update');
     const fresh = path.join(work, 'new');
     const previous = path.join(work, 'previous');
     fs.rmSync(work, { recursive: true, force: true });
     fs.mkdirSync(fresh, { recursive: true });
-    report = { ...report, state: 'updating', step: `Downloading ${latest.commit}` };
+    step(`Downloading ${latest.commit}`, 0.1);
     const archive = path.join(work, 'agent.tgz');
     await download(archive);
     if (latest.sha256 && sha256(archive) !== latest.sha256)
       throw new Error("The download doesn't match the hub's package");
-    report = { ...report, step: 'Unpacking' };
+    step('Unpacking', 0.5);
     await unpack(archive, fresh);
     const unpacked = readBuild(fresh);
     if (unpacked?.commit !== latest.commit || !fs.existsSync(path.join(fresh, 'bin', 'recorder.js')))
       throw new Error("The package isn't the build the hub says it is");
     // The swap: each top-level entry of the package in place of the old one (kept until it's done).
-    report = { ...report, step: 'Swapping in the new code' };
+    step('Swapping in the new code', 0.8);
     fs.mkdirSync(previous, { recursive: true });
     const moved = [];
     try {
@@ -97,9 +106,15 @@ export function updater({
       throw error;
     }
     fs.rmSync(archive, { force: true });
-    markHandled(updateAt);
     report = { ...report, state: 'restarting', step: `Updated to ${latest.commit}; restarting` };
     log(`Updated from ${current?.commit} to ${latest.commit}: restarting`);
+    return { from: current?.commit || null, to: latest.commit };
+  }
+
+  // Asked through its settings (by an older website): swapped in and restarted.
+  async function update(updateAt) {
+    await swapIn();
+    markHandled(updateAt);
     restart();
   }
 
@@ -121,7 +136,18 @@ export function updater({
       }
       const behind = Boolean(latest?.commit && latest.commit !== current?.commit);
       report = { ...report, behind };
-      if (!asked && !(settings.autoUpdate && behind && latest.commit !== failedCommit)) return;
+      const auto = settings.autoUpdate && behind && latest.commit !== failedCommit;
+      // By itself: as an update job for itself, so it shows in the work queue (done when it's idle).
+      if (!asked && auto && queueUpdate && managed) {
+        if (queuedCommit !== latest.commit) {
+          queuedCommit = latest.commit;
+          await queueUpdate(latest.commit).catch(() => {
+            queuedCommit = null;
+          });
+        }
+        return;
+      }
+      if (!asked && !auto) return;
       if (!managed || !behind) {
         markHandled(updateAt);
         report = { ...report, state: managed ? 'up to date' : 'not updated (git)', step: null };
@@ -143,6 +169,32 @@ export function updater({
         });
       await running;
     },
+    // An update job from the work queue ({ type: 'update', forAgent }): only while nothing else runs here (jobs.js
+    // takes one job at a time, so not during another job; and not while recording), then a restart once the job shows
+    // as done.
+    job: () => ({
+      canDo: () => !running && isIdle(),
+      async run(job, { progress }) {
+        if (!managed) throw new Error('This agent runs from a git repository: update it with git');
+        latest = await hubBuild();
+        report = { ...report, latest: latest?.commit || null, checkedAt: new Date().toISOString() };
+        if (!latest?.commit) throw new Error('The hub has no agent package');
+        if (latest.commit === current?.commit) return { current: current.commit, note: 'Already up to date' };
+        running = swapIn(progress);
+        try {
+          return await running;
+        } catch (error) {
+          failedCommit = latest.commit;
+          report = { ...report, state: 'failed', error: error.message, step: null };
+          throw error;
+        } finally {
+          running = null;
+        }
+      },
+      done: (job, result) => {
+        if (result?.to) restart();
+      }
+    }),
     // { current, latest, behind, canUpdate, state, step, error, checkedAt }
     report: () => report
   };
