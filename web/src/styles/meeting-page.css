@@ -164,3 +164,40 @@ dialog.word-editor {
   inset: auto;
   color: inherit;
 }
+
+/* Words are selectable text acting as buttons (see Transcript.tsx); the menu under selected words. */
+.word.readonly {
+  cursor: text;
+}
+.word:not(.readonly):hover {
+  background: var(--mark);
+}
+.word:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.selection-menu {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 6px 20px #0004;
+}
+.selection-menu button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.selection-menu button:hover,
+.selection-menu button:focus-visible {
+  background: var(--mark);
+}

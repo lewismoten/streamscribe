@@ -1,5 +1,7 @@
 import { Link } from 'react-router';
-import { useState, type Ref } from 'react';
+import { useEffect, useRef, useState, type Ref } from 'react';
+import Dialog from '../Dialog.tsx';
+import LinkForm from './LinkForm.tsx';
 import TimeLink from './TimeLink.tsx';
 import WordEditor from './WordEditor.tsx';
 import { covers, endsAt, linkHref, linkLabel, type TranscriptLink } from './links.ts';
@@ -7,7 +9,8 @@ import { lineKey } from './useFollowAlong.ts';
 import type { Person, ShownLine, Word } from './words.ts';
 
 // The meeting's transcript: every line with its time (a click plays from there), its words (a click on one, signed
-// in, opens its editor), and who is speaking named wherever that changes. A find box narrows it to the lines holding
+// in, opens its editor), and who is speaking named wherever that changes. Signed in, selecting words (with the mouse,
+// or Shift and the arrow keys) opens a menu under them: mark them as a Bible passage, or link them to a web page. A find box narrows it to the lines holding
 // some words; the line being played is followed along (see useFollowAlong).
 export default function Transcript({
   kind,
@@ -66,6 +69,66 @@ export default function Transcript({
   onUnlink: (part: string, link: TranscriptLink) => void;
 }) {
   const [filter, setFilter] = useState('');
+  // Words selected in the transcript: the menu under them, and the dialog one of its choices opens.
+  const area = useRef<HTMLElement>(null);
+  const [menu, setMenu] = useState<{ part: string; words: Word[]; top: number; left: number } | null>(null);
+  const [marking, setMarking] = useState<{ part: string; words: Word[]; kind: 'passage' | 'web' } | null>(null);
+  const wordKey = (word: Word) => `${word.part}|${word.line}|${word.index}`;
+  const readSelection = () => {
+    const selection = window.getSelection();
+    if (!editable || !selection || selection.isCollapsed || !selection.rangeCount || !area.current)
+      return setMenu(null);
+    const range = selection.getRangeAt(0);
+    const keys = [...area.current.querySelectorAll<HTMLElement>('[data-word]')]
+      .filter((element) => range.intersectsNode(element))
+      .map((element) => element.dataset.word);
+    const byKey = new Map(lines.flatMap((line) => line.words).map((word) => [wordKey(word), word]));
+    const words = keys.map((key) => byKey.get(key || '')).filter((word) => word !== undefined);
+    // One part at a time (a link belongs to a part's transcript).
+    const chosen = words.filter((word) => word.part === words[0]?.part);
+    if (!chosen.length) return setMenu(null);
+    const box = range.getBoundingClientRect();
+    setMenu({ part: chosen[0].part, words: chosen, top: box.bottom + 6, left: Math.max(8, box.left) });
+  };
+  // A selection is read when it's made: the mouse let go, or a key (Shift and an arrow) let up.
+  const reading = useRef(readSelection);
+  useEffect(() => {
+    reading.current = readSelection;
+  });
+  useEffect(() => {
+    const element = area.current;
+    if (!element) return;
+    const read = () => reading.current();
+    element.addEventListener('mouseup', read);
+    element.addEventListener('keyup', read);
+    return () => {
+      element.removeEventListener('mouseup', read);
+      element.removeEventListener('keyup', read);
+    };
+  }, []);
+  // The menu goes when the selection does, on Escape, or when the page scrolls away from it.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const changed = () => {
+      if (window.getSelection()?.isCollapsed) close();
+    };
+    const key = (event: KeyboardEvent) => event.key === 'Escape' && close();
+    document.addEventListener('selectionchange', changed);
+    document.addEventListener('keydown', key);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('selectionchange', changed);
+      document.removeEventListener('keydown', key);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [menu]);
+  const mark = (choice: 'passage' | 'web') => {
+    if (!menu) return;
+    setMarking({ part: menu.part, words: menu.words, kind: choice });
+    setMenu(null);
+    window.getSelection()?.removeAllRanges();
+  };
   const needle = filter.trim().toLowerCase();
   const shown = needle
     ? lines.filter((line) =>
@@ -90,7 +153,7 @@ export default function Transcript({
   };
 
   return (
-    <section className="panel transcript">
+    <section className="panel transcript" ref={area}>
       <div className="panel-head">
         <h2>Transcript{kind === 'quick' ? ' (quick, while recording)' : ''}</h2>
         <input
@@ -165,16 +228,32 @@ export default function Transcript({
                             </button>
                           )
                         ) : (
-                          <button
-                            type="button"
-                            className={`word${word.edit ? ' edited' : ''}${linked ? ' linked' : ''}`}
-                            disabled={!editable}
+                          // Selectable text (a button's isn't), acting as a button: a click (not ending a selection),
+                          // Enter, or Space opens the word's editor.
+                          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+                          <span
+                            className={`word${word.edit ? ' edited' : ''}${linked ? ' linked' : ''}${editable ? '' : ' readonly'}`}
                             data-at={word.at}
+                            data-word={wordKey(word)}
                             title={word.edit ? `Was “${word.text}”${by ? ` · corrected by ${by}` : ''}` : undefined}
-                            onClick={() => onPick(word)}
+                            {...(editable
+                              ? {
+                                  role: 'button',
+                                  tabIndex: 0,
+                                  onClick: () => {
+                                    if (window.getSelection()?.isCollapsed !== false) onPick(word);
+                                  },
+                                  onKeyDown: (event: React.KeyboardEvent) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                      event.preventDefault();
+                                      onPick(word);
+                                    }
+                                  }
+                                }
+                              : {})}
                           >
                             {word.shown}
-                          </button>
+                          </span>
                         )}
                         {ending.map((link) => (
                           <a
@@ -216,6 +295,43 @@ export default function Transcript({
             );
           })}
         </ol>
+      )}
+      {menu && (
+        // Pressing a choice keeps the selection (it's what the choice is for).
+        <div
+          className="selection-menu"
+          role="menu"
+          tabIndex={-1}
+          aria-label="The selected words"
+          style={{ top: menu.top, left: menu.left }}
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <button type="button" role="menuitem" onClick={() => mark('passage')}>
+            Mark Bible passage…
+          </button>
+          <button type="button" role="menuitem" onClick={() => mark('web')}>
+            Link to a web page…
+          </button>
+        </div>
+      )}
+      {marking && (
+        <Dialog
+          title={marking.kind === 'passage' ? 'Mark a Bible passage' : 'Link to a web page'}
+          onClose={() => setMarking(null)}
+        >
+          <LinkForm
+            word={marking.words[0]}
+            following={marking.words}
+            link={null}
+            fixed
+            startWith={marking.kind}
+            onSave={(link) => {
+              onLink(marking.part, link);
+              setMarking(null);
+            }}
+            onRemove={() => setMarking(null)}
+          />
+        </Dialog>
       )}
     </section>
   );
