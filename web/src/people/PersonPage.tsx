@@ -10,6 +10,7 @@ import { useCivic } from '../civic/useCivic.ts';
 import Avatar from './Avatar.tsx';
 import { publicPeople } from './directory.ts';
 import ProfileBlock from './ProfileBlock.tsx';
+import { fullName, profileId, useProfiles } from './profiles.ts';
 import PublicToggles from './PublicToggles.tsx';
 import { personKey, shownName, type MeetingPerson } from './usePeople.ts';
 
@@ -20,6 +21,7 @@ import { personKey, shownName, type MeetingPerson } from './usePeople.ts';
 export default function PersonPage() {
   const { source = '', id = '' } = useParams();
   const civic = useCivic();
+  const { profiles } = useProfiles();
   const { account, viewer, directories } = civic;
   const { people: everyone, groups } = civic.roster;
   const { records: publications } = useRecords<Publication>('publications');
@@ -44,9 +46,9 @@ export default function PersonPage() {
         <Avatar person={person} size={120} />
         <div>
           <div className="card-kind">{[person.group, person.sourceName].filter(Boolean).join(' · ')}</div>
-          <h1>{shownName(person)}</h1>
-          {person.role && !person.nameUnknown && <p className="meta">{person.role}</p>}
-          <ProfileBlock person={person} canEdit={civic.editor} />
+          {/* Their full name when their profile has its parts: Title First “Nick” Last, Suffix. */}
+          <h1>{fullName(profiles.get(profileId(person.sourceKey, person.id))) || shownName(person)}</h1>
+          <ProfileBlock person={person} civic={civic} />
           {viewer && can('publish', account) && (
             <PublicToggles person={person} directories={directories} groups={groups} />
           )}

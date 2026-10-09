@@ -15,6 +15,9 @@ import ClipForm from '../videos/ClipForm.tsx';
 import ClipsPanel from '../videos/ClipsPanel.tsx';
 import { saveClip, type Clip } from '../videos/types.ts';
 import type { Attendance } from '../people/usePeople.ts';
+import type { Ring } from '../people/Avatar.tsx';
+import { activeOn, bodiesOfRecording, MEMBER_KINDS, STAFF_KINDS, type Body, type Term } from '../civic/types.ts';
+import { dayKey } from '../format.ts';
 import MeetingHeader from '../meeting/MeetingHeader.tsx';
 import Transcript from '../meeting/Transcript.tsx';
 import { Chapters, Votes, type Chapter, type Vote } from '../meeting/Chapters.tsx';
@@ -43,6 +46,8 @@ import { mergeOfficial, parseOfficialUrl } from '../../../src/sync/official.js';
 // final transcript corrects it or says who is speaking from there; each person's changes are their own layer (see
 // src/sync/layers.js), public if their group allows that kind of change and they're trusted, else theirs alone.
 // The parts live in ../meeting: the transcript and its word editor, the player, and the side panels.
+const stamp = () => new Date().toISOString();
+
 export default function MeetingPage() {
   const { id = '' } = useParams();
   const account = useAccount();
@@ -50,6 +55,8 @@ export default function MeetingPage() {
   const { records: chunks } = useRecords<Chunk>('transcript_chunks');
   const { records: stills } = useRecords<Still>('stills');
   const { records: mediaRecords } = useRecords<MediaData>('media');
+  const { records: terms } = useRecords<Term>('terms');
+  const { records: bodies } = useRecords<Body>('bodies');
   const [picked, setPicked] = useState<Word | null>(null);
   const [partShown, setPartShown] = useState('');
   const [seek, setSeek] = useState<{ time: number; n: number } | null>(null);
@@ -75,10 +82,30 @@ export default function MeetingPage() {
   // Speakers' photos, private ones included (this page is only for people who may see meetings).
   const photos =
     markData<{ photos?: Record<string, { path: string }> }>(`${recording?.data.sourceKey}:people-photos`)?.photos || {};
+  // A ring for what each speaker was that day, from their terms (see ../civic): a voting member of the body meeting,
+  // staff, or an elected official serving elsewhere.
+  const meetingDay = dayKey(recording?.data.startedAt || null);
+  const meetingBodies = recording
+    ? bodiesOfRecording(bodies || [], recording.data, markData<Attendance>(`${id}:attendance`)?.bodyId)
+    : [];
+  const ringOf = (speaker: string): Ring | undefined => {
+    const own = (terms || [])
+      .map((term) => term.data)
+      .filter(
+        (term) =>
+          term.sourceKey === recording?.data.sourceKey && term.personId === speaker && activeOn(term, meetingDay)
+      );
+    if (own.some((term) => MEMBER_KINDS.includes(term.kind) && meetingBodies.some((body) => body.id === term.bodyId)))
+      return 'voting';
+    if (own.some((term) => STAFF_KINDS.includes(term.kind))) return 'staff';
+    if (own.some((term) => term.kind === 'elected')) return 'elected';
+    return undefined;
+  };
   const avatarOf = (speaker: string) => ({
     ...(peopleMap.get(speaker) || { id: speaker }),
     name: nameOf(speaker),
-    photo: photos[speaker]?.path || null
+    photo: photos[speaker]?.path || null,
+    ring: ringOf(speaker)
   });
 
   // Lines with their words (corrections applied), and who is speaking at each word.
@@ -240,7 +267,7 @@ export default function MeetingPage() {
     sourceKey: data.sourceKey,
     meeting: data.title,
     recordedAt: data.startedAt || null,
-    createdAt: new Date().toISOString(),
+    createdAt: stamp(),
     createdBy: account.user?.displayName || account.user?.username || ''
   });
   return (

@@ -4,8 +4,8 @@
 #     https://streamscribe.lewismoten.com/hub/api.php), and the site syncs with it; an admin adds
 #     https://<owner>.github.io under Accounts → Hub settings ("Other sites that may use this hub").
 # Visitors can point the site at another hub, or none, under Settings either way. To use it: in the repository's
-# Settings → Pages choose "GitHub Actions" as the source, then run this workflow from the Actions tab; set the
-# PAGES_ON_PUSH variable to true to publish on every push to main. See docs/hub/deploy.md.
+# Settings → Pages choose "GitHub Actions" as the source. It publishes on every push to main (set the PAGES_ON_PUSH
+# variable to false to publish only when run from the Actions tab). See docs/hub/deploy.md.
 name: Pages
 on:
   push:
@@ -20,10 +20,12 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' || vars.PAGES_ON_PUSH == 'true'
+    if: github.event_name == 'workflow_dispatch' || vars.PAGES_ON_PUSH != 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Fails with a clear message when the repository's Pages aren't set to "GitHub Actions" yet.
+      - uses: actions/configure-pages@v5
       - uses: actions/setup-node@v4
         with:
           node-version: 24

@@ -80,17 +80,17 @@ ssh-keyscan -p 22 example.com | gh secret set DEPLOY_KNOWN_HOSTS
 
 **Variables** (visible):
 
-| Name            | Value                                                                   | Needed                                                           |
-| --------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `DEPLOY_HOST`   | `example.com`                                                           | yes; the deploy is skipped until it's set                        |
-| `DEPLOY_USER`   | your SSH user                                                           | yes                                                              |
-| `DEPLOY_PATH`   | `public_html/meetings` (relative to your home folder, or absolute)      | yes                                                              |
-| `DEPLOY_PORT`   | SSH port                                                                | if it isn't 22                                                   |
-| `SITE_BASE`     | the site's path in the browser, such as `/meetings/`                    | if it isn't `/`                                                  |
-| `SITE_URL`      | the site's full address, such as `https://streamscribe.lewismoten.com`  | for the preview picture when links are shared                    |
-| `REMOTE_PHP`    | the PHP command on the server, such as `php8.3` or `/usr/local/bin/php` | if plain `php` isn't PHP 8                                       |
-| `PAGES_HUB_URL` | `https://example.com/meetings/hub/api.php`                              | for GitHub Pages, to sync with your hub                          |
-| `PAGES_ON_PUSH` | `true`                                                                  | to publish GitHub Pages on every push (otherwise run it by hand) |
+| Name            | Value                                                                   | Needed                                                                               |
+| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `DEPLOY_HOST`   | `example.com`                                                           | yes; the deploy is skipped until it's set                                            |
+| `DEPLOY_USER`   | your SSH user                                                           | yes                                                                                  |
+| `DEPLOY_PATH`   | `public_html/meetings` (relative to your home folder, or absolute)      | yes                                                                                  |
+| `DEPLOY_PORT`   | SSH port                                                                | if it isn't 22                                                                       |
+| `SITE_BASE`     | the site's path in the browser, such as `/meetings/`                    | if it isn't `/`                                                                      |
+| `SITE_URL`      | the site's full address, such as `https://streamscribe.lewismoten.com`  | for the preview picture when links are shared                                        |
+| `REMOTE_PHP`    | the PHP command on the server, such as `php8.3` or `/usr/local/bin/php` | if plain `php` isn't PHP 8                                                           |
+| `PAGES_HUB_URL` | `https://example.com/meetings/hub/api.php`                              | for GitHub Pages, to sync with your hub                                              |
+| `PAGES_ON_PUSH` | `false`                                                                 | to publish GitHub Pages only when run by hand (it publishes on every push otherwise) |
 
 ```bash
 gh variable set DEPLOY_HOST --body example.com
@@ -126,7 +126,7 @@ The **Pages** workflow publishes the web app at `https://YOUR-NAME.github.io/REP
 
 1. Under **Settings → Pages**, set the source to **GitHub Actions**.
 2. Set `PAGES_HUB_URL` so the site syncs with your hub, and add `https://YOUR-NAME.github.io` under Accounts → Hub settings, "Other sites that may use this hub". Without a hub address, each visitor's browser keeps its own copy (IndexedDB) and nothing is shared.
-3. Run **Pages** from the Actions tab, or set `PAGES_ON_PUSH` to `true` to publish on every push.
+3. Push to main (or run **Pages** from the Actions tab). It publishes on every push unless `PAGES_ON_PUSH` is `false`; it fails with a message if step 1 wasn't done.
 
 Visitors can point the site at a different hub, or at none, under Settings. Sign-ins work the same on Pages as on your server; each browser keeps its own session.
 

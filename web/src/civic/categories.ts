@@ -45,7 +45,15 @@ const publiclyElected = (term: Term, body: Body | undefined) =>
 
 export function placements(person: MeetingPerson, civic: Civic): Placement[] {
   const terms = (civic.terms || []).map((term) => term.data).filter((term) => personKeyOf(term) === person.key);
-  if (!terms.length) return [];
+  // Who they work for, on their profile: staff of that organization, when no term says so.
+  const employer = civic.organizations?.find(
+    (item) => item.id === civic.profiles.get(`${person.sourceKey}:${person.id}`)?.employerId
+  )?.data.name;
+  const staffOf = (found: Placement[]) =>
+    employer && !found.some((item) => item.group.startsWith(`${STAFF} · `))
+      ? [...found, { group: `${STAFF} · ${employer}`, detail: person.nameUnknown ? '' : person.role || '' }]
+      : found;
+  if (!terms.length) return staffOf([]);
   const bodyOf = (term: Term) => civic.bodies?.find((item) => item.id === term.bodyId)?.data;
   const organizationOf = (body: Body | undefined) =>
     civic.organizations?.find((item) => item.id === body?.organizationId)?.data;
@@ -118,5 +126,5 @@ export function placements(person: MeetingPerson, civic: Civic): Placement[] {
       else if (staff) add(FORMER_STAFF, past);
     }
   }
-  return [...found].map(([group, details]) => ({ group, detail: details.join('; ') }));
+  return staffOf([...found].map(([group, details]) => ({ group, detail: details.join('; ') })));
 }

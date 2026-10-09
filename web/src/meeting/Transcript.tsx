@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { Fragment, useEffect, useRef, useState, type Ref } from 'react';
 import { clock } from '../format.ts';
-import Avatar, { type AvatarPerson } from '../people/Avatar.tsx';
+import Avatar, { RING_LABELS, type AvatarPerson } from '../people/Avatar.tsx';
 import Dialog from '../Dialog.tsx';
 import LinkForm from './LinkForm.tsx';
 import TimeLink from './TimeLink.tsx';
@@ -199,11 +199,20 @@ export default function Transcript({
       block = openings[index].join();
     }
   });
+  // The kinds of ring among the speakers, for the key.
+  const rings = (['voting', 'staff', 'elected'] as const).filter((ring) =>
+    headings.size
+      ? [...headings].some((index) => openings[index].some((speaker) => avatarOf(speaker).ring === ring))
+      : false
+  );
   // Speakers' pictures and names (each linking to their page when they have one).
   const speakerNames = (speakers: string[], size: number) =>
     speakers.map((speaker, index) => {
       const href = personHref?.(speaker);
-      const face = <Avatar person={avatarOf(speaker)} size={size} />;
+      const person = avatarOf(speaker);
+      const face = <Avatar person={person} size={size} />;
+      // What the ring says, for screen readers (the key says it for everyone else).
+      const what = person.ring ? <span className="visually-hidden"> ({RING_LABELS[person.ring]})</span> : null;
       return (
         <span key={speaker} className="speaker-name">
           {index > 0 && ', '}
@@ -211,11 +220,13 @@ export default function Transcript({
             <Link to={href}>
               {face}
               {nameOf(speaker)}
+              {what}
             </Link>
           ) : (
             <>
               {face}
               {nameOf(speaker)}
+              {what}
             </>
           )}
         </span>
@@ -249,6 +260,15 @@ export default function Transcript({
           </button>
         )}
       </div>
+      {rings.length > 0 && (
+        <p className="ring-key small" aria-hidden="true">
+          {rings.map((ring) => (
+            <span key={ring} className={`ring-${ring}`}>
+              {RING_LABELS[ring]}
+            </span>
+          ))}
+        </p>
+      )}
       {status && (
         <p className="note" aria-live="polite">
           {status}

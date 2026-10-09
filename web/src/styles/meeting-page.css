@@ -241,3 +241,42 @@ button.player-picture {
   background: var(--card);
   border-bottom: 1px solid var(--line);
 }
+/* Rings on speakers' pictures: what they were at the meeting (see the key over the transcript). */
+.avatar.ring-voting,
+.ring-key .ring-voting::before {
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 4px var(--pass);
+}
+.avatar.ring-staff,
+.ring-key .ring-staff::before {
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 4px #3b82f6;
+}
+.avatar.ring-elected,
+.ring-key .ring-elected::before {
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 4px var(--violet);
+}
+.ring-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.ring-key span::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: -1px;
+  background: var(--line);
+}
+.speaker-block .avatar {
+  margin: 4px;
+}

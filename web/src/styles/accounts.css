@@ -115,3 +115,36 @@ output.block {
   display: block;
   margin-top: 0.5rem;
 }
+.profile-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.profile-form fieldset {
+  margin: 0 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.profile-urls {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.profile-urls li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+.profile-urls input {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+}
+.profile-urls input[type='url'] {
+  flex: 1 1 260px;
+}

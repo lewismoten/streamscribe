@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { can, useAccount } from '../data/account.ts';
 import { useRecords } from '../data/useRecords.ts';
 import { publicPeople, useDirectory } from '../people/directory.ts';
+import { useProfiles } from '../people/profiles.ts';
 import { usePeople, type MeetingPerson } from '../people/usePeople.ts';
 import type { Body, Election, Organization, Term } from './types.ts';
 
@@ -16,6 +17,7 @@ export function useCivic() {
   const { records: elections } = useRecords<Election>('elections');
   const directories = useDirectory();
   const roster = usePeople();
+  const { profiles } = useProfiles();
   const people = useMemo(() => {
     const map = new Map<string, MeetingPerson>();
     for (const person of publicPeople(directories) || []) map.set(person.key, person);
@@ -33,6 +35,7 @@ export function useCivic() {
     people,
     directories,
     roster,
+    profiles,
     loading: !organizations || !bodies || !terms || !elections
   };
 }
