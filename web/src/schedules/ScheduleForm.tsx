@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import { describeRule, occurrences } from '../../../src/sync/recurrence.js';
 import type { Body, Organization } from '../civic/types.ts';
+import { roomLabel, type Room } from '../rooms/types.ts';
 import type { HubRecord } from '../data/useRecords.ts';
 import { useNow } from '../useNow.ts';
 import {
@@ -27,6 +28,7 @@ export default function ScheduleForm({
   bodies,
   organizations,
   schedules,
+  rooms,
   change,
   onSave,
   onCancel
@@ -38,6 +40,7 @@ export default function ScheduleForm({
   bodies: HubRecord<Body>[];
   organizations: HubRecord<Organization>[];
   schedules: HubRecord<Schedule>[];
+  rooms: HubRecord<Room>[];
   change: (patch: Partial<Form>) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -59,6 +62,8 @@ export default function ScheduleForm({
     const body = bodies.find((item) => item.id === bodyId)?.data;
     const before = bodies.find((item) => item.id === form.bodyId)?.data;
     const patch: Partial<Form> = { bodyId };
+    // Where it usually meets, unless another room was chosen.
+    if (body?.roomId && (!form.roomId || form.roomId === before?.roomId)) patch.roomId = body.roomId;
     if (body && (!form.title || form.title === before?.name)) patch.title = body.name;
     if (body?.meetings?.[0]?.sourceKey) patch.sourceKey = body.meetings[0].sourceKey;
     const latest = schedules
@@ -99,6 +104,17 @@ export default function ScheduleForm({
                     </option>
                   ))}
               </optgroup>
+            ))}
+          </select>
+        </label>
+        <label>
+          Location
+          <select value={form.roomId} onChange={(event) => change({ roomId: event.target.value })}>
+            <option value="">Not known</option>
+            {rooms.map((room) => (
+              <option key={room.id} value={room.id}>
+                {roomLabel(room.data)}
+              </option>
             ))}
           </select>
         </label>

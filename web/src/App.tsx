@@ -22,6 +22,8 @@ import ElectionsPage from './civic/ElectionsPage.tsx';
 import ElectionPage from './civic/ElectionPage.tsx';
 import ReligionPage from './religion/ReligionPage.tsx';
 import VideosPage from './videos/VideosPage.tsx';
+import RoomsPage from './rooms/RoomsPage.tsx';
+import RoomPage from './rooms/RoomPage.tsx';
 import VideoPage from './videos/VideoPage.tsx';
 import AgentsPage from './pages/AgentsPage.tsx';
 import SetupPage from './pages/SetupPage.tsx';
@@ -76,6 +78,7 @@ export default function App() {
           <NavLink to="/people">People</NavLink>
           <NavLink to="/bodies">Bodies</NavLink>
           <NavLink to="/elections">Elections</NavLink>
+          <NavLink to="/rooms">Rooms</NavLink>
           {/* An internal reference: never for the public. */}
           {viewer && can('edit.bodies', account) && <NavLink to="/religion">Religion</NavLink>}
           {viewer && <NavLink to="/videos">Videos</NavLink>}
@@ -123,6 +126,8 @@ export default function App() {
             <Route path="/elections" element={<ElectionsPage />} />
             <Route path="/elections/:id" element={<ElectionPage />} />
             <Route path="/religion" element={<ReligionPage />} />
+            <Route path="/rooms" element={<RoomsPage />} />
+            <Route path="/rooms/:id" element={<RoomPage />} />
             <Route path="/videos" element={<VideosPage />} />
             <Route path="/videos/:id" element={<VideoPage />} />
             <Route

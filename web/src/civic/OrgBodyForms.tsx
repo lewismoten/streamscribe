@@ -125,6 +125,7 @@ export function BodyForm({
   });
   const [offices, setOffices] = useState((value.offices || DEFAULT_OFFICES).join('\n'));
   const { records: sources } = useRecords<{ name?: string }>('sources');
+  const { records: rooms } = useRecords<{ name: string; building: string }>('rooms');
   const { records: recordings } = useRecords<{ sourceKey: string }>('recordings');
   const sourceKeys = [
     ...new Set([
@@ -225,6 +226,17 @@ export function BodyForm({
           />
         </label>
       </div>
+      <label className="block">
+        Usually meets in
+        <select value={form.roomId || ''} onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
+          <option value="">Not known</option>
+          {(rooms || []).map((room) => (
+            <option key={room.id} value={room.id}>
+              {room.data.name}, {room.data.building}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="block">
         Members are called
         <input

@@ -35,6 +35,8 @@ export interface Body {
   parentId?: string;
   selection: Selection;
   meetings: MeetingMatch[];
+  // Where it usually meets (a room; see ../rooms): its schedules and meetings are there unless they say otherwise.
+  roomId?: string;
   // What its members are called (such as Supervisor): the title new members' terms get.
   memberTitle?: string;
   // How many years an elected seat lasts (such as 4): winners' terms run that long from taking office.

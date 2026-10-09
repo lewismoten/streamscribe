@@ -10,6 +10,8 @@ import PublishPanel, { type PublishLine } from '../meeting/PublishPanel.tsx';
 import OfficialPanel, { type Official } from '../meeting/OfficialPanel.tsx';
 import AttendancePanel from '../meeting/AttendancePanel.tsx';
 import PrayerPanel from '../meeting/PrayerPanel.tsx';
+import RoomPanel from '../meeting/RoomPanel.tsx';
+import type { CameraView } from '../rooms/types.ts';
 import Dialog from '../Dialog.tsx';
 import ClipForm from '../videos/ClipForm.tsx';
 import ClipsPanel from '../videos/ClipsPanel.tsx';
@@ -384,6 +386,16 @@ export default function MeetingPage() {
             onAddFile={editChapters ? addChapterFile : null}
           />
           <Votes votes={votes} playAt={playChapterAt} />
+          <RoomPanel
+            recordingId={id}
+            part={firstPart}
+            occurrenceKey={data.occurrenceKey}
+            meetingBodies={meetingBodies}
+            info={info as { roomId?: string } & Record<string, unknown>}
+            views={markData<{ views?: CameraView[] }>(`${id}:${firstPart}:views`)?.views || []}
+            account={account}
+            save={save}
+          />
           <ClipsPanel
             recordingId={id}
             playlist={(data.parts || []).flatMap((item) =>

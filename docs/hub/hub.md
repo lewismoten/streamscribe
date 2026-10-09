@@ -46,6 +46,7 @@ Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, o
 | `jobs`              | work for agents: clips to cut, recordings to encode                                                                                 | the Publish permission; agents (progress)                |
 | `organizations`     | counties, towns, school divisions, nonprofits with public bodies; their districts                                                   | Edit public bodies permission                            |
 | `bodies`            | public bodies (boards, committees, staff): how members are chosen, which meetings are theirs                                        | Edit public bodies permission                            |
+| `rooms`             | where meetings are held: a room in a building, its address, and the camera views its meetings share                                 | Edit public bodies permission                            |
 | `elections`         | an organization's elections: the day, a name, general, special, or primary                                                          | Edit public bodies permission                            |
 | `profiles`          | a person's formal name, nicknames, and ids on other sites (such as state election results)                                          | Edit public bodies permission                            |
 | `terms`             | who served on a body, as what, and when: elected, appointed, officer, staff, interim, candidate                                     | Edit public bodies permission                            |
@@ -224,6 +225,12 @@ People in terms are the ones on each source's roster. Saving a term lists the pe
 **Person pages** show a person's public service body by body, then (for people who may see meetings) the meetings they presided at, attended, or missed, or were expected at (on the body that day) and spoke in.
 
 **Attendance.** A meeting's Attendance panel lists the people on its body that day (from their terms) and anyone who spoke, to mark present or absent, and who presided. It's a mark (`<recording>:attendance`) with layers like the others, made public by the "Choose who is speaking" permission. When a recording isn't matched to the right body, choose it there.
+
+## Rooms
+
+The Rooms page lists where meetings are held, by building (with its address and a map): a room (the Board Room) in a building (the Warren County Government Center). A room keeps the **camera views** its meetings share (a view is a camera angle with a zoom area for each seat, as the review page makes them).
+
+**A meeting's room** is the one chosen on its page (its Where panel; saved in its meeting-info mark), else its schedule's **Location**, else the room its body **usually meets in** (on the body's form). A schedule's location starts as its body's usual room. On a meeting's page, **Save this meeting's camera views to the room** shares them (people who may edit public bodies), and a meeting with none can **Use the room's camera views** (copied into its own views, so the review page has them too). A room's page shows its views, the bodies that usually meet there, what's coming up there, and (for people who may see meetings) the meetings held there.
 
 ## Clips and videos
 

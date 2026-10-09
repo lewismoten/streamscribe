@@ -69,6 +69,11 @@ export const COLLECTIONS = {
     mode: 'mutable',
     doc: "More about a person (id <source>:<roster id>): their formal name, nicknames, and ids on other sites (such as a state's election results), whose addresses are the settings record person-links."
   },
+  rooms: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: 'Where meetings are held: a room in a building, with its address, and camera views (zoom areas for each seat) that its meetings share.'
+  },
   elections: {
     writers: ['editor'],
     mode: 'mutable',

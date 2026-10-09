@@ -5,6 +5,8 @@ import { parseRule } from '../../../src/sync/recurrence.js';
 export interface Schedule {
   // The public body meeting (see ../civic), when there is one: it gives the title and source.
   bodyId?: string;
+  // Where it meets (a room; see ../rooms).
+  roomId?: string;
   title: string;
   sourceKey: string;
   timeZone: string;
@@ -32,6 +34,7 @@ export const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 export interface Form {
   id: string | null;
   bodyId: string;
+  roomId: string;
   title: string;
   sourceKey: string;
   timeZone: string;
@@ -59,6 +62,7 @@ export function blankForm(): Form {
   return {
     id: null,
     bodyId: '',
+    roomId: '',
     title: '',
     sourceKey: '',
     timeZone: localZone,
@@ -100,6 +104,7 @@ export function formOf(id: string, schedule: Schedule): Form {
     ...blankForm(),
     id,
     bodyId: schedule.bodyId || '',
+    roomId: schedule.roomId || '',
     title: schedule.title || '',
     sourceKey: schedule.sourceKey || '',
     timeZone: schedule.timeZone || localZone,
@@ -163,6 +168,7 @@ export function scheduleOf(form: Form, previous?: Schedule): Schedule {
   return {
     ...previous,
     bodyId: form.bodyId || undefined,
+    roomId: form.roomId || undefined,
     title: form.title.trim(),
     sourceKey: form.sourceKey.trim(),
     timeZone: form.timeZone,

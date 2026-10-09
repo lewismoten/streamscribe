@@ -290,3 +290,6 @@ label.block textarea,
   padding: 4px 0;
   border-bottom: 1px solid var(--line);
 }
+.building {
+  margin-bottom: 24px;
+}

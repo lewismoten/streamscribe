@@ -60,6 +60,15 @@ test('public bodies: edited with edit.bodies, read by everyone', { skip: externa
     nicknames: ['Jane'],
     links: { 'virginia-elections': '87362' }
   });
+  await boss.put('rooms', 'government-center-board-room', {
+    name: 'Board Room',
+    building: 'Government Center',
+    address: '220 North Commerce Avenue',
+    city: 'Front Royal',
+    state: 'VA',
+    postal: '22630',
+    views: [{ id: 'v1', name: 'Dais', regions: {} }]
+  });
   const sent = await boss.sync();
   assert.deepEqual(sent.refused, []);
 

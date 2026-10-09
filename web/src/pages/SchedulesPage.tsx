@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { upcoming } from '../../../src/sync/recurrence.js';
 import type { Body, Election, Organization } from '../civic/types.ts';
+import type { Room } from '../rooms/types.ts';
 import { putRecord, removeRecord, useRecords } from '../data/useRecords.ts';
 import { can, useAccount } from '../data/account.ts';
 import { hubSettings } from '../data/hub.ts';
@@ -46,6 +47,7 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
   const { records: bodies } = useRecords<Body>('bodies');
   const { records: organizations } = useRecords<Organization>('organizations');
   const { records: elections } = useRecords<Election>('elections');
+  const { records: rooms } = useRecords<Room>('rooms');
   const recorders = useRecords<{ name?: string }>('recorders').records || [];
   const [form, setForm] = useState<Form | null>(null);
   const [picked, setPicked] = useState<Occurrence | null>(null);
@@ -161,6 +163,9 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
     return dayOfMonth(Date.UTC(year, month - 1, date, 12), 'UTC');
   };
   const bodyOf = (occurrence: Occurrence) => bodies?.find((body) => body.id === occurrence.schedule.bodyId);
+  // Where a meeting is: its schedule's location, else its body's usual room.
+  const roomName = (occurrence: Occurrence) =>
+    rooms?.find((room) => room.id === (occurrence.schedule.roomId || bodyOf(occurrence)?.data.roomId))?.data.name || '';
 
   return (
     <section>
@@ -183,6 +188,7 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
             bodies={bodies || []}
             organizations={organizations || []}
             schedules={records || []}
+            rooms={rooms || []}
             change={change}
             onSave={save}
             onCancel={close}
@@ -259,6 +265,7 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
                       <span className="grow">
                         {body ? <Link to={`/bodies/${encodeURIComponent(body.id)}`}>{item.title}</Link> : item.title}
                         {item.cancelled && <span className="muted small"> (cancelled)</span>}
+                        {roomName(item) && <span className="muted small"> · {roomName(item)}</span>}
                       </span>
                       {editor && (
                         <button
