@@ -21,6 +21,7 @@
     "ocr-slides": "node bin/ocr-slides.js",
     "fetch-maps": "node bin/fetch-maps.js",
     "build-maps": "node bin/build-maps.js",
+    "fire-areas": "node bin/fire-areas.js",
     "publish-maps": "node bin/publish-maps.js",
     "extract-thumbnails": "node bin/extract-thumbnails.js",
     "extract-clip": "node bin/extract-clip.js",

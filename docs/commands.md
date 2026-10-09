@@ -17,6 +17,7 @@ Each command is `npm run <command>` (add options after `--`, as in `npm run capt
 | [`ocr-slides`](media/ocr-slides.md)                                 | Reads the text on each saved slide with a vision model (DeepSeek OCR on Ollama)                               |
 | [`fetch-maps`](maps/maps.md)                                        | Downloads public map data (boundaries, roads, parcels, buildings) into data/maps                              |
 | [`build-maps`](maps/maps.md)                                        | Draws SVG maps of the state, county, and town from it, with credits                                           |
+| [`fire-areas`](maps/maps.md#fire-and-rescue-service-areas)          | Places the county's fire and rescue service areas from its Map 5.3 PDF                                        |
 | [`publish-maps`](maps/maps.md)                                      | Sends the maps to the hub's Maps section                                                                      |
 | [`extract-clip`](media/extract-clip.md)                             | Cuts an MP4 clip of a session                                                                                 |
 | `render-playlist`                                                   | Joins a playlist of clips into one video (used by the review page)                                            |

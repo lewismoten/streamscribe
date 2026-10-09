@@ -167,3 +167,11 @@
   width: 100%;
   display: block;
 }
+.map-layers,
+.map-shades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin: 0 0 8px;
+}

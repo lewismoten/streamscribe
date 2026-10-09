@@ -5,7 +5,8 @@ import { putRecord, removeRecord, useRecords } from '../data/useRecords.ts';
 import { uploadPicture } from '../data/upload.ts';
 import { mediaUrl } from '../data/hub.ts';
 import MapView from './MapView.tsx';
-import { MAP_GROUPS, svgUrl, type MapRecord } from './types.ts';
+import LayeredMapView from './LayeredMapView.tsx';
+import { composeLayered, MAP_GROUPS, svgUrl, type MapRecord } from './types.ts';
 
 // The Maps section: maps of the state, the county, and the town (drawn from public data by npm run build-maps and sent
 // with publish-maps, or added here as an SVG or a picture), each with the credits for its data. People who may edit
@@ -118,7 +119,10 @@ export function MapsPage() {
   const [adding, setAdding] = useState(false);
   const editor = can('edit.bodies', account);
   if (!maps) return <p className="empty">Loading…</p>;
-  const groups = [...new Set([...MAP_GROUPS, ...maps.map((map) => map.data.group)])];
+  // (A layered map's layers are records of their own, not maps to list.)
+  const listed = maps.filter((map) => map.data.kind !== 'layer');
+  const layerSvg = (record: string) => maps.find((map) => map.id === record)?.data.svg || '';
+  const groups = [...new Set([...MAP_GROUPS, ...listed.map((map) => map.data.group)])];
   return (
     <section>
       <div className="toolbar">
@@ -130,14 +134,14 @@ export function MapsPage() {
         )}
       </div>
       {adding && <AddMap onDone={() => setAdding(false)} />}
-      {maps.length === 0 && (
+      {listed.length === 0 && (
         <p className="empty">
           No maps yet. On the recording machine: <code>npm run fetch-maps</code>, <code>npm run build-maps</code>, then{' '}
           <code>npm run publish-maps</code>.
         </p>
       )}
       {groups.map((group) => {
-        const inGroup = maps
+        const inGroup = listed
           .filter((map) => map.data.group === group)
           .sort((a, b) => a.data.title.localeCompare(b.data.title));
         if (!inGroup.length) return null;
@@ -148,7 +152,20 @@ export function MapsPage() {
               {inGroup.map((map) => (
                 <li key={map.id} className="panel">
                   <Link to={`/maps/${encodeURIComponent(map.id)}`}>
-                    {map.data.kind === 'svg' && map.data.svg ? (
+                    {map.data.kind === 'layered' ? (
+                      <img
+                        src={svgUrl(
+                          composeLayered(map.data, layerSvg, {
+                            shown: new Set(
+                              (map.data.layers || []).filter((layer) => layer.on).map((layer) => layer.id)
+                            ),
+                            shaded: new Set()
+                          })
+                        )}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : map.data.kind === 'svg' && map.data.svg ? (
                       <img src={svgUrl(map.data.svg)} alt="" loading="lazy" />
                     ) : map.data.image ? (
                       <img src={mediaUrl(map.data.image)} alt="" loading="lazy" />
@@ -206,7 +223,11 @@ export function MapPage() {
         )}
       </div>
       {map.data.about && <p>{map.data.about}</p>}
-      <MapView map={map.data} />
+      {map.data.kind === 'layered' ? (
+        <LayeredMapView map={map.data} layerSvg={(record) => maps.find((item) => item.id === record)?.data.svg || ''} />
+      ) : (
+        <MapView map={map.data} />
+      )}
       {(map.data.credits || []).length > 0 && (
         <section className="small map-credits">
           <h2>Credits</h2>

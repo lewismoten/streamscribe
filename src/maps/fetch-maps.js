@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { DATA_ROOT } from '../config/runtime-config.js';
-import { COUNTY, MAP_SOURCES } from './sources.js';
+import { COUNTY, MAP_SOURCES, REGION } from './sources.js';
 
 // Downloads the public map data (sources.js) into data/maps/raw/<id>/, and keeps a list of what came from where, and
 // when, in data/maps/sources.json (for credits). Already downloaded data is skipped unless --again; large data only
@@ -28,9 +28,9 @@ async function arcgis(source, file) {
       f: 'geojson',
       resultOffset: String(offset),
       resultRecordCount: '2000',
-      ...(source.within === 'box'
+      ...(source.within
         ? {
-            geometry: COUNTY.box.join(','),
+            geometry: (source.within === 'region' ? REGION.box : COUNTY.box).join(','),
             geometryType: 'esriGeometryEnvelope',
             inSR: '4326',
             spatialRel: 'esriSpatialRelIntersects'
@@ -69,10 +69,17 @@ export async function fetchMaps({ only = null, heavy = false, again = false, log
     log(`${source.title}: ${source.url}`);
     let count = null;
     if (source.kind === 'zip') {
-      const zip = path.join(folder, path.basename(source.url));
-      await download(source.url, zip);
-      const unzipped = spawnSync('unzip', ['-o', '-q', zip, '-d', folder]);
-      if (unzipped.status !== 0) throw new Error(`unzip ${zip}: ${unzipped.stderr}`);
+      // One file, or one for each county of the region ({county} in its address).
+      const urls = source.perCounty
+        ? REGION.counties.map((county) => source.url.replace('{county}', county))
+        : [source.url];
+      for (const url of urls) {
+        const zip = path.join(folder, path.basename(url));
+        await download(url, zip);
+        const unzipped = spawnSync('unzip', ['-o', '-q', zip, '-d', folder]);
+        if (unzipped.status !== 0) throw new Error(`unzip ${zip}: ${unzipped.stderr}`);
+        if (source.perCounty) await pause(500);
+      }
     } else if (source.kind === 'arcgis') count = await arcgis(source, path.join(folder, `${source.id}.geojson`));
     else await download(source.url, path.join(folder, path.basename(source.url)));
     fetched[source.id] = {

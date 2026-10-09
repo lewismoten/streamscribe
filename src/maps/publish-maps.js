@@ -44,6 +44,46 @@ export async function publishMaps({ dryRun = false, log = console.log } = {}) {
     sent += 1;
     if (!dryRun) await client.put('maps', id, data);
   }
+  // Maps in layers: one record for the map (its layers, which areas can be shaded, credits) and one per layer.
+  const layered = path.join(MAPS_ROOT, 'layered');
+  for (const file of fs.existsSync(layered) ? fs.readdirSync(layered).filter((name) => name.endsWith('.json')) : []) {
+    const map = JSON.parse(fs.readFileSync(path.join(layered, file), 'utf8'));
+    for (const layer of map.layers) {
+      if (layer.svg.length > LIMIT) {
+        log(`  ${map.id} ${layer.id}: ${Math.round(layer.svg.length / 1024)} KB, too large for the hub`);
+        continue;
+      }
+      const id = `${map.id}--${layer.id}`;
+      const data = { kind: 'layer', map: map.id, title: layer.title, svg: layer.svg };
+      if ((await client.get('maps', id))?.data?.svg === layer.svg) continue;
+      log(`  ${map.id}: ${layer.title}`);
+      sent += 1;
+      if (!dryRun) await client.put('maps', id, data);
+    }
+    const data = {
+      kind: 'layered',
+      title: map.title,
+      group: map.id === 'region' ? 'Region' : 'County',
+      about: map.about,
+      width: map.width,
+      height: map.height,
+      layers: map.layers.map((layer) => ({
+        id: layer.id,
+        title: layer.title,
+        on: layer.on,
+        record: `${map.id}--${layer.id}`,
+        credits: layer.credits
+      })),
+      shades: map.shades,
+      credits: map.credits,
+      sources: map.sources,
+      builtAt: index.builtAt
+    };
+    if (JSON.stringify((await client.get('maps', map.id))?.data) === JSON.stringify(data)) continue;
+    log(`  ${map.title} (in layers)`);
+    sent += 1;
+    if (!dryRun) await client.put('maps', map.id, data);
+  }
   if (!dryRun) await client.sync();
   return sent;
 }
