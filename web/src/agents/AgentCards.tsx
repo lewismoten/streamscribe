@@ -2,6 +2,7 @@ import { hubCall } from '../data/hub.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type Capabilities, type UpdateStatus } from './types.ts';
 import { Progress } from './WorkQueue.tsx';
+import { isBehind, useAgentBuild } from './useAgentBuild.ts';
 import AgentSettings from './AgentSettings.tsx';
 
 // A card for each agent that has reported to the hub: online or not (one not heard from for 90 seconds is offline),
@@ -18,6 +19,7 @@ export default function AgentCards({
   onForget?: (agentId: string) => void;
 }) {
   const now = useNow(10000);
+  const build = useAgentBuild();
   return (
     <div className="agents">
       {agents === null ? (
@@ -68,7 +70,7 @@ export default function AgentCards({
                   : `Offline · last heard from ${ago(agent.updatedAt, now)}`}
                 {status?.freeGb !== null && status?.freeGb !== undefined ? ` · ${status.freeGb} GB free` : ''}
                 {status?.version ? ` · v${status.version}` : ''}
-                {updateNote(status?.update)}
+                {updateNote(status?.update, isBehind(agent, build), build?.commit)}
               </p>
               {online && status?.job && (
                 <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
@@ -79,6 +81,8 @@ export default function AgentCards({
                 report={status?.settings}
                 copies={status?.copies}
                 update={status?.update}
+                behind={isBehind(agent, build)}
+                latest={build?.commit || status?.update?.latest || null}
                 agent={agent}
                 canEdit={canEdit}
               />
@@ -91,13 +95,13 @@ export default function AgentCards({
 }
 
 // Its build against the hub's: behind (and updating, or waiting to), or why an update failed.
-function updateNote(update: UpdateStatus | null | undefined) {
+function updateNote(update: UpdateStatus | null | undefined, behind: boolean, latest?: string | null) {
   if (!update) return '';
   if (update.state === 'waiting' || update.state === 'updating' || update.state === 'restarting')
     return ` · ${update.step || 'updating'}`;
   if (update.state === 'failed') return ` · update failed: ${update.error}`;
-  if (update.behind)
-    return update.canUpdate ? ` · update available (${update.latest})` : ` · behind the hub (${update.latest})`;
+  if (behind) return ` · update available (${latest || update.latest})`;
+  if (update.behind && !update.canUpdate) return ` · behind the hub (${update.latest})`;
   return '';
 }
 

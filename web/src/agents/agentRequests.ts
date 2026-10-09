@@ -9,8 +9,8 @@ const now = () => new Date().toISOString();
 const takes = (agent: Agent, type: string) => (agent.status?.jobTypes || []).includes(type);
 const nameOf = (agent: Agent) => agent.status?.name || agent.name || agent.recorderId;
 
-export async function requestUpdate(agent: Agent, saved: AgentSettingsData, by: string) {
-  const to = agent.status?.update?.latest || 'the newest build';
+export async function requestUpdate(agent: Agent, saved: AgentSettingsData, by: string, latest?: string | null) {
+  const to = latest || agent.status?.update?.latest || 'the newest build';
   if (takes(agent, 'update'))
     await putRecord('jobs', `update-${agent.recorderId}-${Date.now()}`, {
       type: 'update',

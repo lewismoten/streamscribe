@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
-import { hubCall } from '../data/hub.ts';
 import type { HubRecord } from '../data/useRecords.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type AgentSettingsData, type Job } from './types.ts';
 import { Progress } from './WorkQueue.tsx';
+import { useAgentBuild, type AgentBuild } from './useAgentBuild.ts';
 
 // The big picture of keeping the agents up to date: for each, its build against the hub's agent package and where its
 // update stands (queued, under way, restarting, failed, or up to date), its whisper.cpp (installing, or which model),
@@ -11,10 +10,7 @@ import { Progress } from './WorkQueue.tsx';
 export const MAINTENANCE = ['update', 'install'];
 const RECENT_MS = 24 * 3600000;
 
-interface Build {
-  commit: string | null;
-  builtAt?: string | null;
-}
+type Build = AgentBuild;
 
 // Its newest job of a type: under way, waiting, or finished in the last day.
 function latestJob(jobs: HubRecord<Job>[], agentId: string, type: string, now: number) {
@@ -36,23 +32,42 @@ function JobState({ job, now }: { job: Job; now: number }) {
   return null;
 }
 
-function UpdateCell({ agent, job, build, now }: { agent: Agent; job?: Job; build: Build | null; now: number }) {
+function UpdateCell({
+  agent,
+  job,
+  build,
+  saved,
+  now
+}: {
+  agent: Agent;
+  job?: Job;
+  build: Build | null;
+  saved?: AgentSettingsData;
+  now: number;
+}) {
   const update = agent.status?.update;
   if (job && job.status !== 'done') return <JobState job={job} now={now} />;
+  // Asked through its settings (an agent too old for update jobs), and it hasn't checked since.
+  const behind = Boolean(update?.behind || (build?.commit && update?.current !== build.commit));
+  if (behind && saved?.updateAt && (!update?.checkedAt || saved.updateAt > update.checkedAt))
+    return <span>Requested {ago(saved.updateAt, now)} (it picks it up within a minute)</span>;
   if (update?.state === 'waiting' || update?.state === 'updating' || update?.state === 'restarting')
     return <span>{update.step}</span>;
   if (update?.state === 'failed') return <span className="error">Failed: {update.error}</span>;
   if (!update) return <span className="muted">Not reported (an older agent: reinstall it once)</span>;
   if (!update.canUpdate) return <span className="muted">Runs from git</span>;
-  if (update.behind || (build?.commit && update.current !== build.commit))
-    return <span className="error">Behind (the hub has {build?.commit || update.latest})</span>;
+  if (behind) return <span className="error">Behind (the hub has {build?.commit || update.latest})</span>;
   return <span>Up to date{job?.status === 'done' ? `, updated ${ago(job.finishedAt, now)}` : ''}</span>;
 }
 
-function WhisperCell({ agent, job, now }: { agent: Agent; job?: Job; now: number }) {
+function WhisperCell({ agent, job, saved, now }: { agent: Agent; job?: Job; saved?: AgentSettingsData; now: number }) {
   const tools = agent.status?.settings?.tools?.whisper;
   const capabilities = agent.status?.capabilities;
   if (job && ['queued', 'working'].includes(job.status)) return <JobState job={job} now={now} />;
+  // Asked through its settings, and not taken up yet.
+  const asked = saved?.tools?.whisper?.at;
+  if (asked && tools?.state !== 'installing' && tools?.requestedAt !== asked && tools?.at !== asked)
+    return <span>Requested {ago(asked, now)} (it picks it up within a minute)</span>;
   if (tools?.state === 'installing') return <Progress value={tools.share || 0} label={tools.step || ''} />;
   if (job?.status === 'failed') return <JobState job={job} now={now} />;
   if (capabilities?.whisper === 'ready') return <span>{capabilities.whisperModel || 'Ready'}</span>;
@@ -70,16 +85,7 @@ export default function MaintenancePanel({
   settings: HubRecord<AgentSettingsData>[] | null | undefined;
 }) {
   const now = useNow(10000);
-  const [build, setBuild] = useState<Build | null>(null);
-  useEffect(() => {
-    const load = () =>
-      hubCall<Build>('agent-build')
-        .then(setBuild)
-        .catch(() => setBuild(null));
-    load();
-    const timer = setInterval(load, 60000);
-    return () => clearInterval(timer);
-  }, []);
+  const build = useAgentBuild();
   if (!agents?.length) return null;
   const all = jobs || [];
   return (
@@ -120,11 +126,17 @@ export default function MaintenancePanel({
                       agent={agent}
                       job={latestJob(all, agent.recorderId, 'update', now)}
                       build={build}
+                      saved={saved}
                       now={now}
                     />
                   </td>
                   <td>
-                    <WhisperCell agent={agent} job={latestJob(all, agent.recorderId, 'install', now)} now={now} />
+                    <WhisperCell
+                      agent={agent}
+                      job={latestJob(all, agent.recorderId, 'install', now)}
+                      saved={saved}
+                      now={now}
+                    />
                   </td>
                   <td>{saved?.autoUpdate ? 'Yes' : 'No'}</td>
                 </tr>

@@ -88,6 +88,7 @@ export interface LlmServerStatus {
 }
 export interface ToolStatus {
   state: 'installing' | 'installed' | 'failed';
+  requestedAt?: string;
   step?: string;
   share?: number;
   version?: string;
@@ -113,6 +114,7 @@ export interface UpdateStatus {
   state?: 'waiting' | 'updating' | 'restarting' | 'failed' | 'up to date' | 'not updated (git)';
   step?: string | null;
   error?: string;
+  checkedAt?: string;
 }
 // A storage agent's copies (src/recorder/copies.js).
 export interface CopiesReport {

@@ -110,9 +110,13 @@ export default function AgentSettings({
   report,
   copies,
   update,
+  behind = false,
+  latest = null,
   agent,
   canEdit
 }: {
+  behind?: boolean;
+  latest?: string | null;
   agentId: string;
   agent: Agent;
   report: SettingsReport | null | undefined;
@@ -151,7 +155,7 @@ export default function AgentSettings({
     requestInstall(agent, saved, chosenModel, WHISPER_MODELS[chosenModel] || chosenModel, by);
   const installing = report?.tools?.whisper?.state === 'installing';
   // (The website can't reach agents: the request goes through the hub, and the agent picks it up when it next syncs.)
-  const updateNow = () => requestUpdate(agent, saved, by);
+  const updateNow = () => requestUpdate(agent, saved, by, latest);
   const checkNow = () => putRecord('agent_settings', agentId, { ...saved, peerTestAt: new Date().toISOString() });
   const asked = saved.peerTestAt && (!report?.checkedAt || report.checkedAt < saved.peerTestAt);
 
@@ -190,9 +194,9 @@ export default function AgentSettings({
         <p className="muted">Not reported yet (agents check their settings each minute).</p>
       )}
       <div className="toolbar">
-        {canEdit && update?.canUpdate && update.behind && update.state !== 'waiting' && (
+        {canEdit && behind && update?.state !== 'waiting' && (
           <button type="button" className="button" onClick={updateNow}>
-            Update now (to {update.latest})
+            Update now (to {latest})
           </button>
         )}
         {update?.note && <span className="muted">{update.note}</span>}
