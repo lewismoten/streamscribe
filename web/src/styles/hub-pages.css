@@ -149,41 +149,123 @@ fieldset.weekdays {
   min-inline-size: 0;
 }
 
-/* Schedules: three months side by side, each month's meetings by day and time. */
-.calendar {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 14px;
+/* Schedules: small block calendars across the top (days marked for meetings, holidays, elections), then the list. */
+.month-grids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin-bottom: 6px;
 }
-.calendar-month h2 {
-  margin: 0 0 6px;
-  font-size: 0.95rem;
+.month-grid {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.month-grid caption {
+  font-weight: 700;
+  text-align: left;
+  padding-bottom: 4px;
+}
+.month-grid th {
+  color: var(--muted);
+  font-weight: 600;
+  width: 2em;
+  padding: 2px 0;
+}
+.month-grid td {
+  text-align: center;
+  padding: 1px;
+}
+.month-grid td > span,
+.month-grid td > button {
+  display: inline-block;
+  width: 1.9em;
+  line-height: 1.9em;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+}
+.month-grid td > button {
+  cursor: pointer;
+}
+.month-grid .has-meeting > button,
+.calendar-legend .has-meeting::before {
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+}
+.month-grid .has-holiday > button,
+.calendar-legend .has-holiday::before {
+  box-shadow: inset 0 0 0 2px var(--live);
+}
+.month-grid .has-election > button,
+.calendar-legend .has-election::before {
+  background: var(--violet);
+  color: #fff;
+  font-weight: 700;
+}
+.month-grid .has-meeting.has-election > button {
+  background: linear-gradient(135deg, var(--accent) 50%, var(--violet) 50%);
+}
+.month-grid .today > span,
+.month-grid .today > button {
+  outline: 2px solid var(--fg);
+  outline-offset: -2px;
+}
+.calendar-legend {
+  display: flex;
+  gap: 14px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.calendar-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 4px;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+}
+.upcoming .month-head {
+  margin: 12px 0 4px;
+  font-size: 0.8rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
-.calendar-month ul {
+.upcoming ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.calendar-month li {
+.upcoming li {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: baseline;
   padding: 6px 0;
   border-bottom: 1px solid var(--line);
+  scroll-margin-top: 80px;
 }
-.calendar-month li.cancelled .grow {
+.upcoming li.cancelled .grow {
   text-decoration: line-through;
   color: var(--muted);
+}
+.upcoming li.holiday .grow {
+  color: var(--live);
+}
+.upcoming li.election .grow::before {
+  content: '🗳 ';
 }
 .calendar-day {
   min-width: 3.6em;
   font-weight: 600;
 }
 .calendar-time {
-  min-width: 5em;
+  min-width: 5.2em;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }

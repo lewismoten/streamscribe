@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { upcoming } from '../../../src/sync/recurrence.js';
-import type { Body, Organization } from '../civic/types.ts';
+import type { Body, Election, Organization } from '../civic/types.ts';
 import { putRecord, removeRecord, useRecords } from '../data/useRecords.ts';
 import { can, useAccount } from '../data/account.ts';
 import { hubSettings } from '../data/hub.ts';
 import Dialog from '../Dialog.tsx';
 import { useNow } from '../useNow.ts';
+import { holidays } from '../schedules/holidays.ts';
+import MonthGrid, { type DayNote } from '../schedules/MonthGrid.tsx';
 import ScheduleForm from '../schedules/ScheduleForm.tsx';
 import {
   blankForm,
@@ -30,7 +32,8 @@ interface Occurrence {
   schedule: Schedule;
 }
 
-// Meetings this month and the next two, side by side: each month's meetings by day and time. A meeting's pencil
+// This month and the next two: small block calendars across the top, their days marked for meetings, holidays, and
+// elections; then, month by month, what's coming (meetings by day and time, holidays, elections). A meeting's pencil
 // opens its schedule in a dialog (to change it, or to cancel that one meeting of a repeating schedule); ＋ Meeting adds
 // one: choose the public body and the day, and its usual time comes along. The form and its rules live in
 // ../schedules.
@@ -42,6 +45,7 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
   const { records: sources } = useRecords<{ name?: string }>('sources');
   const { records: bodies } = useRecords<Body>('bodies');
   const { records: organizations } = useRecords<Organization>('organizations');
+  const { records: elections } = useRecords<Election>('elections');
   const recorders = useRecords<{ name?: string }>('recorders').records || [];
   const [form, setForm] = useState<Form | null>(null);
   const [picked, setPicked] = useState<Occurrence | null>(null);
@@ -110,6 +114,52 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
     setForm(formOf(occurrence.scheduleId, occurrence.schedule));
   };
   const zone = (occurrence: Occurrence) => occurrence.schedule.timeZone || localZone;
+  const dayKeyOf = (ms: number, timeZone: string) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+      new Date(ms)
+    );
+  const todayKey = dayKeyOf(now, localZone);
+  // Everything on the calendar, by day: meetings (not cancelled ones), holidays, and elections.
+  const firstDay = dayKeyOf(months[0], localZone);
+  const lastDay = dayKeyOf(until - 1, localZone);
+  const years = [...new Set(months.map((month) => new Date(month).getFullYear()))];
+  const holidayList = years.flatMap(holidays).filter((item) => item.day >= firstDay && item.day <= lastDay);
+  const electionList = (elections || []).filter((item) => item.data.date >= firstDay && item.data.date <= lastDay);
+  const notes = new Map<string, DayNote[]>();
+  const note = (key: string, item: DayNote) => notes.set(key, [...(notes.get(key) || []), item]);
+  for (const item of meetings)
+    if (!item.cancelled)
+      note(dayKeyOf(item.start, zone(item)), {
+        kind: 'meeting',
+        text: `${clockTime(item.start, zone(item))} ${item.title}`
+      });
+  for (const item of holidayList) note(item.day, { kind: 'holiday', text: item.name });
+  for (const item of electionList) note(item.data.date, { kind: 'election', text: item.data.name });
+  // The list: meetings, holidays, and elections in day order (all-day ones first in their day).
+  type Entry =
+    | { kind: 'meeting'; day: string; sort: number; item: Occurrence }
+    | { kind: 'holiday'; day: string; sort: number; name: string }
+    | { kind: 'election'; day: string; sort: number; id: string; name: string };
+  const entries: Entry[] = [
+    ...meetings.map((item): Entry => ({
+      kind: 'meeting',
+      day: dayKeyOf(item.start, zone(item)),
+      sort: item.start,
+      item
+    })),
+    ...holidayList.map((item): Entry => ({ kind: 'holiday', day: item.day, sort: 0, name: item.name })),
+    ...electionList.map((item): Entry => ({
+      kind: 'election',
+      day: item.data.date,
+      sort: 0,
+      id: item.id,
+      name: item.data.name
+    }))
+  ].sort((a, b) => a.day.localeCompare(b.day) || a.sort - b.sort);
+  const dayLabel = (day: string) => {
+    const [year, month, date] = day.split('-').map(Number);
+    return dayOfMonth(Date.UTC(year, month - 1, date, 12), 'UTC');
+  };
   const bodyOf = (occurrence: Occurrence) => bodies?.find((body) => body.id === occurrence.schedule.bodyId);
 
   return (
@@ -152,19 +202,58 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
         </Dialog>
       )}
 
-      <div className="calendar">
+      <div className="month-grids">
+        {months.map((month) => (
+          <MonthGrid
+            key={month}
+            year={new Date(month).getFullYear()}
+            month={new Date(month).getMonth() + 1}
+            notes={notes}
+            today={todayKey}
+          />
+        ))}
+      </div>
+      <p className="calendar-legend small" aria-hidden="true">
+        <span className="has-meeting">Meeting</span> <span className="has-holiday">Holiday</span>{' '}
+        <span className="has-election">Election</span>
+      </p>
+
+      <section className="panel upcoming">
         {months.map((month) => {
-          const next = new Date(new Date(month).getFullYear(), new Date(month).getMonth() + 1, 1).getTime();
-          const inMonth = meetings.filter((item) => item.start >= month && item.start < next);
+          const prefix = dayKeyOf(month, localZone).slice(0, 7);
+          const inMonth = entries.filter((entry) => entry.day.startsWith(prefix));
+          const seen = new Set<string>();
           return (
-            <section key={month} className="calendar-month">
-              <h2>{monthOf(month, localZone)}</h2>
-              {inMonth.length === 0 && <p className="muted small">No meetings.</p>}
+            <section key={month}>
+              <h2 className="month-head">{monthOf(month, localZone)}</h2>
+              {inMonth.length === 0 && <p className="muted small">Nothing scheduled.</p>}
               <ul>
-                {inMonth.map((item) => {
+                {inMonth.map((entry) => {
+                  // The day's first entry is where its calendar day goes.
+                  const id = seen.has(entry.day) ? undefined : `day-${entry.day}`;
+                  seen.add(entry.day);
+                  if (entry.kind === 'holiday')
+                    return (
+                      <li key={`h-${entry.day}`} id={id} className="holiday">
+                        <span className="calendar-day">{dayLabel(entry.day)}</span>
+                        <span className="calendar-time" />
+                        <span className="grow">{entry.name}</span>
+                      </li>
+                    );
+                  if (entry.kind === 'election')
+                    return (
+                      <li key={`e-${entry.id}`} id={id} className="election">
+                        <span className="calendar-day">{dayLabel(entry.day)}</span>
+                        <span className="calendar-time" />
+                        <span className="grow">
+                          <Link to={`/elections/${encodeURIComponent(entry.id)}`}>{entry.name}</Link>
+                        </span>
+                      </li>
+                    );
+                  const item = entry.item;
                   const body = bodyOf(item);
                   return (
-                    <li key={item.key} className={item.cancelled ? 'cancelled' : ''}>
+                    <li key={item.key} id={id} className={item.cancelled ? 'cancelled' : ''}>
                       <span className="calendar-day">{dayOfMonth(item.start, zone(item))}</span>
                       <span className="calendar-time">{clockTime(item.start, zone(item))}</span>
                       <span className="grow">
@@ -189,7 +278,7 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
             </section>
           );
         })}
-      </div>
+      </section>
     </section>
   );
 }
