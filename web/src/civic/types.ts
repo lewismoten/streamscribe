@@ -41,6 +41,8 @@ export interface Body {
   termYears?: number;
   // The body's offices, such as Chair and Vice Chair; officer terms hold them, usually a year at a time.
   offices?: string[];
+  // What its officers are together, when they're more than officers (such as the Executive Committee).
+  officersName?: string;
   website?: string;
   note?: string;
 }
@@ -58,7 +60,7 @@ export interface Election {
 }
 
 export type TermKind =
-  'elected' | 'appointed' | 'citizen' | 'ex-officio' | 'officer' | 'staff' | 'interim' | 'candidate';
+  'elected' | 'appointed' | 'chosen' | 'citizen' | 'ex-officio' | 'officer' | 'staff' | 'interim' | 'candidate';
 export type EndReason = '' | 'term-ended' | 'resigned' | 'replaced' | 'removed' | 'died' | 'other';
 export type Result = '' | 'won' | 'lost' | 'withdrew';
 export interface Term {
@@ -104,6 +106,7 @@ export const SELECTIONS: Record<Selection, string> = {
 export const TERM_KINDS: Record<TermKind, string> = {
   elected: 'Elected',
   appointed: 'Appointed',
+  chosen: 'Chosen by the body',
   citizen: 'Citizen appointee',
   'ex-officio': 'Ex officio',
   officer: 'Officer',
@@ -114,6 +117,7 @@ export const TERM_KINDS: Record<TermKind, string> = {
 export const TERM_HELP: Record<TermKind, string> = {
   elected: 'A seat won in an election',
   appointed: 'A seat filled by appointment (such as before an election, or after a resignation), not elected',
+  chosen: 'A seat the body fills itself (such as library trustees elected by their board), not by the public',
   citizen: 'A member of the public appointed to the body (often a committee)',
   'ex-officio': 'A member because of another office they hold',
   officer: 'An office on the body, such as Chair or Vice Chair, held by a member',
@@ -166,9 +170,10 @@ export const RESULTS: Record<Result, string> = {
 export const TITLE_SUGGESTIONS: Record<TermKind, string[]> = {
   elected: ['Supervisor', 'Council member', 'Mayor', 'School board member', 'Member'],
   appointed: ['Supervisor', 'Council member', 'Trustee', 'Member'],
+  chosen: ['Trustee', 'Director', 'Member'],
   citizen: ['Citizen member', 'Member'],
   'ex-officio': ['Member (ex officio)'],
-  officer: ['Chair', 'Vice Chair', 'Vice Mayor', 'Secretary', 'Treasurer', 'President', 'Vice President'],
+  officer: ['Chair', 'Vice Chair', 'Vice Mayor', 'President', 'Vice President', 'Secretary', 'Treasurer', 'At-Large'],
   staff: [
     'County Administrator',
     'Assistant to the County Administrator',
@@ -185,7 +190,7 @@ export const TITLE_SUGGESTIONS: Record<TermKind, string[]> = {
 };
 
 // Kinds that make someone a member of the body (officers are members too; staff and candidates are not).
-export const MEMBER_KINDS: TermKind[] = ['elected', 'appointed', 'citizen', 'ex-officio'];
+export const MEMBER_KINDS: TermKind[] = ['elected', 'appointed', 'chosen', 'citizen', 'ex-officio'];
 export const STAFF_KINDS: TermKind[] = ['staff', 'interim'];
 
 export const today = () => dayKey(new Date().toISOString());
@@ -200,7 +205,9 @@ export const memberKindFor = (body: Body | undefined): TermKind =>
     ? 'staff'
     : body?.selection === 'elected' || body?.selection === 'mixed'
       ? 'elected'
-      : 'appointed';
+      : body?.selection === 'self-selected'
+        ? 'chosen'
+        : 'appointed';
 // A candidate is current until the election has a result (or has passed, with an end date).
 export const isCurrent = (term: Term, day = today()) =>
   term.kind === 'candidate' ? !term.result && activeOn(term, day) : activeOn(term, day);

@@ -124,6 +124,8 @@ export default function TermForm({
       await putRecord('bodies', term.bodyId, {
         organizationId: organization.id,
         name: organization.data.name,
+        // An office of one: its members are called what this term says (such as Sheriff).
+        memberTitle: term.title,
         kind: 'other',
         selection: organization.data.kind === 'nonprofit' ? 'self-selected' : 'elected',
         meetings: []

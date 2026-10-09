@@ -8,7 +8,8 @@ import PersonService from '../civic/PersonService.tsx';
 import { activeOn, bodiesOfRecording, MEMBER_KINDS, personKeyOf, STAFF_KINDS } from '../civic/types.ts';
 import { useCivic } from '../civic/useCivic.ts';
 import Avatar from './Avatar.tsx';
-import { publicPeople } from './PeoplePage.tsx';
+import { publicPeople } from './directory.ts';
+import ProfileBlock from './ProfileBlock.tsx';
 import PublicToggles from './PublicToggles.tsx';
 import { personKey, shownName, type MeetingPerson } from './usePeople.ts';
 
@@ -45,6 +46,7 @@ export default function PersonPage() {
           <div className="card-kind">{[person.group, person.sourceName].filter(Boolean).join(' · ')}</div>
           <h1>{shownName(person)}</h1>
           {person.role && !person.nameUnknown && <p className="meta">{person.role}</p>}
+          <ProfileBlock person={person} canEdit={civic.editor} />
           {viewer && can('publish', account) && (
             <PublicToggles person={person} directories={directories} groups={groups} />
           )}

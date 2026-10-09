@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { putRecord } from '../data/useRecords.ts';
 import Avatar from '../people/Avatar.tsx';
+import { namesOf, profileId, useProfiles } from '../people/profiles.ts';
 import { shownName } from '../people/usePeople.ts';
 import { listPublicly } from './listing.ts';
 import { MEMBER_KINDS, memberKindFor, personKeyOf, TERM_KINDS, type Body } from './types.ts';
@@ -21,6 +22,7 @@ export default function MemberPicker({
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState(false);
+  const { profiles } = useProfiles();
   const sources = new Set((body.data.meetings || []).map((item) => item.sourceKey));
   const members = new Set(
     (civic.terms || [])
@@ -31,7 +33,13 @@ export default function MemberPicker({
   const people = [...civic.people.values()]
     .filter((person) => !sources.size || sources.has(person.sourceKey))
     .filter((person) => !person.nameUnknown && person.id !== 'everyone')
-    .filter((person) => !needle || [person.name, person.role].some((text) => text?.toLowerCase().includes(needle)))
+    .filter(
+      (person) =>
+        !needle ||
+        [person.name, person.role, ...namesOf(profiles.get(profileId(person.sourceKey, person.id)))].some((text) =>
+          text?.toLowerCase().includes(needle)
+        )
+    )
     .sort((a, b) => b.seconds - a.seconds || shownName(a).localeCompare(shownName(b)));
   const kind = memberKindFor(body.data);
   const title = body.data.memberTitle || TERM_KINDS[kind];

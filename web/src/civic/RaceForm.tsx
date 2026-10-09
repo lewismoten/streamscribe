@@ -99,7 +99,8 @@ export default function RaceForm({
         sourceKey: person.sourceKey,
         personId: person.id,
         bodyId,
-        title,
+        // The seat as the candidate ran for it (such as Sheriff), else what the body's members are called.
+        title: entry.candidate?.data.title || entry.seat?.data.title || title,
         ...(districtId ? { districtId } : {}),
         electionId: election.id,
         ...(entry.note.trim() ? { electionNote: entry.note.trim() } : {})

@@ -253,6 +253,14 @@ export function BodyForm({
           placeholder={'Chair\nVice Chair'}
         />
       </label>
+      <label className="block">
+        Its officers together are (blank: just its officers)
+        <input
+          value={form.officersName || ''}
+          onChange={(event) => setForm({ ...form, officersName: event.target.value })}
+          placeholder="Executive Committee"
+        />
+      </label>
       <fieldset>
         <legend>Its meetings</legend>
         <p className="muted small">

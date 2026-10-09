@@ -64,6 +64,11 @@ export const COLLECTIONS = {
     mode: 'mutable',
     doc: "Public bodies of an organization (a board, a committee under it, its staff): how members are chosen, and which sources' meetings are theirs."
   },
+  profiles: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: "More about a person (id <source>:<roster id>): their formal name, nicknames, and ids on other sites (such as a state's election results), whose addresses are the settings record person-links."
+  },
   elections: {
     writers: ['editor'],
     mode: 'mutable',

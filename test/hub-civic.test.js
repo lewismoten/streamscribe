@@ -46,6 +46,20 @@ test('public bodies: edited with edit.bodies, read by everyone', { skip: externa
     electionId: 'warren-2025-11-04-general',
     result: 'won'
   });
+  await boss.put('settings', 'person-links', {
+    kinds: [
+      {
+        id: 'virginia-elections',
+        name: 'Virginia elections',
+        url: 'https://historical.elections.virginia.gov/candidate/'
+      }
+    ]
+  });
+  await boss.put('profiles', 'warren-county-va:jane-doe', {
+    formalName: 'Janet Doe',
+    nicknames: ['Jane'],
+    links: { 'virginia-elections': '87362' }
+  });
   const sent = await boss.sync();
   assert.deepEqual(sent.refused, []);
 
@@ -53,6 +67,11 @@ test('public bodies: edited with edit.bodies, read by everyone', { skip: externa
   assert.equal((await reader.get('terms', 't1')).data.kind, 'appointed', 'terms are public');
   assert.equal((await reader.get('bodies', 'warren-bos')).data.name, 'Board of Supervisors');
   assert.equal((await reader.get('elections', 'warren-2025-11-04-general')).data.date, '2025-11-04', 'elections too');
+  assert.deepEqual(
+    (await reader.get('profiles', 'warren-county-va:jane-doe')).data.nicknames,
+    ['Jane'],
+    'and profiles'
+  );
 
   const jane = person(await signIn('jane'));
   await jane.put('terms', 't2', {

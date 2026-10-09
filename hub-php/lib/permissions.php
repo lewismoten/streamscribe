@@ -53,6 +53,7 @@ const EDIT_PERMISSIONS = [
   'bodies' => 'edit.bodies',
   'terms' => 'edit.bodies',
   'elections' => 'edit.bodies',
+  'profiles' => 'edit.bodies',
 ];
 
 // The kind of a mark id: the last part of recordingId:part:kind or sourceKey:people.

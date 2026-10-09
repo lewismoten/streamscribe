@@ -216,3 +216,22 @@ label.block textarea,
   gap: 6px 16px;
   font-size: 0.9rem;
 }
+.office-later {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+}
+.office-replace {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.office-replace select,
+.office-replace input {
+  font: inherit;
+}

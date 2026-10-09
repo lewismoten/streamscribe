@@ -1,7 +1,7 @@
 import { hubCall } from '../data/hub.ts';
 import { syncNow } from '../data/sync.ts';
 import { useRecords } from '../data/useRecords.ts';
-import type { MeetingPerson } from './usePeople.ts';
+import { personKey, type MeetingPerson } from './usePeople.ts';
 
 // The public directory (collection `directory`, one record per source; hub-php/lib/people-routes.php): who is listed
 // for everyone, and the public copy of their photo when it's public. Anyone can read it.
@@ -50,4 +50,20 @@ export async function savePublic(person: MeetingPerson, groups: string[], listed
     photo
   });
   await syncNow();
+}
+
+// The public directory as people (with their public photo, and no private speaking details).
+export function publicPeople(directories: Directory[] | null): MeetingPerson[] | null {
+  if (!directories) return null;
+  return directories.flatMap((directory) =>
+    directory.people.map((person) => ({
+      ...person,
+      key: personKey(directory.sourceKey, person.id),
+      sourceKey: directory.sourceKey,
+      sourceName: directory.sourceName,
+      photo: person.photo,
+      meetings: [],
+      seconds: 0
+    }))
+  );
 }

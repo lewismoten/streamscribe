@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { can, useAccount } from '../data/account.ts';
 import { useRecords } from '../data/useRecords.ts';
-import { useDirectory } from '../people/directory.ts';
-import { publicPeople } from '../people/PeoplePage.tsx';
+import { publicPeople, useDirectory } from '../people/directory.ts';
 import { usePeople, type MeetingPerson } from '../people/usePeople.ts';
 import type { Body, Election, Organization, Term } from './types.ts';
 
