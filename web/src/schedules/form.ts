@@ -3,6 +3,8 @@ import { parseRule } from '../../../src/sync/recurrence.js';
 // A meeting schedule as the hub keeps it, and the form that edits one: the form's fields, a blank form, and the
 // conversions between the two (the repeat settings become an RFC 5545 rule and back).
 export interface Schedule {
+  // The public body meeting (see ../civic), when there is one: it gives the title and source.
+  bodyId?: string;
   title: string;
   sourceKey: string;
   timeZone: string;
@@ -29,6 +31,7 @@ export const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export interface Form {
   id: string | null;
+  bodyId: string;
   title: string;
   sourceKey: string;
   timeZone: string;
@@ -55,13 +58,14 @@ export function blankForm(): Form {
   const today = new Date().toISOString().slice(0, 10);
   return {
     id: null,
+    bodyId: '',
     title: '',
     sourceKey: '',
     timeZone: localZone,
     date: today,
     time: '18:00',
     durationMinutes: 180,
-    repeat: 'weekly',
+    repeat: 'none',
     weekdays: ['TU'],
     interval: 1,
     ordinal: '1',
@@ -95,6 +99,7 @@ export function formOf(id: string, schedule: Schedule): Form {
   const form = {
     ...blankForm(),
     id,
+    bodyId: schedule.bodyId || '',
     title: schedule.title || '',
     sourceKey: schedule.sourceKey || '',
     timeZone: schedule.timeZone || localZone,
@@ -157,6 +162,7 @@ export function scheduleOf(form: Form, previous?: Schedule): Schedule {
   );
   return {
     ...previous,
+    bodyId: form.bodyId || undefined,
     title: form.title.trim(),
     sourceKey: form.sourceKey.trim(),
     timeZone: form.timeZone,
@@ -182,5 +188,15 @@ export const when = (ms: number, timeZone: string) =>
     hour: 'numeric',
     minute: '2-digit'
   }).format(new Date(ms));
+// "7:00 PM", "Wed 14": a meeting in the calendar, in the schedule's time zone.
+export const dayOfMonth = (ms: number, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', day: 'numeric' }).formatToParts(
+    new Date(ms)
+  );
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  return `${part('weekday')} ${part('day')}`;
+};
+export const monthOf = (ms: number, timeZone: string) =>
+  new Intl.DateTimeFormat('en-US', { timeZone, month: 'long', year: 'numeric' }).format(new Date(ms));
 export const clockTime = (ms: number, timeZone: string) =>
   new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(ms));

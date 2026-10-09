@@ -148,3 +148,68 @@ fieldset.weekdays {
   padding: 0;
   min-inline-size: 0;
 }
+
+/* Schedules: three months side by side, each month's meetings by day and time. */
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.calendar-month h2 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.calendar-month ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.calendar-month li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.calendar-month li.cancelled .grow {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.calendar-day {
+  min-width: 3.6em;
+  font-weight: 600;
+}
+.calendar-time {
+  min-width: 5em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* A modal dialog (Dialog.tsx). */
+.dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.dialog::backdrop {
+  background: #0006;
+}
+.dialog-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  background: var(--bg);
+}
+.dialog .panel {
+  margin: 0;
+}

@@ -224,6 +224,8 @@ People in terms are the ones on each source's roster. Saving a term lists the pe
 
 ## Schedules
 
+The Schedules page shows this month and the next two side by side, each month's meetings by day and time. **＋ Meeting** opens a dialog: choose the public body (its name and source come with it) and the day; a body that has met before brings its usual time, length, and recording settings, from its latest schedule. A meeting's ✎ opens its schedule in the same dialog, to change it, cancel (or restore) that one meeting of a repeating schedule, or delete it. A schedule's `bodyId` names its body.
+
 A schedule says when a meeting happens, in its own time zone, so a 6 pm meeting stays at 6 pm when daylight saving changes:
 
 ```json

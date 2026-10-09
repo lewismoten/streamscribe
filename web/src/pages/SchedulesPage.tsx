@@ -1,68 +1,116 @@
 import { useMemo, useState } from 'react';
-import { describeRule, upcoming } from '../../../src/sync/recurrence.js';
+import { Link } from 'react-router';
+import { upcoming } from '../../../src/sync/recurrence.js';
+import type { Body, Organization } from '../civic/types.ts';
 import { putRecord, removeRecord, useRecords } from '../data/useRecords.ts';
 import { can, useAccount } from '../data/account.ts';
 import { hubSettings } from '../data/hub.ts';
+import Dialog from '../Dialog.tsx';
 import { useNow } from '../useNow.ts';
 import ScheduleForm from '../schedules/ScheduleForm.tsx';
 import {
   blankForm,
   clockTime,
+  dayOfMonth,
   formOf,
   localZone,
+  monthOf,
   scheduleOf,
-  when,
   type Form,
   type Schedule
 } from '../schedules/form.ts';
 
-// Meeting schedules: when each source's meetings happen, one-off or recurring, which recorders follow. Upcoming
-// meetings can be cancelled one at a time (and restored). The form and its rules live in ../schedules.
+interface Occurrence {
+  key: string;
+  scheduleId: string;
+  start: number;
+  end: number;
+  title: string;
+  cancelled: boolean;
+  schedule: Schedule;
+}
+
+// Meetings this month and the next two, side by side: each month's meetings by day and time. A meeting's pencil
+// opens its schedule in a dialog (to change it, or to cancel that one meeting of a repeating schedule); ＋ Meeting adds
+// one: choose the public body and the day, and its usual time comes along. The form and its rules live in
+// ../schedules.
 export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) {
   // Changing schedules takes a group that may (or a key); everyone else sees them read-only.
   const account = useAccount();
   const editor = can('edit.schedules', account) || (!account.user && Boolean(hubSettings().key)) || !hubSettings().url;
   const { records } = useRecords<Schedule>('schedules');
   const { records: sources } = useRecords<{ name?: string }>('sources');
+  const { records: bodies } = useRecords<Body>('bodies');
+  const { records: organizations } = useRecords<Organization>('organizations');
   const recorders = useRecords<{ name?: string }>('recorders').records || [];
   const [form, setForm] = useState<Form | null>(null);
+  const [picked, setPicked] = useState<Occurrence | null>(null);
   const [message, setMessage] = useState('');
   const knownSources = useMemo(
     () => [...new Set([...sourceKeys, ...(sources || []).map((record) => record.id)])],
     [sourceKeys, sources]
   );
   const now = useNow(60000);
-  const next = useMemo(
+  // The first day of this month, and of the three months shown (in this browser's time zone).
+  const months = useMemo(() => {
+    const today = new Date(now);
+    return [0, 1, 2].map((offset) => new Date(today.getFullYear(), today.getMonth() + offset, 1).getTime());
+  }, [now]);
+  const until = useMemo(() => {
+    const last = new Date(months[2]);
+    return new Date(last.getFullYear(), last.getMonth() + 1, 1).getTime();
+  }, [months]);
+  const meetings = useMemo(
     () =>
       upcoming(
         (records || []).map((record) => ({ ...record.data, id: record.id })),
-        now,
-        now + 60 * 86400000
-      ).slice(0, 12),
-    [records, now]
+        months[0],
+        until,
+        { includeCancelled: true }
+      ).map((item) => ({ ...item, schedule: item.schedule as Schedule, cancelled: Boolean(item.cancelled) })),
+    [records, months, until]
   );
 
   const change = (patch: Partial<Form>) => setForm((current) => (current ? { ...current, ...patch } : current));
-
   const previousOf = (id: string | null) => (id ? records?.find((record) => record.id === id)?.data : undefined);
+  const close = () => {
+    setForm(null);
+    setPicked(null);
+  };
   const save = async () => {
     if (!form) return;
     if (!form.title.trim() || !form.sourceKey.trim()) {
-      setMessage('A schedule needs a title and a source');
+      setMessage('A meeting needs a title and a source');
       return;
     }
     await putRecord('schedules', form.id, scheduleOf(form, previousOf(form.id)));
     setMessage(`Saved “${form.title.trim()}”`);
-    setForm(null);
+    close();
   };
-  const toggleCancelled = async (id: string, schedule: Schedule, key: string) => {
-    const local = key.split('@')[1];
-    const exdates = new Set(schedule.exdates || []);
+  const toggleCancelled = async (occurrence: Occurrence) => {
+    const record = records?.find((entry) => entry.id === occurrence.scheduleId);
+    if (!record) return;
+    const local = occurrence.key.split('@')[1];
+    const exdates = new Set(record.data.exdates || []);
     if (exdates.has(local)) exdates.delete(local);
     else exdates.add(local);
-    await putRecord('schedules', id, { ...schedule, exdates: [...exdates] });
-    setMessage(exdates.has(local) ? 'Cancelled that meeting' : 'Restored that meeting');
+    await putRecord('schedules', record.id, { ...record.data, exdates: [...exdates] });
+    setMessage(exdates.has(local) ? `Cancelled ${occurrence.title} that day` : `Restored ${occurrence.title} that day`);
+    close();
   };
+  const remove = async (occurrence: Occurrence) => {
+    const repeating = Boolean(occurrence.schedule.rrule);
+    if (!confirm(repeating ? `Delete every “${occurrence.title}” meeting?` : `Delete “${occurrence.title}”?`)) return;
+    await removeRecord('schedules', occurrence.scheduleId);
+    setMessage('Deleted');
+    close();
+  };
+  const edit = (occurrence: Occurrence) => {
+    setPicked(occurrence);
+    setForm(formOf(occurrence.scheduleId, occurrence.schedule));
+  };
+  const zone = (occurrence: Occurrence) => occurrence.schedule.timeZone || localZone;
+  const bodyOf = (occurrence: Occurrence) => bodies?.find((body) => body.id === occurrence.schedule.bodyId);
 
   return (
     <section>
@@ -70,116 +118,78 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
         <h1 className="grow">Schedules</h1>
         {editor && (
           <button type="button" className="button primary" onClick={() => setForm(blankForm())}>
-            ＋ New schedule
+            ＋ Meeting
           </button>
         )}
       </div>
       {message && <p className="note">{message}</p>}
       {form && (
-        <ScheduleForm
-          form={form}
-          previous={previousOf(form.id)}
-          knownSources={knownSources}
-          recorders={recorders}
-          change={change}
-          onSave={save}
-          onCancel={() => setForm(null)}
-        />
+        <Dialog title={form.id ? form.title || 'Meeting' : 'New meeting'} onClose={close}>
+          <ScheduleForm
+            form={form}
+            previous={previousOf(form.id)}
+            knownSources={knownSources}
+            recorders={recorders}
+            bodies={bodies || []}
+            organizations={organizations || []}
+            schedules={records || []}
+            change={change}
+            onSave={save}
+            onCancel={close}
+          />
+          {picked && (
+            <div className="card-actions">
+              {picked.schedule.rrule && (
+                <button type="button" className="button" onClick={() => toggleCancelled(picked)}>
+                  {picked.cancelled ? 'Restore' : 'Cancel'} the meeting on {dayOfMonth(picked.start, zone(picked))}
+                </button>
+              )}
+              <button type="button" className="link-button danger" onClick={() => remove(picked)}>
+                {picked.schedule.rrule ? 'Delete every meeting of this schedule' : 'Delete this meeting'}
+              </button>
+            </div>
+          )}
+        </Dialog>
       )}
 
-      <section className="panel">
-        <h2>Coming up</h2>
-        {next.length === 0 ? (
-          <p className="empty">Nothing scheduled in the next two months.</p>
-        ) : (
-          <ol className="lines upcoming">
-            {next.map((item) => {
-              const record = records?.find((entry) => entry.id === item.scheduleId);
-              return (
-                <li key={item.key}>
-                  <span className="time">{when(item.start, item.schedule.timeZone || localZone)}</span>
-                  <span>
-                    {item.title}{' '}
-                    <span className="muted">
-                      · {item.sourceKey} · until {clockTime(item.end, item.schedule.timeZone || localZone)}
-                    </span>
-                    {record && editor && (
-                      <button
-                        type="button"
-                        className="link-button"
-                        onClick={() => toggleCancelled(record.id, record.data, item.key)}
-                      >
-                        Cancel this one
-                      </button>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </section>
-
-      <section className="panel">
-        <h2>All schedules</h2>
-        {records && records.length === 0 && <p className="empty">No schedules yet.</p>}
-        <ul className="schedules">
-          {(records || [])
-            .sort((a, b) => a.data.title.localeCompare(b.data.title))
-            .map((record) => {
-              const schedule = record.data;
-              const cancelled = (schedule.exdates || []).sort();
-              return (
-                <li key={record.id}>
-                  <div>
-                    <strong>{schedule.title}</strong>
-                    {record.pending && <span className="muted"> · not synced yet</span>}
-                    <div className="muted">
-                      {schedule.rrule ? describeRule(schedule.rrule) : 'Once'}, {schedule.start.slice(11, 16)} for{' '}
-                      {schedule.durationMinutes} min ({schedule.timeZone}) · {schedule.sourceKey}
-                    </div>
-                    {cancelled.length > 0 && (
-                      <div className="muted">
-                        Cancelled:{' '}
-                        {cancelled.map((local) => (
-                          <button
-                            key={local}
-                            type="button"
-                            className="link-button"
-                            title="Restore"
-                            disabled={!editor}
-                            onClick={() => toggleCancelled(record.id, schedule, `${record.id}@${local}`)}
-                          >
-                            {local.replace('T', ' ')} ↺
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {editor && (
-                    <span className="card-actions">
-                      <button type="button" className="button" onClick={() => setForm(formOf(record.id, schedule))}>
-                        ✎ Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="button"
-                        onClick={async () => {
-                          if (confirm(`Delete the schedule “${schedule.title}”?`)) {
-                            await removeRecord('schedules', record.id);
-                            setMessage('Deleted');
-                          }
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-        </ul>
-      </section>
+      <div className="calendar">
+        {months.map((month) => {
+          const next = new Date(new Date(month).getFullYear(), new Date(month).getMonth() + 1, 1).getTime();
+          const inMonth = meetings.filter((item) => item.start >= month && item.start < next);
+          return (
+            <section key={month} className="calendar-month">
+              <h2>{monthOf(month, localZone)}</h2>
+              {inMonth.length === 0 && <p className="muted small">No meetings.</p>}
+              <ul>
+                {inMonth.map((item) => {
+                  const body = bodyOf(item);
+                  return (
+                    <li key={item.key} className={item.cancelled ? 'cancelled' : ''}>
+                      <span className="calendar-day">{dayOfMonth(item.start, zone(item))}</span>
+                      <span className="calendar-time">{clockTime(item.start, zone(item))}</span>
+                      <span className="grow">
+                        {body ? <Link to={`/bodies/${encodeURIComponent(body.id)}`}>{item.title}</Link> : item.title}
+                        {item.cancelled && <span className="muted small"> (cancelled)</span>}
+                      </span>
+                      {editor && (
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => edit(item)}
+                          aria-label={`Change ${item.title} on ${dayOfMonth(item.start, zone(item))}`}
+                          title="Change"
+                        >
+                          ✎
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
     </section>
   );
 }

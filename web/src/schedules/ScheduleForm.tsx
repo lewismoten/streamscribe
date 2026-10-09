@@ -1,5 +1,6 @@
 import type { FormEvent } from 'react';
 import { describeRule, occurrences } from '../../../src/sync/recurrence.js';
+import type { Body, Organization } from '../civic/types.ts';
 import type { HubRecord } from '../data/useRecords.ts';
 import { useNow } from '../useNow.ts';
 import {
@@ -15,13 +16,17 @@ import {
   type Schedule
 } from './form.ts';
 
-// The form for a new or changed schedule: when the meetings are, how they repeat, how the recorders treat them, and
-// a preview of the next few meetings (cancelled ones included) so a rule can be checked before it's saved.
+// The form for a new or changed schedule: which public body meets (its name and source come with it; for a new
+// meeting, its usual time and length too, from its latest schedule), when, how it repeats, how the recorders treat
+// it, and a preview of the next few meetings (cancelled ones included) so a rule can be checked before it's saved.
 export default function ScheduleForm({
   form,
   previous,
   knownSources,
   recorders,
+  bodies,
+  organizations,
+  schedules,
   change,
   onSave,
   onCancel
@@ -30,6 +35,9 @@ export default function ScheduleForm({
   previous: Schedule | undefined;
   knownSources: string[];
   recorders: HubRecord<{ name?: string }>[];
+  bodies: HubRecord<Body>[];
+  organizations: HubRecord<Organization>[];
+  schedules: HubRecord<Schedule>[];
   change: (patch: Partial<Form>) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -45,6 +53,28 @@ export default function ScheduleForm({
   } catch (error) {
     previewError = (error as Error).message;
   }
+  // Choosing a body: its name (unless another title was typed) and source; a new meeting also takes the time,
+  // length, and recording settings of the body's latest schedule, so only the day is left to choose.
+  const chooseBody = (bodyId: string) => {
+    const body = bodies.find((item) => item.id === bodyId)?.data;
+    const before = bodies.find((item) => item.id === form.bodyId)?.data;
+    const patch: Partial<Form> = { bodyId };
+    if (body && (!form.title || form.title === before?.name)) patch.title = body.name;
+    if (body?.meetings?.[0]?.sourceKey) patch.sourceKey = body.meetings[0].sourceKey;
+    const latest = schedules
+      .filter((item) => item.data.bodyId === bodyId && item.id !== form.id)
+      .sort((a, b) => b.data.start.localeCompare(a.data.start))[0]?.data;
+    if (!form.id && latest)
+      Object.assign(patch, {
+        title: patch.title === body?.name && latest.title ? latest.title : patch.title,
+        sourceKey: latest.sourceKey,
+        timeZone: latest.timeZone,
+        time: latest.start.slice(11, 16),
+        durationMinutes: latest.durationMinutes,
+        leadMinutes: latest.leadMinutes ?? form.leadMinutes
+      });
+    change(patch);
+  };
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!previewError) onSave();
@@ -52,8 +82,26 @@ export default function ScheduleForm({
 
   return (
     <form className="panel schedule-form" onSubmit={submit}>
-      <h2>{form.id ? 'Edit schedule' : 'New schedule'}</h2>
+      <h2>{form.id ? 'Edit schedule' : 'New meeting'}</h2>
       <div className="form-grid">
+        <label>
+          Public body
+          <select value={form.bodyId} onChange={(event) => chooseBody(event.target.value)}>
+            <option value="">None (type a title)</option>
+            {organizations.map((org) => (
+              <optgroup key={org.id} label={org.data.name}>
+                {bodies
+                  .filter((body) => body.data.organizationId === org.id)
+                  .sort((a, b) => a.data.name.localeCompare(b.data.name))
+                  .map((body) => (
+                    <option key={body.id} value={body.id}>
+                      {body.data.name}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
         <label>
           Title{' '}
           <input
@@ -64,22 +112,7 @@ export default function ScheduleForm({
           />
         </label>
         <label>
-          Source{' '}
-          <input
-            value={form.sourceKey}
-            onChange={(event) => change({ sourceKey: event.target.value })}
-            list="source-keys"
-            placeholder="warren-county-va"
-            required
-          />
-        </label>
-        <datalist id="source-keys">
-          {knownSources.map((key) => (
-            <option key={key} value={key} aria-label={key} />
-          ))}
-        </datalist>
-        <label>
-          First meeting{' '}
+          {form.repeat === 'none' ? 'Day' : 'First meeting'}{' '}
           <input type="date" value={form.date} onChange={(event) => change({ date: event.target.value })} required />
         </label>
         <label>
@@ -94,9 +127,6 @@ export default function ScheduleForm({
             value={form.durationMinutes}
             onChange={(event) => change({ durationMinutes: Number(event.target.value) })}
           />
-        </label>
-        <label>
-          Time zone <input value={form.timeZone} onChange={(event) => change({ timeZone: event.target.value })} />
         </label>
         <label>
           Repeats
@@ -192,9 +222,28 @@ export default function ScheduleForm({
           )}
         </p>
       )}
-      <details>
-        <summary>Recording</summary>
+      <details open={!form.sourceKey}>
+        <summary>Source and recording</summary>
         <div className="form-grid">
+          <label>
+            Source{' '}
+            <input
+              value={form.sourceKey}
+              onChange={(event) => change({ sourceKey: event.target.value })}
+              list="source-keys"
+              placeholder="warren-county-va"
+              required
+            />
+          </label>
+          <datalist id="source-keys">
+            {knownSources.map((key) => (
+              <option key={key} value={key} aria-label={key} />
+            ))}
+          </datalist>
+          <label>
+            Time zone <input value={form.timeZone} onChange={(event) => change({ timeZone: event.target.value })} />
+          </label>
+
           <label>
             Start early (minutes){' '}
             <input
