@@ -183,6 +183,13 @@ export default function MapView({
   // Space) and dragging moves the map; clicks then add no points. (Leaflet's own dragging ignores Shift, which it keeps
   // for zooming to a box, so the moving is done here.)
   const holding = useRef(false);
+  // Another type (another shape to draw): nothing half-drawn or selected carries over; the map stays where it is.
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- the drawing state belongs to the shape being drawn
+    setActive(null);
+    setMiddle(null);
+    setSelected(null);
+  }, [draw]);
   useEffect(() => {
     const current = map.current;
     if (!current) return;

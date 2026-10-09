@@ -235,8 +235,8 @@ export default function LocationForm({
           <input {...text('note')} />
         </label>
       </div>
+      {/* One map for the form: changing the type changes what it draws, not where it's looking. */}
       <LocationMap
-        key={type}
         place={forType()}
         others={others}
         onChange={(next) => setPlace({ ...place, ...next })}
