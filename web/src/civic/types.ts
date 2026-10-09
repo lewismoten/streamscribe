@@ -49,7 +49,8 @@ export type ElectionKind = 'general' | 'special' | 'primary' | 'other';
 export interface Election {
   date: string; // YYYY-MM-DD
   name: string;
-  organizationId: string;
+  // Older elections named one organization; an election day is one ballot, with races for any body.
+  organizationId?: string;
   kind: ElectionKind;
   // When those elected take office (default: January 1 after the election).
   takesOffice?: string;
@@ -141,8 +142,10 @@ export const ELECTED_KINDS: TermKind[] = ['elected', 'candidate'];
 export function electionOf(elections: { id: string; data: Election }[] | null, term: Term) {
   const found = term.electionId ? elections?.find((item) => item.id === term.electionId)?.data : undefined;
   if (found) return found;
-  return term.election ? { date: term.election, name: 'Election', organizationId: '', kind: 'other' as const } : null;
+  return term.election ? { date: term.election, name: 'Election', kind: 'other' as const } : null;
 }
+// One election per day and kind: its id.
+export const electionId = (date: string, kind: ElectionKind) => `${date}-${kind}`;
 export const takesOfficeOn = (election: Election) =>
   election.takesOffice || (election.date ? `${Number(election.date.slice(0, 4)) + 1}-01-01` : '');
 // The last day of a term that starts on a day and lasts some years: the day before the same date that many years on.

@@ -44,8 +44,7 @@ export default function RaceForm({
   civic: Civic;
   onDone: (message: string) => void;
 }) {
-  const bodies = (civic.bodies || []).filter((body) => body.data.organizationId === election.data.organizationId);
-  const organization = civic.organizations?.find((item) => item.id === election.data.organizationId)?.data;
+  const bodies = civic.bodies || [];
   const terms = (civic.terms || []).filter((term) => term.data.electionId === election.id);
   const existing = (bodyId: string, districtId: string) => {
     const inRace = terms.filter((term) => term.data.bodyId === bodyId && (term.data.districtId || '') === districtId);
@@ -68,6 +67,7 @@ export default function RaceForm({
   const [removed, setRemoved] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
   const body = bodies.find((item) => item.id === bodyId)?.data;
+  const organization = civic.organizations?.find((item) => item.id === body?.organizationId)?.data;
   const title = body?.memberTitle || TERM_KINDS.elected;
   const sources = new Set((body?.meetings || []).map((item) => item.sourceKey));
   const people = [...civic.people.values()]
@@ -139,15 +139,17 @@ export default function RaceForm({
       <div className="form-grid">
         <label>
           Body
-          <select
-            value={bodyId}
-            onChange={(event) => chooseRace(event.target.value, districtId)}
-            disabled={Boolean(race)}
-          >
-            {bodies.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.data.name}
-              </option>
+          <select value={bodyId} onChange={(event) => chooseRace(event.target.value, '')} disabled={Boolean(race)}>
+            {(civic.organizations || []).map((org) => (
+              <optgroup key={org.id} label={org.data.name}>
+                {bodies
+                  .filter((item) => item.data.organizationId === org.id)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.data.name}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
         </label>

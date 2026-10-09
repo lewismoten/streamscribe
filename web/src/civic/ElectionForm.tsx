@@ -1,35 +1,40 @@
 import { useState, type FormEvent } from 'react';
-import { putRecord, removeRecord } from '../data/useRecords.ts';
+import { putRecord, removeRecord, useRecords } from '../data/useRecords.ts';
 import { FormButtons } from './OrgBodyForms.tsx';
-import { ELECTION_KINDS, takesOfficeOn, type Election, type ElectionKind, type Organization } from './types.ts';
+import { electionId, ELECTION_KINDS, takesOfficeOn, type Election, type ElectionKind } from './types.ts';
 
-// Adding or changing an election: its day, a name, and what kind it is. Candidates' terms (and the terms of those
+// Adding or changing an election: its day, a name, and what kind it is. It's one ballot: its races can be for any
+// body (supervisors, a sheriff, a school board, a town council). Candidates' terms (and the terms of those
 // who won) point at it.
 export default function ElectionForm({
   id,
   value,
-  organizations,
   onDone
 }: {
   id: string | null;
   value: Partial<Election>;
-  organizations: { id: string; data: Organization }[];
   onDone: (message: string) => void;
 }) {
   const [form, setForm] = useState<Election>({
     date: '',
     name: '',
-    organizationId: organizations[0]?.id || '',
     kind: 'general',
     ...value
   });
+  const [message, setMessage] = useState('');
+  const { records: elections } = useRecords<Election>('elections');
   const save = async (event: FormEvent) => {
     event.preventDefault();
+    // One election per day and kind: a new one on a day that has it already is that one.
+    const same = elections?.find(
+      (item) => item.id !== id && item.data.date === form.date && item.data.kind === form.kind
+    );
+    if (same) return setMessage(`There is already ${same.data.name} on that day: add its races there`);
     const election = {
       ...form,
       name: form.name.trim() || `${ELECTION_KINDS[form.kind]} ${form.date.slice(0, 4)}`.trim()
     };
-    await putRecord('elections', id || `${form.organizationId}-${form.date}-${form.kind}`, election);
+    await putRecord('elections', id || electionId(form.date, form.kind), election);
     onDone(`Saved ${election.name}`);
   };
   const remove = async () => {
@@ -41,20 +46,6 @@ export default function ElectionForm({
     <form className="panel schedule-form" onSubmit={save}>
       <h2>{id ? `Change ${value.name}` : 'New election'}</h2>
       <div className="form-grid">
-        <label>
-          Organization
-          <select
-            value={form.organizationId}
-            onChange={(event) => setForm({ ...form, organizationId: event.target.value })}
-            required
-          >
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.data.name}
-              </option>
-            ))}
-          </select>
-        </label>
         <label>
           Election day
           <input
@@ -100,6 +91,11 @@ export default function ElectionForm({
           <input value={form.note || ''} onChange={(event) => setForm({ ...form, note: event.target.value })} />
         </label>
       </div>
+      {message && (
+        <p className="error" role="alert">
+          {message}
+        </p>
+      )}
       <FormButtons onCancel={() => onDone('')} onRemove={id ? remove : null} />
     </form>
   );

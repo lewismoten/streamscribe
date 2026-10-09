@@ -12,7 +12,6 @@ export default function ElectionsPage() {
   const [editing, setEditing] = useState<{ id: string | null; value: Partial<Election> } | null>(null);
   const [message, setMessage] = useState('');
   if (civic.loading) return <p className="empty">Loading…</p>;
-  const organizations = [...(civic.organizations || [])].sort((a, b) => a.data.name.localeCompare(b.data.name));
   const elections = [...(civic.elections || [])].sort((a, b) => b.data.date.localeCompare(a.data.date));
   const years = [...new Set(elections.map((item) => item.data.date.slice(0, 4)))];
   const winners = (id: string) =>
@@ -33,7 +32,7 @@ export default function ElectionsPage() {
     <section>
       <div className="toolbar">
         <h1 className="grow">Elections</h1>
-        {civic.editor && organizations.length > 0 && (
+        {civic.editor && (
           <button type="button" className="button primary" onClick={() => setEditing({ id: null, value: {} })}>
             ＋ Election
           </button>
@@ -44,20 +43,13 @@ export default function ElectionsPage() {
         <ElectionForm
           id={editing.id}
           value={editing.value}
-          organizations={organizations}
           onDone={(text) => {
             setEditing(null);
             setMessage(text);
           }}
         />
       )}
-      {elections.length === 0 && (
-        <p className="empty">
-          {civic.editor && !organizations.length
-            ? 'Add an organization on the Bodies page first.'
-            : 'No elections yet.'}
-        </p>
-      )}
+      {elections.length === 0 && <p className="empty">No elections yet.</p>}
       {years.map((year) => (
         <section key={year}>
           <h2>{year}</h2>
@@ -71,13 +63,7 @@ export default function ElectionsPage() {
                   </Link>
                   <span className="muted small">
                     {' '}
-                    {[
-                      shortDate(item.data.date),
-                      ELECTION_KINDS[item.data.kind],
-                      civic.organizations?.find((org) => org.id === item.data.organizationId)?.data.name
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
+                    {[shortDate(item.data.date), ELECTION_KINDS[item.data.kind]].filter(Boolean).join(' · ')}
                   </span>
                   {winners(item.id) && <div className="small">Elected: {winners(item.id)}</div>}
                 </li>

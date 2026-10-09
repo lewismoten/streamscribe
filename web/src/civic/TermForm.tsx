@@ -6,6 +6,7 @@ import { FormButtons } from './OrgBodyForms.tsx';
 import {
   ELECTED_KINDS,
   ELECTION_KINDS,
+  electionId,
   electionLabel,
   END_REASONS,
   RESULTS,
@@ -93,9 +94,7 @@ export default function TermForm({
     bodies.some((item) => item.data.organizationId === org.id)
   );
   const withoutBodies = (civic.organizations || []).filter((org) => !withBodies.includes(org));
-  const elections = (civic.elections || [])
-    .filter((item) => !organizationId || item.data.organizationId === organizationId)
-    .sort((a, b) => b.data.date.localeCompare(a.data.date));
+  const elections = (civic.elections || []).sort((a, b) => b.data.date.localeCompare(a.data.date));
   const people = [...civic.people.values()].sort(
     (a, b) => a.sourceName.localeCompare(b.sourceName) || shownName(a).localeCompare(shownName(b))
   );
@@ -130,14 +129,18 @@ export default function TermForm({
         meetings: []
       });
     }
-    if (term.electionId === NEW_ELECTION && organization) {
-      term.electionId = `${organization.id}-${newElection.date}-${newElection.kind}`;
-      await putRecord('elections', term.electionId, {
-        date: newElection.date,
-        name: `${ELECTION_KINDS[newElection.kind]} ${newElection.date.slice(0, 4)}`,
-        organizationId: organization.id,
-        kind: newElection.kind
-      });
+    if (term.electionId === NEW_ELECTION) {
+      // One election per day and kind: an existing one is used as it is.
+      const sameDay = civic.elections?.find(
+        (item) => item.data.date === newElection.date && item.data.kind === newElection.kind
+      );
+      term.electionId = sameDay?.id || electionId(newElection.date, newElection.kind);
+      if (!sameDay)
+        await putRecord('elections', term.electionId, {
+          date: newElection.date,
+          name: `${ELECTION_KINDS[newElection.kind]} ${newElection.date.slice(0, 4)}`,
+          kind: newElection.kind
+        });
     }
     if (!ELECTED_KINDS.includes(term.kind) || !term.electionId) delete term.electionId;
     if (term.electionId) delete term.election;
@@ -290,7 +293,7 @@ export default function TermForm({
                   {electionLabel(item.data)}
                 </option>
               ))}
-              {organization && <option value={NEW_ELECTION}>＋ A new election…</option>}
+              <option value={NEW_ELECTION}>＋ A new election…</option>
             </select>
           </label>
         )}

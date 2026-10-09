@@ -22,7 +22,6 @@ export default function ElectionPage() {
         No such election. <Link to="/elections">All elections</Link>
       </p>
     );
-  const organization = civic.organizations?.find((item) => item.id === election.data.organizationId)?.data;
   const terms = (civic.terms || []).filter(
     (term) =>
       term.data.electionId === id &&
@@ -32,6 +31,7 @@ export default function ElectionPage() {
   const races = [...new Set(terms.map((term) => raceKey(term.data)))].map((key) => {
     const [bodyId, districtId] = key.split('|');
     const body = civic.bodies?.find((item) => item.id === bodyId)?.data;
+    const organization = civic.organizations?.find((item) => item.id === body?.organizationId)?.data;
     const district = organization?.districts.find((item) => item.id === districtId)?.name;
     const inRace = terms.filter((term) => raceKey(term.data) === key);
     const people = [...new Set(inRace.map((term) => personKeyOf(term.data)))].map((personKey) => {
@@ -47,7 +47,10 @@ export default function ElectionPage() {
     return {
       bodyId,
       districtId,
-      label: [body?.name || 'A removed body', district ? `${district} District` : 'At large'],
+      label: [
+        [...new Set([body?.name || 'A removed body', organization?.name || ''])].filter(Boolean).join(', '),
+        district ? `${district} District` : 'At large'
+      ],
       people
     };
   });
@@ -59,7 +62,7 @@ export default function ElectionPage() {
   return (
     <article>
       <div className="card-kind">
-        <Link to="/elections">Elections</Link> · {organization?.name}
+        <Link to="/elections">Elections</Link>
       </div>
       <div className="toolbar">
         <h1 className="grow">{election.data.name}</h1>
@@ -85,9 +88,7 @@ export default function ElectionPage() {
           .join(' · ')}
       </p>
       {message && <p className="note">{message}</p>}
-      {editing?.type === 'election' && (
-        <ElectionForm id={election.id} value={election.data} organizations={civic.organizations || []} onDone={done} />
-      )}
+      {editing?.type === 'election' && <ElectionForm id={election.id} value={election.data} onDone={done} />}
       {editing?.type === 'race' && (
         <RaceForm
           key={editing.race ? `${editing.race.bodyId}|${editing.race.districtId}` : 'new'}
