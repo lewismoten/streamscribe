@@ -84,8 +84,18 @@ if ($method === 'POST' && $route === 'publish') {
   foreach ($wantsTranscript || $wantsClip ? array_slice((array)($input['lines'] ?? []), 0, 50000) : [] as $line) {
     $start = (float)($line['start'] ?? 0);
     if ($start < $from - 0.01 || $start >= $to) continue;
+    $text = mb_substr(trim((string)($line['text'] ?? '')), 0, 5000);
+    // Links on phrases (web pages, Bible passages): where each starts and ends in the text, to a web address.
+    $links = [];
+    foreach (array_slice((array)($line['links'] ?? []), 0, 20) as $link) {
+      $url = (string)($link['url'] ?? '');
+      $linkFrom = (int)($link['from'] ?? -1);
+      $linkTo = (int)($link['to'] ?? -1);
+      if (!preg_match('#^https?://\S{1,2000}$#', $url) || $linkFrom < 0 || $linkTo <= $linkFrom || $linkTo > mb_strlen($text)) continue;
+      $links[] = ['from' => $linkFrom, 'to' => $linkTo, 'url' => $url, 'label' => mb_substr(trim((string)($link['label'] ?? '')), 0, 200)];
+    }
     $lines[] = ['start' => round($start - $from, 2), 'end' => round(min($to, (float)($line['end'] ?? $start)) - $from, 2),
-      'speaker' => mb_substr(trim((string)($line['speaker'] ?? '')), 0, 120), 'text' => mb_substr(trim((string)($line['text'] ?? '')), 0, 5000),
+      'speaker' => mb_substr(trim((string)($line['speaker'] ?? '')), 0, 120), 'text' => $text, 'links' => $links,
       // Who is speaking, by roster id: the public page shows the photos the directory makes public.
       'speakers' => array_values(array_filter(array_map('strval', array_slice((array)($line['speakers'] ?? []), 0, 12)), fn ($id) => (bool)preg_match('/^[A-Za-z0-9._-]{1,120}$/', $id)))];
   }

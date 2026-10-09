@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { clock } from '../format.ts';
+import LinkForm from './LinkForm.tsx';
+import type { TranscriptLink } from './links.ts';
 import { personName, type Person, type Word } from './words.ts';
 
 // Changing one word of the transcript, opened by clicking it: correct, delete, or restore the word, say who is
-// speaking from it on, or add someone new speaking from it. It sits in the transcript beside the word (a dialog
+// speaking from it on, add someone new speaking from it, or link a phrase from it (a web page, a Bible passage). It sits in the transcript beside the word (a dialog
 // that isn't modal); Escape closes it.
 export default function WordEditor({
   word,
@@ -12,6 +14,10 @@ export default function WordEditor({
   onWord,
   onSpeakers,
   onAdd,
+  following,
+  link,
+  onLink,
+  onUnlink,
   onClose
 }: {
   word: Word;
@@ -20,6 +26,10 @@ export default function WordEditor({
   onWord: (word: Word, text: string) => void;
   onSpeakers: (word: Word, speakers: string[]) => void;
   onAdd: (word: Word, name: string, role: string) => void;
+  following: Word[];
+  link: TranscriptLink | null;
+  onLink: (link: Omit<TranscriptLink, 'id'> & { id?: string }) => void;
+  onUnlink: (link: TranscriptLink) => void;
   onClose: () => void;
 }) {
   const [text, setText] = useState(word.shown);
@@ -102,6 +112,7 @@ export default function WordEditor({
           Add, speaking from here
         </button>
       </form>
+      <LinkForm word={word} following={following} link={link} onSave={onLink} onRemove={onUnlink} />
       <button type="button" className="link-button" onClick={onClose}>
         Close
       </button>

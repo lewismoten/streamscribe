@@ -18,6 +18,8 @@ export interface PublishLine {
   // Who is speaking, by roster id (public pages show the photos the public directory allows).
   speakers: string[];
   text: string;
+  // Links on phrases: where each starts and ends in the text.
+  links?: { from: number; to: number; url: string; label: string }[];
 }
 
 const parseTime = (text: string) => {

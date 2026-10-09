@@ -20,6 +20,7 @@ import BodiesPage from './civic/BodiesPage.tsx';
 import BodyPage from './civic/BodyPage.tsx';
 import ElectionsPage from './civic/ElectionsPage.tsx';
 import ElectionPage from './civic/ElectionPage.tsx';
+import ReligionPage from './religion/ReligionPage.tsx';
 import AgentsPage from './pages/AgentsPage.tsx';
 import SetupPage from './pages/SetupPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
@@ -73,6 +74,8 @@ export default function App() {
           <NavLink to="/people">People</NavLink>
           <NavLink to="/bodies">Bodies</NavLink>
           <NavLink to="/elections">Elections</NavLink>
+          {/* An internal reference: never for the public. */}
+          {viewer && can('edit.bodies', account) && <NavLink to="/religion">Religion</NavLink>}
           {viewer && <NavLink to="/live">Live</NavLink>}
           {viewer && <NavLink to="/agents">Agents</NavLink>}
           <NavLink to="/schedules">Schedules</NavLink>
@@ -116,6 +119,7 @@ export default function App() {
             <Route path="/bodies/:id" element={<BodyPage />} />
             <Route path="/elections" element={<ElectionsPage />} />
             <Route path="/elections/:id" element={<ElectionPage />} />
+            <Route path="/religion" element={<ReligionPage />} />
             <Route
               path="*"
               element={

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { can, useAccount } from '../data/account.ts';
 import { hubCall, mediaUrl } from '../data/hub.ts';
@@ -273,7 +273,7 @@ export function PublicationPage() {
                         {line.speaker}:{' '}
                       </strong>
                     )}
-                    {line.text}
+                    <LinkedText text={line.text} links={line.links || []} />
                   </span>
                 </li>
               ))}
@@ -291,4 +291,30 @@ export function PublicationPage() {
       )}
     </article>
   );
+}
+
+// A line's text with its linked phrases (a web page, a Bible passage) as links.
+function LinkedText({
+  text,
+  links
+}: {
+  text: string;
+  links: { from: number; to: number; url: string; label: string }[];
+}) {
+  const sorted = [...links]
+    .sort((a, b) => a.from - b.from)
+    .filter((link, index, list) => index === 0 || link.from >= list[index - 1].to);
+  const pieces: ReactNode[] = [];
+  let at = 0;
+  for (const link of sorted) {
+    if (link.from > at) pieces.push(text.slice(at, link.from));
+    pieces.push(
+      <a key={link.from} href={link.url} target="_blank" rel="noreferrer" title={link.label}>
+        {text.slice(link.from, link.to)}
+      </a>
+    );
+    at = link.to;
+  }
+  pieces.push(text.slice(at));
+  return <>{pieces}</>;
 }

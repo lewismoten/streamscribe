@@ -222,6 +222,16 @@ People in terms are the ones on each source's roster. Saving a term lists the pe
 
 **Attendance.** A meeting's Attendance panel lists the people on its body that day (from their terms) and anyone who spoke, to mark present or absent, and who presided. It's a mark (`<recording>:attendance`) with layers like the others, made public by the "Choose who is speaking" permission. When a recording isn't matched to the right body, choose it there.
 
+## Links, prayer, and the Religion page
+
+**Links in transcripts.** Clicking a word of a meeting's transcript (signed in) opens its editor, which can link a phrase from that word through a later one (into the next lines): to a web page, or naming a Bible passage (a book, and chapters and verses such as `121-122` or `3:16-18`). The phrase is underlined and followed by a ↗ link. Links are each part's `links` mark (made public by "Correct transcript words"); publishing a transcript excerpt carries them, so the phrase is a link on the public page too (the hub keeps only web addresses that fit the line).
+
+**Where passages link** is a setting (the settings record `scripture`): a web address with `{passage}` where the passage goes, `https://www.biblegateway.com/passage/?search={passage}` unless changed on the Religion page. Published transcripts keep the address they were published with.
+
+**Prayer.** A meeting's Prayer panel says who led prayer (a prayer, an invocation, a moment of silence, a reading), when, and their church, denomination, and tradition (Front Royal Church of the Nazarene, Church of the Nazarene, Christian). A person's church is kept once for the source (its `faith` mark) and filled in the next time they pray; a denomination already known fills in its tradition. Each meeting's prayers are its `prayers` mark. Both are private, like the meetings.
+
+**The Religion page** is an internal reference, only for people who may see meetings and edit public bodies (never shown to the public): every prayer, counted by tradition, denomination, church, and person so a rotation shows, filtered by body and year; every passage named in a transcript, by book; and where passages link.
+
 ## Schedules
 
 The Schedules page shows this month and the next two side by side, each month's meetings by day and time. **＋ Meeting** opens a dialog: choose the public body (its name and source come with it) and the day; a body that has met before brings its usual time, length, and recording settings, from its latest schedule. A meeting's ✎ opens its schedule in the same dialog, to change it, cancel (or restore) that one meeting of a repeating schedule, or delete it. A schedule's `bodyId` names its body.

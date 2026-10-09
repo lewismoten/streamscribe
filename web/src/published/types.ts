@@ -43,6 +43,8 @@ export interface Line {
   speaker: string;
   speakers?: string[];
   text: string;
+  // Links on phrases (web pages, Bible passages): where each starts and ends in the text.
+  links?: { from: number; to: number; url: string; label: string }[];
 }
 
 export const KIND_LABEL = { note: 'Notes', transcript: 'Transcript', clip: 'Clip' };

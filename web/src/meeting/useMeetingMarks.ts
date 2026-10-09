@@ -21,12 +21,12 @@ export function useMeetingMarks({
 }) {
   const viewerId = account.user?.id || 0;
   const { records: marks } = useRecords<Record<string, unknown>>('marks');
-  // This meeting's marks, and the people of its source (who may speak in any of its meetings).
+  // This meeting's marks, and its source's (its people, who may speak in any of its meetings, and their faith).
   const stacks = useMemo(
     () =>
       stackMarks(
         (marks || []).filter(
-          (mark) => mark.id.startsWith(`${id}:`) || (sourceKey && mark.id.startsWith(`${sourceKey}:people`))
+          (mark) => mark.id.startsWith(`${id}:`) || (sourceKey && mark.id.startsWith(`${sourceKey}:`))
         ),
         viewerId
       ) as Stacks,

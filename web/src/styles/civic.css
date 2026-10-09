@@ -235,3 +235,58 @@ label.block textarea,
 .office-replace input {
   font: inherit;
 }
+/* The Religion page's counts, and links in the transcript. */
+.tallies {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px 20px;
+  margin-bottom: 14px;
+}
+.tallies h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+.tallies ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tallies li {
+  position: relative;
+  padding: 3px 6px;
+}
+.tally-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--note);
+  border-radius: 4px;
+  z-index: 0;
+}
+.tallies li > span:last-child {
+  position: relative;
+}
+.word.linked {
+  text-decoration: underline dotted var(--accent);
+  text-underline-offset: 3px;
+}
+.transcript-link {
+  margin-left: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.link-form {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.prayers ul {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.prayers li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}

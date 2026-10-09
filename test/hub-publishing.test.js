@@ -64,7 +64,18 @@ test(
     assert.equal(note.publication.officialUrl, 'https://example.com/videos/1');
     const lines = [
       { start: 590, end: 595, speaker: 'Before', text: 'not in it' },
-      { start: 600, end: 604, speaker: 'Pat Lee', text: 'Next, the budget.' },
+      {
+        start: 600,
+        end: 604,
+        speaker: 'Pat Lee',
+        text: 'Next, the budget.',
+        // A linked phrase ("the budget"), and ones the hub drops: not a web address, past the text's end.
+        links: [
+          { from: 6, to: 16, url: 'https://example.com/budget', label: 'Budget' },
+          { from: 0, to: 4, url: 'javascript:alert(1)', label: 'bad' },
+          { from: 6, to: 99, url: 'https://example.com/', label: 'too long' }
+        ]
+      },
       { start: 605, end: 610, speaker: 'Sam', text: 'Thank you & good evening.' }
     ];
     const excerpt = await json(
@@ -85,6 +96,10 @@ test(
     const text = await (await fetch(hub.replace('api.php', excerpt.publication.transcript.text))).text();
     assert.match(text, /Pat Lee:\n\[00:00:00\] Next, the budget\./);
     assert.doesNotMatch(text, /not in it/);
+    const transcriptFile = await (await fetch(hub.replace('api.php', excerpt.publication.transcript.path))).json();
+    assert.deepEqual(transcriptFile.lines[0].links, [
+      { from: 6, to: 16, url: 'https://example.com/budget', label: 'Budget' }
+    ]);
     const clip = await json(
       'publish',
       {

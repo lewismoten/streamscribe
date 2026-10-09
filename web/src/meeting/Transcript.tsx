@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { useState, type Ref } from 'react';
 import TimeLink from './TimeLink.tsx';
 import WordEditor from './WordEditor.tsx';
+import { covers, endsAt, linkHref, linkLabel, type TranscriptLink } from './links.ts';
 import { lineKey } from './useFollowAlong.ts';
 import type { Person, ShownLine, Word } from './words.ts';
 
@@ -27,7 +28,11 @@ export default function Transcript({
   playing,
   picked,
   onPick,
-  edits
+  edits,
+  linksFor,
+  scriptureSite,
+  onLink,
+  onUnlink
 }: {
   kind: 'quick' | 'final';
   lines: ShownLine[];
@@ -54,6 +59,11 @@ export default function Transcript({
     saveSpeakers: (word: Word, speakers: string[]) => void;
     addPerson: (word: Word, name: string, role: string) => void;
   };
+  // Links on phrases (web pages, Bible passages), per part, and saving or removing one.
+  linksFor: (part: string) => TranscriptLink[];
+  scriptureSite: string;
+  onLink: (part: string, link: Omit<TranscriptLink, 'id'> & { id?: string }) => void;
+  onUnlink: (part: string, link: TranscriptLink) => void;
 }) {
   const [filter, setFilter] = useState('');
   const needle = filter.trim().toLowerCase();
@@ -68,6 +78,16 @@ export default function Transcript({
     : lines;
   const isPicked = (word: Word) =>
     picked !== null && picked.part === word.part && picked.line === word.line && picked.index === word.index;
+  // The words a phrase from the picked one can run through: the rest of its line and the next two.
+  const followingOf = (word: Word) => {
+    const at = lines.findIndex((line) => line.part === word.part && line.words.some((item) => item === word));
+    return lines
+      .slice(at, at + 3)
+      .filter((line) => line.part === word.part)
+      .flatMap((line) => line.words)
+      .filter((item) => item.line > word.line || (item.line === word.line && item.index >= word.index))
+      .slice(0, 40);
+  };
 
   return (
     <section className="panel transcript">
@@ -112,6 +132,10 @@ export default function Transcript({
                     const changed = speakers.join() !== last;
                     last = speakers.join();
                     const by = word.edit ? correctedBy(word) : '';
+                    const partLinks = linksFor(line.part);
+                    const place = { line: word.line, index: word.index };
+                    const linked = partLinks.find((link) => covers(link, place)) || null;
+                    const ending = partLinks.filter((link) => endsAt(link, place));
                     return (
                       <span key={word.index}>
                         {changed && speakers.length > 0 && (
@@ -143,7 +167,7 @@ export default function Transcript({
                         ) : (
                           <button
                             type="button"
-                            className={`word${word.edit ? ' edited' : ''}`}
+                            className={`word${word.edit ? ' edited' : ''}${linked ? ' linked' : ''}`}
                             disabled={!editable}
                             data-at={word.at}
                             title={word.edit ? `Was “${word.text}”${by ? ` · corrected by ${by}` : ''}` : undefined}
@@ -151,7 +175,18 @@ export default function Transcript({
                           >
                             {word.shown}
                           </button>
-                        )}{' '}
+                        )}
+                        {ending.map((link) => (
+                          <a
+                            key={link.id}
+                            className="transcript-link"
+                            href={linkHref(link, scriptureSite)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            ↗ {linkLabel(link)}
+                          </a>
+                        ))}{' '}
                         {isPicked(word) && (
                           <WordEditor
                             word={word}
@@ -160,6 +195,16 @@ export default function Transcript({
                             onWord={edits.saveWord}
                             onSpeakers={edits.saveSpeakers}
                             onAdd={edits.addPerson}
+                            following={followingOf(word)}
+                            link={linked}
+                            onLink={(link) => {
+                              onLink(line.part, link);
+                              onPick(null);
+                            }}
+                            onUnlink={(link) => {
+                              onUnlink(line.part, link);
+                              onPick(null);
+                            }}
                             onClose={() => onPick(null)}
                           />
                         )}

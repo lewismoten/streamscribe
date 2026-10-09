@@ -36,6 +36,9 @@ const MARK_PERMISSIONS = [
   'audio-boosts' => 'contribute.other',
   'playlist' => 'contribute.other',
   'attendance' => 'contribute.speakers',
+  'links' => 'contribute.transcript',
+  'prayers' => 'contribute.speakers',
+  'faith' => 'contribute.speakers',
 ];
 
 // Collections of meetings, which only viewers with view.meetings (and keys) see. Everyone sees schedules, sources,

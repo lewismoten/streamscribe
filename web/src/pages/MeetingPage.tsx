@@ -9,11 +9,15 @@ import MediaPlayer, { type MediaData, type PlayerControl } from '../meeting/Medi
 import PublishPanel, { type PublishLine } from '../meeting/PublishPanel.tsx';
 import OfficialPanel, { type Official } from '../meeting/OfficialPanel.tsx';
 import AttendancePanel from '../meeting/AttendancePanel.tsx';
+import PrayerPanel from '../meeting/PrayerPanel.tsx';
 import type { Attendance } from '../people/usePeople.ts';
 import MeetingHeader from '../meeting/MeetingHeader.tsx';
 import Transcript from '../meeting/Transcript.tsx';
 import { Chapters, Votes, type Chapter, type Vote } from '../meeting/Chapters.tsx';
 import { captionsVtt } from '../meeting/captions.ts';
+import { lineLinks, linksIn, linksMarkId, type TranscriptLink } from '../meeting/links.ts';
+import { useScriptureSite } from '../religion/bible.ts';
+import { newId } from '../../../src/sync/collections.js';
 import { transcriptEdits } from '../meeting/edits.ts';
 import { useFollowAlong } from '../meeting/useFollowAlong.ts';
 import { correctedBy, markList, useMeetingMarks } from '../meeting/useMeetingMarks.ts';
@@ -69,6 +73,20 @@ export default function MeetingPage() {
     speakersIn(
       (markData<{ turns?: Turn[] }>(`${id}:${part}:speakers`)?.turns || []).slice().sort((a, b) => a.at - b.at),
       seconds
+    );
+  // Links on phrases of the transcript (web pages, Bible passages), a mark per part.
+  const scriptureSite = useScriptureSite();
+  const linksFor = (part: string) => linksIn(stacks, id, part);
+  const saveLink = (part: string, link: Omit<TranscriptLink, 'id'> & { id?: string }) => {
+    const items = linksFor(part).filter((item) => item.id !== link.id);
+    const saved = { ...link, id: link.id || newId() } as TranscriptLink;
+    return save(linksMarkId(id, part), { items: [...items, saved] }, `Linked “${saved.text}”`);
+  };
+  const removeLink = (part: string, link: TranscriptLink) =>
+    save(
+      linksMarkId(id, part),
+      { items: linksFor(part).filter((item) => item.id !== link.id) },
+      `Removed the link on “${link.text}”`
     );
   const edits = transcriptEdits({ id, peopleId, people, markData, save, closeEditor: () => setPicked(null) });
 
@@ -178,7 +196,8 @@ export default function MeetingPage() {
           .map(nameOf)
           .join(', '),
         speakers: speakersAt(part, line.start + 0.01),
-        text: lineText(line)
+        text: lineText(line),
+        links: lineLinks(line, linksFor(part), scriptureSite)
       }));
   const firstPart = data.parts?.[0]?.name || lines[0]?.part || '';
   const playChapterAt = playing ? (seconds: number) => playAt(playing.part, seconds) : null;
@@ -296,6 +315,17 @@ export default function MeetingPage() {
             onAddFile={editChapters ? addChapterFile : null}
           />
           <Votes votes={votes} playAt={playChapterAt} />
+          <PrayerPanel
+            recordingId={id}
+            sourceKey={data.sourceKey}
+            part={playing?.part || firstPart}
+            people={people}
+            playerTime={follow.currentTime}
+            markData={markData}
+            save={save}
+            canEdit={Boolean(account.user)}
+            playAt={playing ? playAt : null}
+          />
           <AttendancePanel
             recordingId={id}
             recording={data}
@@ -330,6 +360,10 @@ export default function MeetingPage() {
           picked={picked}
           onPick={setPicked}
           edits={edits}
+          linksFor={linksFor}
+          scriptureSite={scriptureSite}
+          onLink={saveLink}
+          onUnlink={removeLink}
         />
       </div>
     </article>

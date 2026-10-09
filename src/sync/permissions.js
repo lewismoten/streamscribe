@@ -26,7 +26,10 @@ export const MARK_PERMISSIONS = {
   views: 'contribute.other',
   'audio-boosts': 'contribute.other',
   playlist: 'contribute.other',
-  attendance: 'contribute.speakers'
+  attendance: 'contribute.speakers',
+  links: 'contribute.transcript',
+  prayers: 'contribute.speakers',
+  faith: 'contribute.speakers'
 };
 
 export const markKind = (markId) => String(markId).split(':').at(-1);
