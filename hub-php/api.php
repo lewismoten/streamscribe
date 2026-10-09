@@ -8,6 +8,7 @@
 //   POST claim     (recorder key)     { occurrenceKey, recorderId, ttlSeconds } → { granted, holder, leaseUntil }
 //   POST live      (recorder key)     { recorderId, status } — the recorder's current state (heartbeat)
 //   GET  live      (view.meetings)    every recorder's latest state
+//   POST live/forget (manage.users)   { recorderId } its last report removed from the live view
 //   POST live-thumbnail?recorder=ID   (recorder key) a JPEG, replacing that recorder's live picture
 //   POST media?sha256=HEX&type=image/jpeg   (key) a file stored by its hash; already there → { exists: true }
 // Private files (lib/files.php): GET file-key (view.meetings) → { e, s }; GET file/private/<path>?e=…&s=…
@@ -248,6 +249,15 @@ if ($method === 'GET' && $route === 'live') {
   if ($viewer['kind'] !== 'key') hub_require_permission($viewer, 'view.meetings');
   $rows = $db->query('SELECT body, updated_at FROM live ORDER BY recorder_id')->fetchAll();
   hub_send(200, ['time' => hub_now(), 'recorders' => array_map(function ($row) { $entry = json_decode($row['body']); $entry->updatedAt = $row['updated_at']; return $entry; }, $rows)]);
+}
+
+// Removing an agent's last report from the live view (an agent no longer used, or one set up by hand that can't be
+// revoked on the Agents page); one that reports again comes back. Its key is revoked separately.
+if ($method === 'POST' && $route === 'live/forget') {
+  hub_require_permission($viewer, 'manage.users');
+  $input = hub_json_body(4096);
+  $db->prepare('DELETE FROM live WHERE recorder_id = ?')->execute([(string)($input['recorderId'] ?? '')]);
+  hub_send(200, ['ok' => true]);
 }
 
 if ($method === 'POST' && ($route === 'media' || $route === 'live-thumbnail')) {

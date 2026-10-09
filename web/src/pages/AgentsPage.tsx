@@ -61,7 +61,12 @@ export default function AgentsPage() {
         <code>npm run recorder</code>.
       </p>
       {admin && <AddAgent />}
-      <AgentCards agents={agents} canEdit={can('edit.sources', account)} />
+      <AgentCards
+        agents={agents}
+        canEdit={can('edit.sources', account)}
+        admin={admin}
+        onForget={(id) => setAgents((list) => (list || []).filter((agent) => agent.recorderId !== id))}
+      />
       <ReachGrid agents={agents} canEdit={can('edit.sources', account)} />
       <WorkQueue jobs={jobs} manage={can('publish', account)} />
       <SiteTurns

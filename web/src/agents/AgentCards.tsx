@@ -1,11 +1,22 @@
+import { hubCall } from '../data/hub.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type Capabilities, type UpdateStatus } from './types.ts';
 import { Progress } from './WorkQueue.tsx';
 import AgentSettings from './AgentSettings.tsx';
 
 // A card for each agent that has reported to the hub: online or not (one not heard from for 90 seconds is offline),
-// what it's doing, and what its machine can do.
-export default function AgentCards({ agents, canEdit = false }: { agents: Agent[] | null; canEdit?: boolean }) {
+// what it's doing, and what its machine can do. An admin can remove an offline one from the list.
+export default function AgentCards({
+  agents,
+  canEdit = false,
+  admin = false,
+  onForget = () => {}
+}: {
+  agents: Agent[] | null;
+  canEdit?: boolean;
+  admin?: boolean;
+  onForget?: (agentId: string) => void;
+}) {
   const now = useNow(10000);
   return (
     <div className="agents">
@@ -27,6 +38,26 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
                 <code>{agent.recorderId}</code>
               </div>
               <Machine status={status} />
+              {admin && !online && (
+                <p className="small">
+                  <button
+                    type="button"
+                    className="link-button danger"
+                    onClick={async () => {
+                      if (
+                        !window.confirm(
+                          `Remove ${status?.name || agent.name} from this list? If it reports again, it comes back. (Its key still works: revoke it on the Agents page or in Hub settings → Keys.)`
+                        )
+                      )
+                        return;
+                      await hubCall('live/forget', { recorderId: agent.recorderId });
+                      onForget(agent.recorderId);
+                    }}
+                  >
+                    Remove from this list
+                  </button>
+                </p>
+              )}
               <p className="muted">
                 {online
                   ? status?.state === 'recording'

@@ -70,3 +70,13 @@ test('agents: an install command, enrolling once for a key, downloading, revokin
   assert.equal((await json('agents/revoke', { id: 'pi1' }, boss)).ok, true);
   assert.equal((await post('live', { recorderId: 'pi1', status: {} }, second.key)).status, 401);
 });
+
+test("removing an agent's last report from the live view (admins only)", { skip: external }, async () => {
+  assert.equal((await post('live', { recorderId: 'old-mac', status: { name: 'Old Mac' } }, recorderKey)).status, 200);
+  const listed = async () =>
+    (await json('live', null, await signIn('boss'), 'GET')).recorders.map((item) => item.recorderId);
+  assert.ok((await listed()).includes('old-mac'));
+  assert.equal((await json('live/forget', { recorderId: 'old-mac' }, await signIn('jane'))).status, 403);
+  assert.equal((await json('live/forget', { recorderId: 'old-mac' }, await signIn('boss'))).status, 200);
+  assert.ok(!(await listed()).includes('old-mac'));
+});
