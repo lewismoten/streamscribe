@@ -91,7 +91,8 @@ if ($method === 'POST' && $route === 'publish') {
       $url = (string)($link['url'] ?? '');
       $linkFrom = (int)($link['from'] ?? -1);
       $linkTo = (int)($link['to'] ?? -1);
-      if (!preg_match('#^https?://\S{1,2000}$#', $url) || $linkFrom < 0 || $linkTo <= $linkFrom || $linkTo > mb_strlen($text)) continue;
+      // A web address, or a page of this site (a place, as #/locations/<id> or /…/locations/<id>).
+      if (!preg_match('~^(https?://\S{1,2000}|#?/[A-Za-z0-9/_.%-]{1,300})$~', $url) || $linkFrom < 0 || $linkTo <= $linkFrom || $linkTo > mb_strlen($text)) continue;
       $links[] = ['from' => $linkFrom, 'to' => $linkTo, 'url' => $url, 'label' => mb_substr(trim((string)($link['label'] ?? '')), 0, 200)];
     }
     $lines[] = ['start' => round($start - $from, 2), 'end' => round(min($to, (float)($line['end'] ?? $start)) - $from, 2),

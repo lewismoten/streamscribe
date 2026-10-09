@@ -1,5 +1,6 @@
 import type { Passage } from '../religion/bible.ts';
 import { passageName, passageUrl } from '../religion/bible.ts';
+import { placeHref } from '../locations/types.ts';
 import type { ShownLine, Stacks } from './words.ts';
 
 // Links on the transcript's words (each part's `links` mark): a phrase, from one word to another (words are found by
@@ -17,7 +18,8 @@ export interface TranscriptLink {
   at: number; // when the phrase starts, in seconds
   text: string; // the phrase as it was when linked
   url?: string;
-  label?: string; // what a web link is (a meeting document's name)
+  label?: string; // what a web link is (a meeting document's name), or the place's name when it was linked
+  locationId?: string; // a place (see ../locations)
   passage?: Passage;
 }
 
@@ -34,7 +36,11 @@ export const endsAt = (link: TranscriptLink, place: WordPlace) =>
 export const linkLabel = (link: TranscriptLink) =>
   link.passage ? passageName(link.passage) : link.label || link.url || '';
 export const linkHref = (link: TranscriptLink, scriptureSite: string) =>
-  link.passage ? passageUrl(link.passage, scriptureSite) : link.url || '';
+  link.passage
+    ? passageUrl(link.passage, scriptureSite)
+    : link.locationId
+      ? placeHref(link.locationId)
+      : link.url || '';
 
 // A line's links for publishing: where each starts and ends in the line's text (a phrase over several lines is
 // linked on each).

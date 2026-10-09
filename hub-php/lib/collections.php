@@ -20,6 +20,7 @@ const COLLECTIONS = [
   'terms' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'elections' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'rooms' => ['writers' => ['editor'], 'mode' => 'mutable'],
+  'locations' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'profiles' => ['writers' => ['editor'], 'mode' => 'mutable'],
 ];
 const MAX_RECORD_BYTES = 262144;

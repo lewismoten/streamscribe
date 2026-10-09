@@ -14,7 +14,7 @@ import RoomPanel from '../meeting/RoomPanel.tsx';
 import ConsentPanel from '../meeting/ConsentPanel.tsx';
 import DocumentDialog from '../meeting/DocumentDialog.tsx';
 import { consentMarkId, meetingDocuments, type ConsentItem, type DocumentLink } from '../meeting/documents.ts';
-import type { CameraView } from '../rooms/types.ts';
+import { roomIdOf, type CameraView, type Room } from '../rooms/types.ts';
 import Dialog from '../Dialog.tsx';
 import ClipForm from '../videos/ClipForm.tsx';
 import ClipsPanel from '../videos/ClipsPanel.tsx';
@@ -62,6 +62,8 @@ export default function MeetingPage() {
   const { records: mediaRecords } = useRecords<MediaData>('media');
   const { records: terms } = useRecords<Term>('terms');
   const { records: bodies } = useRecords<Body>('bodies');
+  const { records: rooms } = useRecords<Room>('rooms');
+  const { records: schedules } = useRecords<{ roomId?: string }>('schedules');
   const [picked, setPicked] = useState<Word | null>(null);
   const [partShown, setPartShown] = useState('');
   const [seek, setSeek] = useState<{ time: number; n: number } | null>(null);
@@ -232,6 +234,18 @@ export default function MeetingPage() {
   // The consent agenda (a mark of the meeting), and every document of the meeting, to link transcript words to.
   const consent = markData<{ items?: ConsentItem[] }>(consentMarkId(id))?.items || [];
   const saveConsent = (items: ConsentItem[], done: string) => save(consentMarkId(id), { items }, done);
+  // Where the meeting is (its room's town and ZIP), left out of addresses there when naming places.
+  const meetingRoom = rooms?.find(
+    (item) =>
+      item.id ===
+      roomIdOf({
+        chosen: (info as { roomId?: string }).roomId,
+        occurrenceKey: data.occurrenceKey,
+        schedules: schedules || [],
+        meetingBodies
+      })
+  )?.data;
+  const around = meetingRoom ? { city: meetingRoom.city, postal: meetingRoom.postal } : undefined;
   const documents = meetingDocuments({ consent, chapters, official: officialLinks(official) });
   // The transcript as shown (corrections, speaker names), for publishing and for the player's captions.
   const linesFor = (part: string): PublishLine[] =>
@@ -484,6 +498,7 @@ export default function MeetingPage() {
           onLink={saveLink}
           onUnlink={removeLink}
           documents={documents}
+          around={around}
           onClip={(part, from, to, text) =>
             setClipDraft({ part, from, to, title: text.length > 60 ? `${text.slice(0, 57)}…` : text })
           }

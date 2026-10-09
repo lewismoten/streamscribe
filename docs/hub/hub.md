@@ -46,6 +46,7 @@ Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, o
 | `jobs`              | work for agents: clips to cut, recordings to encode                                                                                 | the Publish permission; agents (progress)                |
 | `organizations`     | counties, towns, school divisions, nonprofits with public bodies; their districts                                                   | Edit public bodies permission                            |
 | `bodies`            | public bodies (boards, committees, staff): how members are chosen, which meetings are theirs                                        | Edit public bodies permission                            |
+| `locations`         | places mentioned in meetings: a name, an address, GPS coordinates, a tax map id, and shapes on a map                                | the Chapters and the meeting name permission             |
 | `rooms`             | where meetings are held: a room in a building, its address, and the camera views its meetings share                                 | Edit public bodies permission                            |
 | `elections`         | an organization's elections: the day, a name, general, special, or primary                                                          | Edit public bodies permission                            |
 | `profiles`          | a person's formal name, nicknames, and ids on other sites (such as state election results)                                          | Edit public bodies permission                            |
@@ -231,6 +232,12 @@ People in terms are the ones on each source's roster. Saving a term lists the pe
 The Rooms page lists where meetings are held, by building (with its address and a map): a room (the Board Room) in a building (the Warren County Government Center). A room keeps the **camera views** its meetings share (a view is a camera angle with a zoom area for each seat, as the review page makes them).
 
 **A meeting's room** is the one chosen on its page (its Where panel; saved in its meeting-info mark), else its schedule's **Location**, else the room its body **usually meets in** (on the body's form). A schedule's location starts as its body's usual room. On a meeting's page, **Save this meeting's camera views to the room** shares them (people who may edit public bodies), and a meeting with none can **Use the room's camera views** (copied into its own views, so the review page has them too). A room's page shows its views, the bodies that usually meet there, what's coming up there, and (for people who may see meetings) the meetings held there.
+
+## Locations
+
+Selecting words in a meeting's transcript offers **Mark as a place…**: a dialog to choose a place already known (found by its name, address, or tax map id) or add one. Everything about a place is optional, as long as something is given: a name (a business, an area, an HOA), a street address (town, county, state, ZIP), GPS coordinates, a tax map id, a note, and on a map (OpenStreetMap; **Find** moves it to an address) a marker, an approximate area (a circle: its middle, then its edge), outlined areas, and roads (a click for each point, then Finish). The words get a 📍 link to the place, here and in published transcripts.
+
+A place is called by its name, else its street address (with its town, county, and ZIP when they aren't the meeting room's), else its coordinates, else its tax map id. The **Locations** tab shows every place on a map and in a list, with how often each has come up; a place's page has its details, its map, and each time it was mentioned (for people who may see meetings), linked to that moment. Places are the public collection `locations`; the links are the transcript's `links` marks.
 
 ## Consent agenda and documents
 

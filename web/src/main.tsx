@@ -14,6 +14,7 @@ import './styles/agents.css';
 import './styles/official-sources.css';
 import './styles/civic.css';
 import './styles/videos.css';
+import './styles/locations.css';
 
 // A static host (GitHub Pages) can't send every address to index.html, so that build keeps the page in the # part.
 const Router = import.meta.env.VITE_ROUTER === 'hash' ? HashRouter : BrowserRouter;

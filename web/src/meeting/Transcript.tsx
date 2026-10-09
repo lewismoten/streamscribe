@@ -4,6 +4,8 @@ import { clock } from '../format.ts';
 import Avatar, { RING_LABELS, type AvatarPerson } from '../people/Avatar.tsx';
 import Dialog from '../Dialog.tsx';
 import LinkForm from './LinkForm.tsx';
+import LocationDialog from '../locations/LocationDialog.tsx';
+import { placeName, placePath, type Around } from '../locations/types.ts';
 import TimeLink from './TimeLink.tsx';
 import WordEditor from './WordEditor.tsx';
 import { covers, endsAt, linkHref, linkLabel, type TranscriptLink } from './links.ts';
@@ -40,7 +42,8 @@ export default function Transcript({
   onLink,
   onUnlink,
   onClip,
-  documents = []
+  documents = [],
+  around
 }: {
   kind: 'quick' | 'final';
   lines: ShownLine[];
@@ -78,6 +81,8 @@ export default function Transcript({
   onClip?: (part: string, from: number, to: number, text: string) => void;
   // The meeting's documents (consent agenda, chapters, official), to link selected words to one.
   documents?: { group: string; label: string; url: string }[];
+  // Where the meeting is (its room's town, county, and ZIP), for naming places.
+  around?: Around;
 }) {
   const [filter, setFilter] = useState('');
   // Words selected in the transcript: the menu under them, and the dialog one of its choices opens.
@@ -143,6 +148,14 @@ export default function Transcript({
       label: document.label
     });
     setPicking(null);
+  };
+  // Marking selected words as a place: a known one, or a new one (see ../locations).
+  const [placing, setPlacing] = useState<{ part: string; words: Word[] } | null>(null);
+  const placeWords = () => {
+    if (!menu) return;
+    setPlacing({ part: menu.part, words: menu.words });
+    setMenu(null);
+    window.getSelection()?.removeAllRanges();
   };
   const unlink = (part: string, link: TranscriptLink) => {
     onUnlink(part, link);
@@ -375,17 +388,24 @@ export default function Transcript({
                               {word.shown}
                             </span>
                           )}
-                          {ending.map((link) => (
-                            <a
-                              key={link.id}
-                              className="transcript-link"
-                              href={linkHref(link, scriptureSite)}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              ↗ {linkLabel(link)}
-                            </a>
-                          ))}
+                          {ending.map((link) =>
+                            // A place goes to its page here; anything else opens elsewhere.
+                            link.locationId ? (
+                              <Link key={link.id} className="transcript-link" to={placePath(link.locationId)}>
+                                📍 {linkLabel(link)}
+                              </Link>
+                            ) : (
+                              <a
+                                key={link.id}
+                                className="transcript-link"
+                                href={linkHref(link, scriptureSite)}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                ↗ {linkLabel(link)}
+                              </a>
+                            )
+                          )}
                           {editable &&
                             ending.map((link) => (
                               <button
@@ -462,6 +482,9 @@ export default function Transcript({
           {/* Words already linked are changed or unlinked, not linked twice. */}
           {linksOn(menu.part, menu.words).length === 0 && (
             <>
+              <button type="button" role="menuitem" onClick={placeWords}>
+                Mark as a place…
+              </button>
               {documents.length > 0 && (
                 <button type="button" role="menuitem" onClick={pickDocument}>
                   Link to a meeting document…
@@ -476,6 +499,31 @@ export default function Transcript({
             </>
           )}
         </div>
+      )}
+      {placing && (
+        <LocationDialog
+          words={placing.words
+            .map((word) => word.shown)
+            .filter(Boolean)
+            .join(' ')}
+          around={around}
+          onClose={() => setPlacing(null)}
+          onChoose={(locationId, place) => {
+            const [first, last] = [placing.words[0], placing.words.at(-1)!];
+            onLink(placing.part, {
+              from: { line: first.line, index: first.index },
+              to: { line: last.line, index: last.index },
+              at: first.at,
+              text: placing.words
+                .map((word) => word.shown)
+                .filter(Boolean)
+                .join(' '),
+              locationId,
+              label: placeName(place, around)
+            });
+            setPlacing(null);
+          }}
+        />
       )}
       {picking && (
         <Dialog title="Link to a meeting document" onClose={() => setPicking(null)}>

@@ -61,6 +61,7 @@ const EDIT_PERMISSIONS = [
   'terms' => 'edit.bodies',
   'elections' => 'edit.bodies',
   'rooms' => 'edit.bodies',
+  'locations' => 'contribute.chapters',
   'profiles' => 'edit.bodies',
 ];
 

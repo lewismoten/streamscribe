@@ -69,6 +69,11 @@ export const COLLECTIONS = {
     mode: 'mutable',
     doc: "More about a person (id <source>:<roster id>): their formal name, nicknames, and ids on other sites (such as a state's election results), whose addresses are the settings record person-links."
   },
+  locations: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: 'Places mentioned in meetings: a name, a street address, GPS coordinates, a tax map id, and on a map a marker, an approximate area, outlined areas, or roads; transcripts link words to them.'
+  },
   rooms: {
     writers: ['editor'],
     mode: 'mutable',

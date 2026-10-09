@@ -327,7 +327,13 @@ function LinkedText({
   for (const link of sorted) {
     if (link.from > at) pieces.push(text.slice(at, link.from));
     pieces.push(
-      <a key={link.from} href={link.url} target="_blank" rel="noreferrer" title={link.label}>
+      <a
+        key={link.from}
+        href={link.url}
+        title={link.label}
+        // A page of this site (a place) opens here; anything else in a new tab.
+        {...(/^https?:/.test(link.url) ? { target: '_blank', rel: 'noreferrer' } : {})}
+      >
         {text.slice(link.from, link.to)}
       </a>
     );

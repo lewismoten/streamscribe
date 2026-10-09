@@ -1,0 +1,48 @@
+/* Places: maps for drawing and showing them, and their lists (web/src/locations). */
+.location-map {
+  margin: 10px 0;
+}
+.map-box {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  z-index: 0;
+}
+.map-tools,
+.map-shapes {
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+.map-tools input[type='search'] {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+}
+.place-list {
+  margin: 12px 0;
+  padding-left: 18px;
+}
+.place-list li {
+  margin: 4px 0;
+}
+.place-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 0 0 12px;
+}
+.place-details div {
+  display: contents;
+}
+.place-details dt {
+  color: var(--muted);
+}
+.place-details dd {
+  margin: 0;
+}
+.dialog .location-map .map-box {
+  height: 300px !important;
+}
