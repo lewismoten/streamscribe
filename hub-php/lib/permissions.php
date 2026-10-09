@@ -45,7 +45,7 @@ const MARK_PERMISSIONS = [
 // Collections of meetings (and the clips and videos made from them), which only viewers with view.meetings (and keys)
 // see. Everyone sees schedules, sources,
 // settings, recorders, and publications.
-const PRIVATE_COLLECTIONS = ['recordings', 'transcript_chunks', 'stills', 'media', 'marks', 'jobs', 'clips', 'videos'];
+const PRIVATE_COLLECTIONS = ['recordings', 'transcript_chunks', 'stills', 'media', 'marks', 'jobs', 'clips', 'videos', 'notifications'];
 
 // Shared collections a person may change directly, and the permission it takes.
 const EDIT_PERMISSIONS = [

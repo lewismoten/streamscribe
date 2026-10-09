@@ -26,6 +26,8 @@ export interface VideoItem {
   to: number;
   title: string;
   meeting: string;
+  volume?: number; // 0 to 1 (1 unless changed)
+  muted?: boolean;
 }
 export interface Video {
   title: string;
@@ -35,6 +37,25 @@ export interface Video {
   updatedAt: string;
   publicationId?: string;
   publishedAt?: string;
+  // Which overlays it has (all, unless some are turned off).
+  overlays?: Partial<Record<'speaker' | 'body' | 'chapter' | 'clock' | 'vote', boolean>>;
+}
+// Where each clip starts in the video, and how long the video is.
+export function layout(items: { from: number; to: number }[]) {
+  const starts: number[] = [];
+  let total = 0;
+  for (const item of items) {
+    starts.push(total);
+    total += Math.max(0, item.to - item.from);
+  }
+  return { starts, total };
+}
+// The clip at a moment of the video (the last one at its very end).
+export function itemAt(items: { from: number; to: number }[], seconds: number) {
+  const { starts } = layout(items);
+  let index = 0;
+  for (let at = 0; at < starts.length; at += 1) if (seconds >= starts[at]) index = at;
+  return index;
 }
 
 export const seconds = (items: { from: number; to: number }[]) =>

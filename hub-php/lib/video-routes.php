@@ -3,11 +3,15 @@
 // meetings) lists its clips in order; publishing makes a public publication of kind video, saying which meetings
 // it's from, and queues a job for an agent that has those recordings: it cuts each clip, joins them into one MP4
 // (and an M4A), and uploads them to the publication's media/published/<id>/.
-//   POST publish-video { id } (publish) → { id, publication }   (publishing again replaces the video's publication)
+//   POST publish-video { id, quality, destination, folder, agentId } (publish) → { id, publication, job }
+//     quality: standard (720p) or production (1080p, from the recordings at their best); destination: hub (a public
+//     publication; publishing again replaces it) or folder (saved on an agent, at folder or its streamscribe-videos,
+//     with no publication). Each clip's volume and overlays (who is speaking, the chapter… with when, worked out by
+//     the web app) go to the agent with it.
 
 if ($method === 'POST' && $route === 'publish-video') {
   hub_require_permission($viewer, 'publish');
-  $input = hub_json_body(10000);
+  $input = hub_json_body(4000000);
   $videoId = (string)($input['id'] ?? '');
   $video = $videoId !== '' ? hub_record_data($db, 'videos', $videoId) : null;
   if (!$video) hub_fail(404, 'No such video');
@@ -23,7 +27,19 @@ if ($method === 'POST' && $route === 'publish-video') {
     $to = (float)($item['to'] ?? 0);
     $recording = $recordingId !== '' ? hub_record_data($db, 'recordings', $recordingId) : null;
     if (!$recording || $to <= $from) continue;
-    $items[] = ['recordingId' => $recordingId, 'part' => $part, 'from' => round($from, 2), 'to' => round($to, 2)];
+    $overlays = [];
+    // Overlays come with the request (worked out by the web app from the meetings' marks), by the clip's key.
+    $given = (array)($input['overlays'] ?? []);
+    foreach (array_slice((array)($given[(string)($item['key'] ?? '')] ?? $item['overlays'] ?? []), 0, 2000) as $overlay) {
+      $kind = (string)($overlay['kind'] ?? '');
+      $text = mb_substr(trim((string)($overlay['text'] ?? '')), 0, 300);
+      $start = (float)($overlay['from'] ?? 0);
+      $end = (float)($overlay['to'] ?? 0);
+      if (in_array($kind, ['speaker', 'body', 'chapter', 'clock', 'vote'], true) && $text !== '' && $end > $start)
+        $overlays[] = ['kind' => $kind, 'from' => round($start, 2), 'to' => round($end, 2), 'text' => $text];
+    }
+    $items[] = ['recordingId' => $recordingId, 'part' => $part, 'from' => round($from, 2), 'to' => round($to, 2),
+      'volume' => max(0, min(2, (float)($item['volume'] ?? 1))), 'muted' => !empty($item['muted']), 'overlays' => $overlays];
     // What the public sees of each clip: its title and its meeting (not the private recording).
     $parts[] = ['title' => mb_substr(trim((string)($item['title'] ?? '')), 0, 200), 'meeting' => (string)($recording['title'] ?? ''),
       'recordedAt' => $recording['startedAt'] ?? null, 'sourceKey' => (string)($recording['sourceKey'] ?? ''), 'seconds' => round($to - $from, 2)];
@@ -33,6 +49,19 @@ if ($method === 'POST' && $route === 'publish-video') {
   $maxMinutes = (float)($config['max_clip_minutes'] ?? 240);
   if ($seconds > $maxMinutes * 60) hub_fail(400, "Videos can be up to $maxMinutes minutes (Hub settings, longest clip)");
 
+  $quality = ($input['quality'] ?? '') === 'production' ? 'production' : 'standard';
+  $toFolder = ($input['destination'] ?? '') === 'folder';
+  $output = ['quality' => $quality, 'destination' => $toFolder ? 'folder' : 'hub', 'folder' => mb_substr(trim((string)($input['folder'] ?? '')), 0, 500)];
+  $forAgent = preg_match('/^[A-Za-z0-9._-]{1,80}$/', (string)($input['agentId'] ?? '')) ? (string)$input['agentId'] : null;
+  // Saved to a folder: a job alone (no publication), and a message when it's done.
+  if ($toFolder) {
+    $jobId = 'video-' . bin2hex(random_bytes(6));
+    $job = ['type' => 'video', 'status' => 'queued', 'title' => "Video: $title", 'videoTitle' => $title, 'videoId' => $videoId,
+      'items' => $items, 'output' => $output, 'forAgent' => $forAgent, 'progress' => 0, 'message' => '', 'agent' => null,
+      'createdAt' => hub_now(), 'createdBy' => $viewer['name']];
+    hub_write($db, fn (PDO $db) => hub_put_record($db, 'jobs', $jobId, $job, $viewer['name']));
+    hub_send(200, ['id' => null, 'publication' => null, 'job' => $jobId]);
+  }
   $id = preg_match('/^[a-zA-Z0-9-]{8,64}$/', (string)($video['publicationId'] ?? '')) ? $video['publicationId'] : bin2hex(random_bytes(8));
   $first = $parts[0];
   $publication = [
@@ -43,12 +72,12 @@ if ($method === 'POST' && $route === 'publish-video') {
     'clip' => ['status' => 'queued', 'job' => "video-$id", 'hasVideo' => true],
     'publishedAt' => hub_now(), 'publishedBy' => $viewer['name'],
   ];
-  hub_write($db, function (PDO $db) use ($id, $publication, $items, $title, $viewer, $videoId, $video) {
+  hub_write($db, function (PDO $db) use ($id, $publication, $items, $title, $viewer, $videoId, $video, $output, $forAgent) {
     hub_put_record($db, 'publications', $id, $publication, $viewer['name']);
     hub_put_record($db, 'jobs', "video-$id", ['type' => 'video', 'status' => 'queued', 'title' => "Video: $title", 'publicationId' => $id,
-      'videoId' => $videoId, 'items' => $items, 'progress' => 0, 'message' => '', 'agent' => null, 'createdAt' => hub_now(),
+      'videoId' => $videoId, 'videoTitle' => $title, 'items' => $items, 'output' => $output, 'forAgent' => $forAgent, 'progress' => 0, 'message' => '', 'agent' => null, 'createdAt' => hub_now(),
       'createdBy' => $viewer['name']], $viewer['name']);
     hub_put_record($db, 'videos', $videoId, ['publicationId' => $id, 'publishedAt' => hub_now()] + $video, $viewer['name']);
   });
-  hub_send(200, ['id' => $id, 'publication' => $publication]);
+  hub_send(200, ['id' => $id, 'publication' => $publication, 'job' => "video-$id"]);
 }

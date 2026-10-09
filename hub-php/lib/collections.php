@@ -14,6 +14,7 @@ const COLLECTIONS = [
   'jobs' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'clips' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'videos' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
+  'notifications' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'directory' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'organizations' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'bodies' => ['writers' => ['editor'], 'mode' => 'mutable'],

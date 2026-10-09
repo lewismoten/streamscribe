@@ -89,3 +89,324 @@
 .video-parts {
   margin: 8px 0 14px;
 }
+
+/* The editor: library, preview, and the selected clip's settings above the timeline. */
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(360px, 2.2fr) minmax(220px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.clip-bin {
+  max-height: 520px;
+  overflow: auto;
+}
+.preview-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.preview-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.preview-blank {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #ccc;
+  padding: 12px;
+  text-align: center;
+}
+/* Overlays in the preview, where the render draws them (in parts of the frame, so they scale with it). */
+.preview-overlays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  container-type: inline-size;
+}
+.preview-overlay {
+  position: absolute;
+  padding: 0.6cqw 1cqw;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.overlay-speaker {
+  left: 3.1cqw;
+  bottom: 6.5cqw;
+  font-size: 2.65cqw;
+}
+.overlay-body {
+  left: 3.1cqw;
+  top: 2.3cqw;
+  font-size: 1.7cqw;
+}
+.overlay-chapter {
+  left: 3.1cqw;
+  top: 5.2cqw;
+  font-size: 2.2cqw;
+}
+.overlay-clock {
+  right: 3.1cqw;
+  top: 2.3cqw;
+  font-size: 1.9cqw;
+}
+.overlay-vote {
+  left: 3.1cqw;
+  bottom: 11.2cqw;
+  font-size: 2.2cqw;
+}
+.transport {
+  margin-top: 8px;
+}
+.overlay-choice {
+  display: flex;
+  margin: 4px 0;
+}
+
+/* The timeline: tracks of blocks under a ruler, with the playhead across them. */
+.timeline-editor {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.timeline-scroll {
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.timeline-tracks {
+  position: relative;
+  min-height: 170px;
+}
+.timeline-ruler {
+  position: relative;
+  height: 22px;
+  border-bottom: 1px solid var(--line);
+  cursor: ew-resize;
+  user-select: none;
+}
+.timeline-tick {
+  position: absolute;
+  top: 2px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  border-left: 1px solid var(--line);
+  padding-left: 3px;
+}
+.timeline-track {
+  position: relative;
+  height: 64px;
+  margin: 4px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.audio-track,
+.speaker-track {
+  height: 28px;
+}
+.track-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: inline-block;
+  width: 70px;
+  padding: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--card);
+}
+.timeline-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: grab;
+}
+.timeline-block.selected {
+  outline: 3px solid var(--live);
+  z-index: 1;
+}
+.timeline-block.dragging {
+  opacity: 0.5;
+}
+.timeline-block.drop-before {
+  box-shadow: inset 4px 0 0 var(--live);
+}
+.timeline-block.drop-after {
+  box-shadow: inset -4px 0 0 var(--live);
+}
+.block-select {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+.block-thumbs {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  opacity: 0.85;
+}
+.block-thumbs img {
+  height: 100%;
+  flex: 1;
+  object-fit: cover;
+  min-width: 0;
+}
+.block-title {
+  position: absolute;
+  left: 6px;
+  bottom: 3px;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  padding: 0 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #fff;
+  background: rgb(0 0 0 / 0.6);
+  border-radius: 3px;
+}
+.trim-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 2;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.45);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  cursor: ew-resize;
+  touch-action: none;
+}
+.timeline-block.audio {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg));
+  cursor: pointer;
+}
+.timeline-block.audio.muted {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.speaker-span {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  overflow: hidden;
+  padding: 0 4px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--violet);
+  border-radius: 4px;
+  opacity: 0.85;
+}
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  z-index: 3;
+  background: var(--live);
+  pointer-events: none;
+}
+
+/* Notifications: the bell and its panel. */
+.bell {
+  position: relative;
+}
+.bell-button {
+  position: relative;
+  padding: 4px 8px;
+  border: 0;
+  background: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.bell-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 0.7rem;
+  color: #fff;
+  background: var(--live);
+}
+.bell-busy {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: bell-pulse 1.2s ease-in-out infinite;
+}
+@keyframes bell-pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+.bell-panel {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 60;
+  width: min(420px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow: auto;
+}
+.bell-panel h2 {
+  font-size: 0.95rem;
+  margin: 6px 0;
+}
+.active-jobs,
+.notices {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.active-jobs li,
+.notices li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.active-jobs progress {
+  display: block;
+  width: 100%;
+}
+.notices li.unseen strong::before {
+  content: '● ';
+  color: var(--accent);
+}
+.notices li.problem strong {
+  color: var(--fail);
+}
+.notice-location code {
+  word-break: break-all;
+}

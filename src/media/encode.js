@@ -216,21 +216,31 @@ export async function encodeVideo(
 }
 
 // A clip for publishing: from..to as an MP4 with sound (720p, 30 fps) and the same sound alone as M4A.
-export async function makeClip(sessionDir, session, { from, to, outDir, tempDir, signal, onProgress = () => {} }) {
+// Quality: standard (720p, kept small, for the web) or production (1080p, sharper, larger, for a finished video).
+const CLIP_QUALITY = {
+  standard: { height: 720, crf: 26, maxrateKbps: 1500, audioKbps: 96 },
+  production: { height: 1080, crf: 19, maxrateKbps: 8000, audioKbps: 160 }
+};
+export async function makeClip(
+  sessionDir,
+  session,
+  { from, to, outDir, tempDir, signal, quality = 'standard', onProgress = () => {} }
+) {
+  const settings = CLIP_QUALITY[quality] || CLIP_QUALITY.standard;
   fs.mkdirSync(outDir, { recursive: true });
   const audio = path.join(outDir, 'clip.m4a');
   const silent = path.join(tempDir, 'clip-silent.mp4');
   const video = path.join(outDir, 'clip.mp4');
   onProgress(0.02, 'Audio');
-  await encodeAudio(sessionDir, session, { from, to, kbps: 96, output: audio, tempDir, signal });
+  await encodeAudio(sessionDir, session, { from, to, kbps: settings.audioKbps, output: audio, tempDir, signal });
   onProgress(0.2, 'Video');
   const size = await encodeVideo(sessionDir, session, {
     from,
     to,
-    height: 720,
+    height: settings.height,
     fps: 30,
-    crf: 26,
-    maxrateKbps: 1500,
+    crf: settings.crf,
+    maxrateKbps: settings.maxrateKbps,
     output: silent,
     tempDir,
     signal,

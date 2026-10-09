@@ -99,6 +99,11 @@ export const COLLECTIONS = {
     mode: 'mutable',
     doc: 'Videos put together from clips of any meetings, in order (private until published; publishing has an agent join them into one).'
   },
+  notifications: {
+    writers: ['editor', 'recorder'],
+    mode: 'mutable',
+    doc: 'Messages for the website from agents (private): a job done or failed, and where its result is (a page, or a file on an agent).'
+  },
   jobs: {
     writers: ['editor', 'recorder'],
     mode: 'mutable',

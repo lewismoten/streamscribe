@@ -111,6 +111,35 @@ test('videos of clips: private until published; publishing queues the joining', 
     'the video remembers its publication'
   );
 
+  // Rendering into a folder on an agent: a job alone (no publication), with its quality, folder, agent, each clip's
+  // volume, and the overlays sent with it (by clip key; any that aren't overlays are dropped).
+  const folder = await json(
+    'publish-video',
+    {
+      id: 'v1',
+      quality: 'production',
+      destination: 'folder',
+      folder: '~/Videos',
+      agentId: 'office-mac',
+      overlays: {
+        a: [
+          { kind: 'speaker', from: 0, to: 4, text: 'Pat Lee — Mayor' },
+          { kind: 'script', from: 0, to: 4, text: '<b>no</b>' },
+          { kind: 'clock', from: 3, to: 2, text: 'backwards' }
+        ]
+      }
+    },
+    bossToken
+  );
+  assert.equal(folder.status, 200);
+  assert.equal(folder.publication, null);
+  await agent.pull();
+  const folderJob = (await agent.get('jobs', folder.job)).data;
+  assert.deepEqual(folderJob.output, { quality: 'production', destination: 'folder', folder: '~/Videos' });
+  assert.equal(folderJob.forAgent, 'office-mac');
+  assert.deepEqual(folderJob.items[0].overlays, [{ kind: 'speaker', from: 0, to: 4, text: 'Pat Lee — Mayor' }]);
+  assert.equal(folderJob.items[1].volume, 1);
+
   // Publishing again replaces the same publication; unpublishing cancels the joining.
   assert.equal((await json('publish-video', { id: 'v1' }, bossToken)).id, published.id);
   await json('unpublish', { id: published.id }, bossToken);

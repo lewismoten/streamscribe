@@ -1,20 +1,25 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
+import { newId } from '../../../src/sync/collections.js';
 import { can, useAccount } from '../data/account.ts';
-import { hubCall } from '../data/hub.ts';
-import { syncClient, syncNow } from '../data/sync.ts';
-import { putRecord, removeRecord, useRecords } from '../data/useRecords.ts';
-import { clock, date, duration } from '../format.ts';
+import { syncClient } from '../data/sync.ts';
+import { putRecord, removeRecord, useRecords, type HubRecord } from '../data/useRecords.ts';
+import { clock } from '../format.ts';
 import type { Publication } from '../published/types.ts';
-import VideoPreview from './VideoPreview.tsx';
-import { itemOf, seconds, type Clip, type Video, type VideoItem } from './types.ts';
+import ClipLibrary from './ClipLibrary.tsx';
+import Inspector from './Inspector.tsx';
+import { allOverlays, OVERLAY_KINDS, useOverlays, type OverlayKind } from './overlays.ts';
+import PreviewPlayer from './PreviewPlayer.tsx';
+import RenderDialog from './RenderDialog.tsx';
+import Timeline from './Timeline.tsx';
+import { itemAt, itemOf, layout, type Clip, type Video, type VideoItem } from './types.ts';
 
-// Putting a video together: the clips of every meeting on one side (found by title or meeting), the video's clips in
-// order on the other. Clips are added with their button or dragged in; the video's clips are dragged into order (or
-// moved with their arrows), and removed. The preview plays them in a row. Publishing (for people who may publish)
-// has an agent with those recordings join the clips into one video, on a page of its own for everyone.
+// Putting a video together, like a movie editor: the clip library on the left, the preview (sound and picture, with
+// its overlays) in the middle, the selected clip's settings on the right, and the timeline along the bottom (clips
+// dragged into order, their ends dragged to trim, split at the playhead, deleted; the sound track; who is speaking
+// when). Keys: Space plays and pauses, S splits at the playhead, Delete takes out the selected clip. Rendering has an
+// agent make it from the meetings' recordings, for the hub or a folder (RenderDialog).
 const now = () => new Date().toISOString();
-// DRAG_NOTE: dragging is for the mouse; the Add button and each clip's arrows and ✕ do the same from the keyboard.
 
 export default function VideoPage() {
   const { id = '' } = useParams();
@@ -23,12 +28,18 @@ export default function VideoPage() {
   const { records: videos } = useRecords<Video>('videos');
   const { records: clips } = useRecords<Clip>('clips');
   const { records: publications } = useRecords<Publication>('publications');
-  const [filter, setFilter] = useState('');
-  const [dragging, setDragging] = useState<{ kind: 'clip' | 'item'; id: string } | null>(null);
-  const [over, setOver] = useState<number | null>(null);
+  const { records: stills } = useRecords<{ recordingId: string; part: string; position: number; path: string }>(
+    'stills'
+  );
+  const overlaysOf = useOverlays();
+  const [time, setTime] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [rendering, setRendering] = useState(false);
   const [message, setMessage] = useState('');
-  // Changes are saved one at a time, each to the video as last saved (quick changes, such as a title then a clip
-  // added, would otherwise overwrite each other).
+  // The title and description as typed (saved when left), so typing isn't interrupted by saving.
+  const [draft, setDraft] = useState<{ id: string; title: string; description: string } | null>(null);
+  // Changes are saved one at a time, each to the video as last saved.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const save = (change: Partial<Video> | ((current: Video) => Partial<Video>)) => {
     queue.current = queue.current.then(async () => {
@@ -43,72 +54,70 @@ export default function VideoPage() {
     return queue.current;
   };
   const record = videos?.find((item) => item.id === id);
+  const video = record?.data;
+  const items = video?.items || [];
+  const kinds = { ...allOverlays(), ...video?.overlays };
+  const { total } = layout(items);
+  const changeItems = (change: (current: VideoItem[]) => VideoItem[]) =>
+    save((current) => ({ items: change(current.items) }));
+  // Splitting the clip under the playhead in two there.
+  const split = () => {
+    if (!items.length) return;
+    const index = itemAt(items, time);
+    const item = items[index];
+    const at = item.from + (time - layout(items).starts[index]);
+    if (at - item.from < 0.5 || item.to - at < 0.5) return setMessage('Too near the clip’s start or end to split');
+    const second = { ...item, key: newId(), from: Math.round(at * 10) / 10 };
+    changeItems((current) =>
+      current.flatMap((other) => (other.key === item.key ? [{ ...other, to: second.from }, second] : [other]))
+    );
+    setSelected(second.key);
+  };
+  const removeSelected = () => {
+    if (!selected) return;
+    changeItems((current) => current.filter((item) => item.key !== selected));
+    setSelected(null);
+  };
+  // Keys, when not typing (the latest split and delete, through a ref).
+  const actions = useRef({ split, removeSelected });
+  useEffect(() => {
+    actions.current = { split, removeSelected };
+  });
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('input, textarea, select, [contenteditable], dialog')) return;
+      if (event.key === ' ') {
+        event.preventDefault();
+        setPlaying((value) => !value);
+      } else if (event.key === 's' || event.key === 'S') actions.current.split();
+      else if (event.key === 'Delete' || event.key === 'Backspace') actions.current.removeSelected();
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+    // Listened for once; the latest actions come through the ref.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
+  }, []);
+
   if (!can('view.meetings', account)) return <p className="empty">Videos are made from meetings, which are private.</p>;
   if (!videos || !clips) return <p className="empty">Loading…</p>;
-  if (!record)
+  if (!record || !video)
     return (
       <p>
         No such video. <Link to="/videos">All videos</Link>
       </p>
     );
-  const video = record.data;
   const editable = Boolean(account.user);
   const publication = video.publicationId ? publications?.find((item) => item.id === video.publicationId) : undefined;
-
-  const changeItems = (change: (items: VideoItem[]) => VideoItem[]) =>
-    save((current) => ({ items: change(current.items) }));
-  const insert = (at: number, item: VideoItem) =>
-    changeItems((items) => [...items.slice(0, at), item, ...items.slice(at)]);
-  const move = (from: number, to: number) =>
-    changeItems((items) => {
-      if (to < 0 || to >= items.length) return items;
-      const moved = [...items];
-      const [item] = moved.splice(from, 1);
-      moved.splice(to, 0, item);
-      return moved;
-    });
-  // Dropped at a place in the video: a clip from the library goes in there; one of the video's clips moves there.
-  const drop = (at: number) => (event: DragEvent) => {
-    event.preventDefault();
-    setOver(null);
-    if (!dragging) return;
-    if (dragging.kind === 'clip') {
-      const clip = clips.find((item) => item.id === dragging.id);
-      if (clip) insert(at, itemOf(clip.id, clip.data));
-    } else {
-      const from = video.items.findIndex((item) => item.key === dragging.id);
-      if (from >= 0) move(from, from < at ? at - 1 : at);
-    }
-    setDragging(null);
+  const typed = draft?.id === id ? draft : { id, title: video.title, description: video.description };
+  const selectedIndex = items.findIndex((item) => item.key === selected);
+  // A clip from the library goes after the clip under the playhead (or at the end).
+  const add = (clip: HubRecord<Clip>) => {
+    const item = itemOf(clip.id, clip.data);
+    const at = items.length ? itemAt(items, time) + 1 : 0;
+    changeItems((current) => [...current.slice(0, at), item, ...current.slice(at)]);
+    setSelected(item.key);
   };
-  const dragOver = (at: number) => (event: DragEvent) => {
-    event.preventDefault();
-    setOver(at);
-  };
-  const publish = async () => {
-    setMessage('');
-    try {
-      await queue.current;
-      await syncNow();
-      const reply = await hubCall<{ id: string }>('publish-video', { id });
-      await syncNow();
-      setMessage(`Published: an agent is joining the clips (see Agents). The page: /published/${reply.id}`);
-    } catch (error) {
-      setMessage((error as Error).message);
-    }
-  };
-  const needle = filter.trim().toLowerCase();
-  const library = clips
-    .filter(
-      (item) => !needle || [item.data.title, item.data.meeting].some((text) => text?.toLowerCase().includes(needle))
-    )
-    .sort(
-      (a, b) =>
-        String(b.data.recordedAt).localeCompare(String(a.data.recordedAt)) ||
-        a.data.part.localeCompare(b.data.part) ||
-        a.data.from - b.data.from
-    );
-  const meetings = [...new Set(library.map((item) => `${item.data.recordedAt}|${item.data.meeting}`))];
 
   return (
     <article className="video-editor">
@@ -118,14 +127,16 @@ export default function VideoPage() {
       <div className="toolbar">
         <input
           className="video-title grow"
-          value={video.title}
-          onChange={(event) => save({ title: event.target.value })}
+          value={typed.title}
+          onChange={(event) => setDraft({ ...typed, title: event.target.value })}
+          onBlur={() => typed.title !== video.title && save({ title: typed.title })}
+          onKeyDown={(event) => event.key === 'Enter' && (event.target as HTMLInputElement).blur()}
           disabled={!editable}
           aria-label="The video's title"
         />
         {can('publish', account) && (
-          <button type="button" className="button primary" onClick={publish} disabled={!video.items.length}>
-            {publication ? 'Publish again' : 'Publish'}
+          <button type="button" className="button primary" onClick={() => setRendering(true)} disabled={!items.length}>
+            Render…
           </button>
         )}
         {editable && (
@@ -133,7 +144,7 @@ export default function VideoPage() {
             type="button"
             className="link-button danger"
             onClick={async () => {
-              if (!confirm(`Delete the video “${video.title}”? (A published copy stays published.)`)) return;
+              if (!confirm(`Delete the video “${video.title}”? (Anything rendered from it stays.)`)) return;
               await removeRecord('videos', id);
               navigate('/videos');
             }}
@@ -142,15 +153,6 @@ export default function VideoPage() {
           </button>
         )}
       </div>
-      <label className="block">
-        Description (shown with it when published)
-        <textarea
-          rows={2}
-          value={video.description}
-          onChange={(event) => save({ description: event.target.value })}
-          disabled={!editable}
-        />
-      </label>
       {message && <p className="note">{message}</p>}
       {publication && (
         <p className="small">
@@ -159,152 +161,148 @@ export default function VideoPage() {
             ? ' (ready)'
             : publication.data.clip?.status === 'failed'
               ? ` (couldn't be made: ${publication.data.clip.error || 'unknown error'})`
-              : ' (an agent is joining the clips)'}
-          . Changes here show there when it&apos;s published again.
+              : ' (an agent is making it)'}
         </p>
       )}
 
-      <div className="video-columns">
-        <section className="panel">
-          <div className="toolbar">
-            <h2 className="grow">Clips</h2>
-            <input
-              type="search"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              placeholder="Find a clip or meeting"
-              aria-label="Find a clip or meeting"
-            />
-          </div>
-          {clips.length === 0 && (
-            <p className="muted small">
-              None yet: on a meeting&apos;s page, select words in its transcript and choose “Save as a clip…”.
-            </p>
-          )}
-          {meetings.map((key) => {
-            const [recordedAt, meeting] = key.split('|');
-            return (
-              <div key={key} className="clip-meeting">
-                <h3>
-                  {meeting} <span className="muted small">{recordedAt !== 'null' ? date(recordedAt) : ''}</span>
-                </h3>
-                <ul className="clip-library">
-                  {library
-                    .filter((item) => `${item.data.recordedAt}|${item.data.meeting}` === key)
-                    .map((item) => (
-                      // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- DRAG_NOTE
-                      <li
-                        key={item.id}
-                        draggable={editable}
-                        onDragStart={() => setDragging({ kind: 'clip', id: item.id })}
-                        onDragEnd={() => setDragging(null)}
-                      >
-                        <span className="grow">
-                          <strong>{item.data.title}</strong>{' '}
-                          <span className="muted small">
-                            <Link
-                              to={`/meetings/${item.data.recordingId}?part=${encodeURIComponent(item.data.part)}&t=${Math.floor(item.data.from)}`}
-                            >
-                              {clock(item.data.from)}
-                            </Link>{' '}
-                            · {duration(item.data.to - item.data.from)}
-                          </span>
-                        </span>
-                        {editable && (
-                          <button
-                            type="button"
-                            className="button"
-                            onClick={() => insert(video.items.length, itemOf(item.id, item.data))}
-                            aria-label={`Add “${item.data.title}” to the video`}
-                          >
-                            Add →
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            );
-          })}
-        </section>
-
-        <section className="panel">
-          <h2>
-            The video <span className="muted small">{duration(seconds(video.items))}</span>
-          </h2>
-          <VideoPreview items={video.items} />
-          <ol className="timeline">
-            {video.items.map((item, index) => (
-              // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- DRAG_NOTE
-              <li
-                key={item.key}
-                className={`${over === index ? 'drop-before' : ''}${dragging?.id === item.key ? ' dragging' : ''}`}
-                draggable={editable}
-                onDragStart={() => setDragging({ kind: 'item', id: item.key })}
-                onDragEnd={() => {
-                  setDragging(null);
-                  setOver(null);
-                }}
-                onDragOver={dragOver(index)}
-                onDrop={drop(index)}
-              >
-                <span className="drag-handle" aria-hidden="true">
-                  ⠿
-                </span>
-                <span className="grow">
-                  <strong>
-                    {index + 1}. {item.title}
-                  </strong>
-                  <span className="muted small">
-                    {' '}
-                    {item.meeting} · {clock(item.from)}–{clock(item.to)} · {duration(item.to - item.from)}
-                  </span>
-                </span>
-                {editable && (
-                  <span className="toolbar">
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => move(index, index - 1)}
-                      disabled={index === 0}
-                      aria-label={`Move “${item.title}” earlier`}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => move(index, index + 1)}
-                      disabled={index === video.items.length - 1}
-                      aria-label={`Move “${item.title}” later`}
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => changeItems((items) => items.filter((other) => other.key !== item.key))}
-                      aria-label={`Take “${item.title}” out of the video`}
-                    >
-                      ✕
-                    </button>
-                  </span>
-                )}
-              </li>
-            ))}
+      <div className="editor-grid">
+        <ClipLibrary clips={clips} editable={editable} onAdd={add} />
+        <section className="panel editor-preview">
+          <PreviewPlayer
+            items={items}
+            time={time}
+            playing={playing}
+            onTime={setTime}
+            onPlaying={setPlaying}
+            overlaysOf={overlaysOf}
+            kinds={kinds}
+          />
+          <div className="toolbar transport">
+            <button
+              type="button"
+              className="button"
+              onClick={() => setTime(0)}
+              aria-label="To the start"
+              disabled={!items.length}
+            >
+              ⏮
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => setPlaying(!playing)}
+              disabled={!items.length}
+              aria-label={playing ? 'Pause' : 'Play'}
+            >
+              {playing ? '⏸ Pause' : '▶ Play'}
+            </button>
+            <span className="small">
+              {clock(time)} / {clock(total)}
+            </span>
+            <span className="grow" />
             {editable && (
-              // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- DRAG_NOTE
-              <li
-                className={`timeline-end${over === video.items.length ? ' drop-before' : ''}`}
-                onDragOver={dragOver(video.items.length)}
-                onDrop={drop(video.items.length)}
-              >
-                {video.items.length ? 'Drop a clip here to add it at the end' : 'Add clips, or drag them here'}
-              </li>
+              <>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={split}
+                  disabled={!items.length}
+                  title="Split at the playhead (S)"
+                >
+                  ✂ Split
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={removeSelected}
+                  disabled={!selected}
+                  title="Delete the selected clip (Delete)"
+                >
+                  Delete clip
+                </button>
+              </>
             )}
-          </ol>
+          </div>
         </section>
+        <aside className="editor-side">
+          {selectedIndex >= 0 && editable ? (
+            <Inspector
+              item={items[selectedIndex]}
+              index={selectedIndex}
+              count={items.length}
+              onChange={(next) =>
+                changeItems((current) => current.map((item) => (item.key === next.key ? next : item)))
+              }
+              onMove={(to) =>
+                changeItems((current) => {
+                  if (to < 0 || to >= current.length) return current;
+                  const moved = [...current];
+                  const [item] = moved.splice(selectedIndex, 1);
+                  moved.splice(to, 0, item);
+                  return moved;
+                })
+              }
+              onRemove={removeSelected}
+            />
+          ) : (
+            <p className="muted small panel">Select a clip on the timeline to change it.</p>
+          )}
+          <section className="panel">
+            <h2>Overlays</h2>
+            {(Object.keys(OVERLAY_KINDS) as OverlayKind[]).map((kind) => (
+              <label key={kind} className="inline overlay-choice">
+                <input
+                  type="checkbox"
+                  checked={kinds[kind]}
+                  disabled={!editable}
+                  onChange={(event) =>
+                    save((current) => ({ overlays: { ...current.overlays, [kind]: event.target.checked } }))
+                  }
+                />{' '}
+                {OVERLAY_KINDS[kind]}
+              </label>
+            ))}
+          </section>
+          <label className="block">
+            Description (with it when published)
+            <textarea
+              rows={3}
+              value={typed.description}
+              onChange={(event) => setDraft({ ...typed, description: event.target.value })}
+              onBlur={() => typed.description !== video.description && save({ description: typed.description })}
+              disabled={!editable}
+            />
+          </label>
+        </aside>
       </div>
+
+      <Timeline
+        items={items}
+        time={time}
+        selected={selected}
+        stills={(stills || []).map((still) => still.data)}
+        overlaysOf={overlaysOf}
+        onSeek={(seconds) => setTime(seconds)}
+        onSelect={setSelected}
+        onChange={(next) => changeItems(() => next)}
+      />
+
+      {rendering && (
+        <RenderDialog
+          videoId={id}
+          beforeRender={() => queue.current}
+          overlays={() =>
+            Object.fromEntries(
+              items.map((item) => [item.key, overlaysOf(item).filter((overlay) => kinds[overlay.kind])])
+            )
+          }
+          onClose={() => setRendering(false)}
+          onDone={(text) => {
+            setRendering(false);
+            setMessage(text);
+          }}
+        />
+      )}
     </article>
   );
 }

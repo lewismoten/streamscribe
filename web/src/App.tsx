@@ -24,6 +24,8 @@ import ReligionPage from './religion/ReligionPage.tsx';
 import VideosPage from './videos/VideosPage.tsx';
 import RoomsPage from './rooms/RoomsPage.tsx';
 import LocationsPage from './locations/LocationsPage.tsx';
+import NotificationsBell from './notifications/NotificationsBell.tsx';
+import NotificationsPage from './notifications/NotificationsPage.tsx';
 import LocationPage from './locations/LocationPage.tsx';
 import RoomPage from './rooms/RoomPage.tsx';
 import VideoPage from './videos/VideoPage.tsx';
@@ -100,6 +102,7 @@ export default function App() {
           </NavLink>
         </nav>
         {local && <SearchBox />}
+        {viewer && <NotificationsBell />}
       </header>
       <main className="page">
         {/* A new hub with no accounts yet: its first visitor makes the admin. */}
@@ -134,6 +137,7 @@ export default function App() {
             <Route path="/elections" element={<ElectionsPage />} />
             <Route path="/elections/:id" element={<ElectionPage />} />
             <Route path="/religion" element={<ReligionPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/locations" element={<LocationsPage />} />
             <Route path="/locations/:id" element={<LocationPage />} />
             <Route path="/rooms" element={<RoomsPage />} />

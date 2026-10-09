@@ -67,6 +67,20 @@ export function jobRunner({ client, findRecording, log }) {
     });
     return { video: videoPath, audio: audioPath };
   }
+  // A message for the website's notifications (who asked for the job, what happened, and where the result is).
+  async function notify(job, title, message, extra = {}) {
+    await client
+      .put('notifications', null, {
+        title,
+        message,
+        ...extra,
+        jobId: job.id,
+        forUser: job.createdBy || '',
+        agent: RECORDER.name || RECORDER.id,
+        createdAt: new Date().toISOString()
+      })
+      .catch(() => {});
+  }
   async function markFailed(job, error) {
     const publication = await client.get('publications', job.publicationId);
     if (publication)
@@ -104,10 +118,14 @@ export function jobRunner({ client, findRecording, log }) {
     },
     video: {
       canDo: (job) =>
-        (job.items || []).length > 0 && job.items.every((item) => findRecording(item.recordingId, item.part)),
+        (job.items || []).length > 0 &&
+        job.items.every((item) => findRecording(item.recordingId, item.part)) &&
+        (!job.forAgent || job.forAgent === RECORDER.id),
       async run(job, { signal, progress }) {
-        if (!(await client.get('publications', job.publicationId)))
+        const toHub = (job.output?.destination || 'hub') === 'hub';
+        if (toHub && !(await client.get('publications', job.publicationId)))
           throw new Error('The publication is gone (unpublished)');
+        const quality = job.output?.quality === 'production' ? 'production' : 'standard';
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'streamscribe-video-'));
         try {
           const pieces = [];
@@ -118,24 +136,58 @@ export function jobRunner({ client, findRecording, log }) {
             const made = await makeClip(found.dir, session, {
               from: item.from,
               to: item.to,
+              quality,
               outDir: path.join(tempDir, `clip-${index}`),
               tempDir: fs.mkdtempSync(path.join(tempDir, 'work-')),
               signal,
               onProgress: (part) => progress(index * share + part * share, `Clip ${index + 1} of ${job.items.length}`)
             });
-            pieces.push(made.video);
+            pieces.push({ video: made.video, overlays: item.overlays || [], volume: item.volume, muted: item.muted });
           }
           progress(0.82, 'Joining the clips');
           const video = path.join(tempDir, 'video.mp4');
           const audio = path.join(tempDir, 'video.m4a');
-          const size = await joinClips(pieces, { video, audio, signal });
-          progress(0.92, 'Uploading');
-          return await uploadClip(job, { video, audio, ...size }, { signal, progress });
+          const size = await joinClips(pieces, {
+            video,
+            audio,
+            height: quality === 'production' ? 1080 : 720,
+            tempDir,
+            signal
+          });
+          if (toHub) {
+            progress(0.92, 'Uploading');
+            const result = await uploadClip(job, { video, audio, ...size }, { signal, progress });
+            await notify(job, `“${job.videoTitle || job.title}” is ready`, 'Published on the hub.', {
+              link: `/published/${job.publicationId}`
+            });
+            return result;
+          }
+          // Saved to a folder on this agent (or a network folder it can reach), under the video's title.
+          progress(0.95, 'Saving');
+          const folder = (job.output?.folder || path.join(os.homedir(), 'streamscribe-videos')).replace(
+            /^~(?=$|\/)/,
+            os.homedir()
+          );
+          fs.mkdirSync(folder, { recursive: true });
+          const name = `${
+            String(job.videoTitle || 'video')
+              .replace(/[^A-Za-z0-9 ._-]+/g, '')
+              .trim() || 'video'
+          } ${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.mp4`;
+          const saved = path.join(folder, name);
+          fs.copyFileSync(video, saved);
+          await notify(job, `“${job.videoTitle || job.title}” is ready`, `Saved on ${RECORDER.name || RECORDER.id}.`, {
+            location: saved
+          });
+          return { saved, agent: RECORDER.name || RECORDER.id };
         } finally {
           fs.rmSync(tempDir, { recursive: true, force: true });
         }
       },
-      failed: (job, error) => markFailed(job, error)
+      async failed(job, error) {
+        if ((job.output?.destination || 'hub') === 'hub') await markFailed(job, error);
+        await notify(job, `“${job.videoTitle || job.title}” couldn't be made`, error.message, { problem: true });
+      }
     },
     encode: {
       canDo: (job) => Boolean(findRecording(job.recordingId)),
@@ -152,7 +204,7 @@ export function jobRunner({ client, findRecording, log }) {
   };
 
   async function start(record) {
-    const job = record.data;
+    const job = { ...record.data, id: record.id };
     const lease = await claim(`job:${record.id}`, LEASE_SECONDS);
     if (!lease.granted) return;
     await update(record.id, {
@@ -166,7 +218,8 @@ export function jobRunner({ client, findRecording, log }) {
     });
     await client.sync().catch(() => {});
     const controller = new AbortController();
-    let reportedAt = 0;
+    let reportedAt = Date.now();
+    let reportedShare = 0;
     current = {
       id: record.id,
       title: job.title || job.type,
@@ -179,8 +232,10 @@ export function jobRunner({ client, findRecording, log }) {
     const progress = (share, message = current.message) => {
       current.progress = Math.max(0, Math.min(1, share));
       current.message = message;
-      if (Date.now() - reportedAt < 5000) return;
+      // Reported when it has moved on by a percent and ten seconds have passed (whichever comes later).
+      if (Date.now() - reportedAt < 10000 || Math.abs(current.progress - reportedShare) < 0.01) return;
       reportedAt = Date.now();
+      reportedShare = current.progress;
       update(record.id, { progress: Number(current.progress.toFixed(3)), message })
         .then(() => client.sync())
         .catch(() => {});
