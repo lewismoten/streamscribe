@@ -184,8 +184,10 @@ if ($method === 'POST' && $route === 'unpublish') {
   hub_remove_tree(rtrim($config['media_dir'], '/') . "/published/$id");
   hub_write($db, function (PDO $db) use ($id, $viewer) {
     hub_put_record($db, 'publications', $id, null, $viewer['name'], true);
-    $job = hub_record_data($db, 'jobs', "clip-$id");
-    if ($job && in_array($job['status'] ?? '', ['queued', 'working'], true)) hub_put_record($db, 'jobs', "clip-$id", ['status' => 'cancelled', 'message' => 'Unpublished'] + $job, $viewer['name']);
+    foreach (["clip-$id", "video-$id"] as $jobId) {
+      $job = hub_record_data($db, 'jobs', $jobId);
+      if ($job && in_array($job['status'] ?? '', ['queued', 'working'], true)) hub_put_record($db, 'jobs', $jobId, ['status' => 'cancelled', 'message' => 'Unpublished'] + $job, $viewer['name']);
+    }
   });
   hub_send(200, ['ok' => true]);
 }

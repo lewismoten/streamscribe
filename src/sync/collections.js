@@ -79,6 +79,16 @@ export const COLLECTIONS = {
     mode: 'mutable',
     doc: 'Who served on a body, as what, and when: elected or appointed members, officers (Chair), staff (interim or not), and candidates running for a seat.'
   },
+  clips: {
+    writers: ['editor', 'recorder'],
+    mode: 'mutable',
+    doc: 'Stretches of meetings saved to build videos from (private, like the meetings): the recording, part, from and to, and a title.'
+  },
+  videos: {
+    writers: ['editor', 'recorder'],
+    mode: 'mutable',
+    doc: 'Videos put together from clips of any meetings, in order (private until published; publishing has an agent join them into one).'
+  },
   jobs: {
     writers: ['editor', 'recorder'],
     mode: 'mutable',

@@ -1,7 +1,9 @@
 // A publication as the hub keeps it (notes, a transcript excerpt, or a clip, from a meeting in the archive), a line
 // of its transcript, and the labels and formats the published pages share.
 export interface Publication {
-  kind: 'note' | 'transcript' | 'clip';
+  kind: 'note' | 'transcript' | 'clip' | 'video';
+  // A video of clips: each clip's title and meeting (not the private recording).
+  parts?: { title: string; meeting: string; recordedAt: string | null; sourceKey: string; seconds: number }[];
   title: string;
   body: string;
   recordingId: string;
@@ -47,7 +49,7 @@ export interface Line {
   links?: { from: number; to: number; url: string; label: string }[];
 }
 
-export const KIND_LABEL = { note: 'Notes', transcript: 'Transcript', clip: 'Clip' };
+export const KIND_LABEL = { note: 'Notes', transcript: 'Transcript', clip: 'Clip', video: 'Video' };
 export const day = (iso: string | null) =>
   iso
     ? new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })

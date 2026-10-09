@@ -41,14 +41,17 @@ const MARK_PERMISSIONS = [
   'faith' => 'contribute.speakers',
 ];
 
-// Collections of meetings, which only viewers with view.meetings (and keys) see. Everyone sees schedules, sources,
+// Collections of meetings (and the clips and videos made from them), which only viewers with view.meetings (and keys)
+// see. Everyone sees schedules, sources,
 // settings, recorders, and publications.
-const PRIVATE_COLLECTIONS = ['recordings', 'transcript_chunks', 'stills', 'media', 'marks', 'jobs'];
+const PRIVATE_COLLECTIONS = ['recordings', 'transcript_chunks', 'stills', 'media', 'marks', 'jobs', 'clips', 'videos'];
 
 // Shared collections a person may change directly, and the permission it takes.
 const EDIT_PERMISSIONS = [
   'publications' => 'publish',
   'jobs' => 'publish',
+  'clips' => 'contribute.other',
+  'videos' => 'contribute.other',
   'schedules' => 'edit.schedules',
   'sources' => 'edit.sources',
   'settings' => 'edit.sources',

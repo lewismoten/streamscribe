@@ -10,6 +10,10 @@ import PublishPanel, { type PublishLine } from '../meeting/PublishPanel.tsx';
 import OfficialPanel, { type Official } from '../meeting/OfficialPanel.tsx';
 import AttendancePanel from '../meeting/AttendancePanel.tsx';
 import PrayerPanel from '../meeting/PrayerPanel.tsx';
+import Dialog from '../Dialog.tsx';
+import ClipForm from '../videos/ClipForm.tsx';
+import ClipsPanel from '../videos/ClipsPanel.tsx';
+import { saveClip, type Clip } from '../videos/types.ts';
 import type { Attendance } from '../people/usePeople.ts';
 import MeetingHeader from '../meeting/MeetingHeader.tsx';
 import Transcript from '../meeting/Transcript.tsx';
@@ -51,6 +55,8 @@ export default function MeetingPage() {
   const [seek, setSeek] = useState<{ time: number; n: number } | null>(null);
   const player = useRef<PlayerControl>(null);
   const [status, setStatus] = useState('');
+  // Words selected in the transcript, being saved as a clip.
+  const [clipDraft, setClipDraft] = useState<{ part: string; from: number; to: number; title: string } | null>(null);
   const recording = recordings?.find((record) => record.id === id);
   const { stacks, markData, save } = useMeetingMarks({
     id,
@@ -224,8 +230,36 @@ export default function MeetingPage() {
     setStatus('Queued for an agent (see Agents)');
     syncNow();
   };
+  // A clip of this meeting, as saved (with the meeting's title and day, for clip lists across meetings).
+  const newClip = (part: string, from: number, to: number, title: string): Clip => ({
+    recordingId: id,
+    part,
+    from,
+    to,
+    title,
+    sourceKey: data.sourceKey,
+    meeting: data.title,
+    recordedAt: data.startedAt || null,
+    createdAt: new Date().toISOString(),
+    createdBy: account.user?.displayName || account.user?.username || ''
+  });
   return (
     <article className="recording">
+      {clipDraft && (
+        <Dialog title="Save as a clip" onClose={() => setClipDraft(null)}>
+          <ClipForm
+            title={clipDraft.title}
+            from={clipDraft.from}
+            to={clipDraft.to}
+            onCancel={() => setClipDraft(null)}
+            onSave={async (value) => {
+              await saveClip(null, newClip(clipDraft.part, value.from, value.to, value.title));
+              setClipDraft(null);
+              setStatus(`Saved the clip “${value.title}” (Clips)`);
+            }}
+          />
+        </Dialog>
+      )}
       <MeetingHeader
         recording={data}
         picture={pictures[0]?.data.path}
@@ -323,6 +357,18 @@ export default function MeetingPage() {
             onAddFile={editChapters ? addChapterFile : null}
           />
           <Votes votes={votes} playAt={playChapterAt} />
+          <ClipsPanel
+            recordingId={id}
+            playlist={(data.parts || []).flatMap((item) =>
+              (
+                markData<{ clips?: { title: string; from: number; to: number }[] }>(`${id}:${item.name}:playlist`)
+                  ?.clips || []
+              ).map((clip) => ({ ...clip, part: item.name }))
+            )}
+            canEdit={Boolean(account.user)}
+            playAt={playing ? playAt : null}
+            newClip={newClip}
+          />
           <PrayerPanel
             recordingId={id}
             sourceKey={data.sourceKey}
@@ -373,6 +419,9 @@ export default function MeetingPage() {
           scriptureSite={scriptureSite}
           onLink={saveLink}
           onUnlink={removeLink}
+          onClip={(part, from, to, text) =>
+            setClipDraft({ part, from, to, title: text.length > 60 ? `${text.slice(0, 57)}…` : text })
+          }
         />
       </div>
     </article>

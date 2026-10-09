@@ -11,7 +11,8 @@
 //   POST live-thumbnail?recorder=ID   (recorder key) a JPEG, replacing that recorder's live picture
 //   POST media?sha256=HEX&type=image/jpeg   (key) a file stored by its hash; already there → { exists: true }
 // Private files (lib/files.php): GET file-key (view.meetings) → { e, s }; GET file/private/<path>?e=…&s=…
-// Publishing (lib/publish-routes.php): POST publish, POST unpublish (publish)
+// Publishing (lib/publish-routes.php): POST publish, POST unpublish (publish); a video of clips (lib/video-routes.php):
+//   POST publish-video (publish)
 // The public directory of people (lib/people-routes.php): POST people-public (publish)
 // The podcast of published clips (lib/podcast-routes.php): GET podcast/<source key>.xml,
 //   GET podcast-chapters/<publication id>.json
@@ -273,6 +274,7 @@ if (($method === 'GET' || $method === 'HEAD') && preg_match('#^file/private/(.+)
 require __DIR__ . '/lib/setup-routes.php';
 require __DIR__ . '/lib/account-routes.php';
 require __DIR__ . '/lib/publish-routes.php';
+require __DIR__ . '/lib/video-routes.php';
 require __DIR__ . '/lib/people-routes.php';
 require __DIR__ . '/lib/podcast-routes.php';
 require __DIR__ . '/lib/upload-routes.php';

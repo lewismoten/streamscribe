@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { RECORDER } from '../config/runtime-config.js';
 import { loadSessionSegments } from '../sessions/session.js';
+import { joinClips } from '../media/compose.js';
 import { makeClip } from '../media/encode.js';
 import { publishMedia } from '../media/publish-media.js';
 import { claim } from './hub-api.js';
@@ -16,6 +17,8 @@ import { hubFiles, sha256 } from './hub-files.js';
 //   clip    { publicationId, recordingId, part, from, to }  cut a published clip (MP4 with sound, and M4A), upload
 //           it (through the hub's API, in pieces) to its public media/published/<id>/, and mark the clip ready
 //   encode  { recordingId }  make and upload the recording's private audio and silent video (publish-media.js)
+//   video   { publicationId, items: [{ recordingId, part, from, to }] }  cut each clip (from recordings this agent has,
+//           all of them), join them into one MP4 and M4A (compose.js), upload them to the publication, and mark it ready
 const LEASE_SECONDS = 180;
 
 export function jobRunner({ client, findRecording, log }) {
@@ -29,6 +32,49 @@ export function jobRunner({ client, findRecording, log }) {
     await client.put('jobs', id, data);
     return data;
   };
+
+  // A made clip (or joined video) to its publication: the MP4 and M4A uploaded (through the hub's API, in pieces) to
+  // its public media/published/<id>/, under names from their content, and the publication's clip marked ready.
+  async function uploadClip(job, made, { signal, progress }) {
+    const [videoHash, audioHash] = [await sha256(made.video), await sha256(made.audio)];
+    const files = [
+      { local: made.video, name: `clip-${videoHash.slice(0, 10)}.mp4` },
+      { local: made.audio, name: `clip-${audioHash.slice(0, 10)}.m4a` }
+    ];
+    const [videoPath, audioPath] = await hubFiles().sendFolder('public', `published/${job.publicationId}`, files, {
+      keepOthers: true,
+      signal,
+      onProgress: (share) => progress(0.92 + share * 0.07, 'Uploading')
+    });
+    const latest = await client.get('publications', job.publicationId);
+    if (!latest) throw new Error('The publication is gone (unpublished)');
+    await client.put('publications', job.publicationId, {
+      ...latest.data,
+      clip: {
+        ...latest.data.clip,
+        status: 'ready',
+        video: {
+          path: videoPath,
+          bytes: fs.statSync(made.video).size,
+          type: 'video/mp4',
+          width: made.width,
+          height: made.height
+        },
+        audio: { path: audioPath, bytes: fs.statSync(made.audio).size, type: 'audio/mp4' },
+        madeBy: RECORDER.id,
+        madeAt: new Date().toISOString()
+      }
+    });
+    return { video: videoPath, audio: audioPath };
+  }
+  async function markFailed(job, error) {
+    const publication = await client.get('publications', job.publicationId);
+    if (publication)
+      await client.put('publications', job.publicationId, {
+        ...publication.data,
+        clip: { ...publication.data.clip, status: 'failed', error: error.message }
+      });
+  }
 
   const handlers = {
     clip: {
@@ -49,49 +95,47 @@ export function jobRunner({ client, findRecording, log }) {
             onProgress: (share, message) => progress(share * 0.9, message)
           });
           progress(0.92, 'Uploading');
-          const [videoHash, audioHash] = [await sha256(made.video), await sha256(made.audio)];
-          const files = [
-            { local: made.video, name: `clip-${videoHash.slice(0, 10)}.mp4` },
-            { local: made.audio, name: `clip-${audioHash.slice(0, 10)}.m4a` }
-          ];
-          const [videoPath, audioPath] = await hubFiles().sendFolder(
-            'public',
-            `published/${job.publicationId}`,
-            files,
-            { keepOthers: true, signal, onProgress: (share) => progress(0.92 + share * 0.07, 'Uploading') }
-          );
-          const latest = await client.get('publications', job.publicationId);
-          if (!latest) throw new Error('The publication is gone (unpublished)');
-          await client.put('publications', job.publicationId, {
-            ...latest.data,
-            clip: {
-              ...latest.data.clip,
-              status: 'ready',
-              video: {
-                path: videoPath,
-                bytes: fs.statSync(made.video).size,
-                type: 'video/mp4',
-                width: made.width,
-                height: made.height
-              },
-              audio: { path: audioPath, bytes: fs.statSync(made.audio).size, type: 'audio/mp4' },
-              madeBy: RECORDER.id,
-              madeAt: new Date().toISOString()
-            }
-          });
-          return { video: videoPath, audio: audioPath };
+          return await uploadClip(job, made, { signal, progress });
         } finally {
           fs.rmSync(tempDir, { recursive: true, force: true });
         }
       },
-      async failed(job, error) {
-        const publication = await client.get('publications', job.publicationId);
-        if (publication)
-          await client.put('publications', job.publicationId, {
-            ...publication.data,
-            clip: { ...publication.data.clip, status: 'failed', error: error.message }
-          });
-      }
+      failed: (job, error) => markFailed(job, error)
+    },
+    video: {
+      canDo: (job) =>
+        (job.items || []).length > 0 && job.items.every((item) => findRecording(item.recordingId, item.part)),
+      async run(job, { signal, progress }) {
+        if (!(await client.get('publications', job.publicationId)))
+          throw new Error('The publication is gone (unpublished)');
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'streamscribe-video-'));
+        try {
+          const pieces = [];
+          const share = 0.8 / job.items.length;
+          for (const [index, item] of job.items.entries()) {
+            const found = findRecording(item.recordingId, item.part);
+            const session = await loadSessionSegments(found.dir);
+            const made = await makeClip(found.dir, session, {
+              from: item.from,
+              to: item.to,
+              outDir: path.join(tempDir, `clip-${index}`),
+              tempDir: fs.mkdtempSync(path.join(tempDir, 'work-')),
+              signal,
+              onProgress: (part) => progress(index * share + part * share, `Clip ${index + 1} of ${job.items.length}`)
+            });
+            pieces.push(made.video);
+          }
+          progress(0.82, 'Joining the clips');
+          const video = path.join(tempDir, 'video.mp4');
+          const audio = path.join(tempDir, 'video.m4a');
+          const size = await joinClips(pieces, { video, audio, signal });
+          progress(0.92, 'Uploading');
+          return await uploadClip(job, { video, audio, ...size }, { signal, progress });
+        } finally {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+      failed: (job, error) => markFailed(job, error)
     },
     encode: {
       canDo: (job) => Boolean(findRecording(job.recordingId)),

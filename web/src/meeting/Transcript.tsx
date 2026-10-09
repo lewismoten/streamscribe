@@ -38,7 +38,8 @@ export default function Transcript({
   linksFor,
   scriptureSite,
   onLink,
-  onUnlink
+  onUnlink,
+  onClip
 }: {
   kind: 'quick' | 'final';
   lines: ShownLine[];
@@ -72,6 +73,8 @@ export default function Transcript({
   scriptureSite: string;
   onLink: (part: string, link: Omit<TranscriptLink, 'id'> & { id?: string }) => void;
   onUnlink: (part: string, link: TranscriptLink) => void;
+  // Saving selected words as a clip (for videos): their part, start and end, and what they say.
+  onClip?: (part: string, from: number, to: number, text: string) => void;
 }) {
   const [filter, setFilter] = useState('');
   // Words selected in the transcript: the menu under them, and the dialog one of its choices opens.
@@ -94,6 +97,21 @@ export default function Transcript({
       .filter((word) => covers(link, { line: word.line, index: word.index }));
   const change = (part: string, link: TranscriptLink, words = wordsOf(part, link)) => {
     setMarking({ part, words, kind: link.passage ? 'passage' : 'web', link });
+    setMenu(null);
+    window.getSelection()?.removeAllRanges();
+  };
+  // Selected words as a clip: from the first word to the end of the last (the next word's start, or its line's end).
+  const clip = () => {
+    if (!menu || !onClip) return;
+    const last = menu.words.at(-1)!;
+    const line = lines.find((item) => item.part === menu.part && item.words.includes(last));
+    const next = line?.words[line.words.indexOf(last) + 1];
+    const end = next ? next.at : line?.end || last.at + 1;
+    const text = menu.words
+      .map((word) => word.shown)
+      .filter(Boolean)
+      .join(' ');
+    onClip(menu.part, menu.words[0].at, end, text);
     setMenu(null);
     window.getSelection()?.removeAllRanges();
   };
@@ -387,6 +405,11 @@ export default function Transcript({
               </button>
             </Fragment>
           ))}
+          {onClip && (
+            <button type="button" role="menuitem" onClick={clip}>
+              Save as a clip…
+            </button>
+          )}
           {/* Words already linked are changed or unlinked, not linked twice. */}
           {linksOn(menu.part, menu.words).length === 0 && (
             <>

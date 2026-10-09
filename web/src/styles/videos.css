@@ -1,0 +1,91 @@
+/* Clips on a meeting page, and putting videos together from them (web/src/videos). */
+.clips ul,
+.video-rows,
+.clip-library,
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.clips li,
+.video-rows li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.video-title {
+  font: inherit;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--fg);
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+}
+.video-title:hover,
+.video-title:focus {
+  border-color: var(--line);
+  background: var(--card);
+}
+.video-columns {
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) minmax(320px, 3fr);
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .video-columns {
+    grid-template-columns: 1fr;
+  }
+}
+.clip-meeting h3 {
+  margin: 12px 0 4px;
+  font-size: 0.95rem;
+}
+.clip-library li,
+.timeline li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  margin: 4px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.clip-library li[draggable='true'],
+.timeline li[draggable='true'] {
+  cursor: grab;
+}
+.timeline li.dragging {
+  opacity: 0.5;
+}
+.timeline li.drop-before {
+  box-shadow: 0 -3px 0 var(--accent);
+}
+.timeline .drag-handle {
+  color: var(--muted);
+}
+.timeline-end {
+  justify-content: center;
+  color: var(--muted);
+  border-style: dashed !important;
+  background: none !important;
+}
+.video-preview video,
+.video-preview-blank {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+}
+.video-preview-blank {
+  display: grid;
+  place-items: center;
+  color: #ccc;
+  padding: 12px;
+  text-align: center;
+}
+.video-parts {
+  margin: 8px 0 14px;
+}

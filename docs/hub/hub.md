@@ -41,6 +41,8 @@ Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, o
 | `marks`             | review marks: speakers, chapters, votes, views, boosts, meeting name and official sources, word edits, playlist, people, attendance | recorders (shared); people (their own layers, see below) |
 | `publications`      | what's published for everyone: notes, transcript excerpts, clips                                                                    | the Publish permission; agents (a clip's files)          |
 | `directory`         | the public directory of people: who is listed, and their public photo                                                               | the Publish permission                                   |
+| `clips`             | stretches of meetings saved to build videos from (private)                                                                          | the Camera views, audio boosts, and clips permission     |
+| `videos`            | videos put together from clips of any meetings, in order (private until published)                                                  | the Camera views, audio boosts, and clips permission     |
 | `jobs`              | work for agents: clips to cut, recordings to encode                                                                                 | the Publish permission; agents (progress)                |
 | `organizations`     | counties, towns, school divisions, nonprofits with public bodies; their districts                                                   | Edit public bodies permission                            |
 | `bodies`            | public bodies (boards, committees, staff): how members are chosen, which meetings are theirs                                        | Edit public bodies permission                            |
@@ -162,6 +164,7 @@ The Agents page, for people who may see meetings, shows:
 Job types:
 
 - **`clip`:** cut a published clip, upload it, and mark it ready.
+- **`video`:** cut each clip of a published video (from recordings this agent has, all of them), join them into one MP4 (each scaled to 1280×720, at 30 frames a second) and an M4A, and upload them to the video's publication.
 - **`encode`:** make and upload a recording's private audio and silent video. A recorder queues one for itself after each meeting it records. The meeting page's "Make audio and video for the hub" queues one for a recording that has none.
 
 How agents share the work:
@@ -221,6 +224,12 @@ People in terms are the ones on each source's roster. Saving a term lists the pe
 **Person pages** show a person's public service body by body, then (for people who may see meetings) the meetings they presided at, attended, or missed, or were expected at (on the body that day) and spoke in.
 
 **Attendance.** A meeting's Attendance panel lists the people on its body that day (from their terms) and anyone who spoke, to mark present or absent, and who presided. It's a mark (`<recording>:attendance`) with layers like the others, made public by the "Choose who is speaking" permission. When a recording isn't matched to the right body, choose it there.
+
+## Clips and videos
+
+**Clips** are stretches of meetings saved to build videos from: on a meeting's page, select words in its transcript and choose **Save as a clip…** (its title starts as those words; its start and end can be adjusted). A meeting's **Clips** panel lists its clips (each plays from its start, can be changed or removed, or added to a video), and brings in the review page's playlist (**Bring in N clips…**) for clips there that aren't clips yet.
+
+**Videos** (the Videos page) are clips of any meetings in order. The editor has every clip on one side (found by title or meeting, by meeting) and the video's clips on the other: **Add →** or drag a clip in, drag the video's clips into order (or use their arrows), ✕ to take one out. **Play the video** previews it from each meeting's audio and video on the hub. **Publish** (the Publish permission) makes a public page for it, saying which meetings its clips come from, and queues a `video` job for an agent that has those recordings, which joins the clips into one video for it; publishing again replaces it. Clips and videos are private, like the meetings; a video keeps its own copy of each clip's range, so changing a clip later doesn't change a video.
 
 ## Links, prayer, and the Religion page
 

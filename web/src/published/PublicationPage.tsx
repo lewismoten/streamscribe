@@ -125,6 +125,24 @@ export function PublicationPage() {
           </>
         )}
       </p>
+      {item.kind === 'video' && (item.parts || []).length > 0 && (
+        <details className="video-parts">
+          <summary>
+            Made of {item.parts!.length} clip{item.parts!.length === 1 ? '' : 's'} ({duration(item.seconds)})
+          </summary>
+          <ol>
+            {item.parts!.map((part, index) => (
+              <li key={index}>
+                {part.title}{' '}
+                <span className="muted small">
+                  · {part.meeting}
+                  {part.recordedAt ? `, ${day(part.recordedAt)}` : ''} · {duration(part.seconds)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
       {!item.official && item.officialUrl && (
         <p>
           <a href={item.officialUrl} rel="noopener noreferrer">
