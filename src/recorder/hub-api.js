@@ -12,14 +12,14 @@ export const hub = {
 
 export const hubConfigured = () => Boolean(hub.url && hub.key);
 
-async function call(route, { method = 'POST', json, body, headers = {} } = {}) {
+async function call(route, { method = 'POST', json, body, headers = {}, timeoutMs = 30000 } = {}) {
   // (A GET carries no body.)
   const sent = json ? JSON.stringify(json) : body;
   const response = await fetch(`${hub.url}/${route}`, {
     method,
     headers: { 'x-streamscribe-key': hub.key, ...(json ? { 'content-type': 'application/json' } : {}), ...headers },
     ...(method === 'GET' || sent === undefined ? {} : { body: sent }),
-    signal: AbortSignal.timeout(30000)
+    signal: AbortSignal.timeout(timeoutMs)
   });
   const date = Date.parse(response.headers.get('date') || '');
   if (Number.isFinite(date)) hub.clockSkewSeconds = Math.round((Date.now() - date) / 1000);
@@ -39,6 +39,10 @@ export const claim = (occurrenceKey, ttlSeconds) =>
   call('claim', { json: { occurrenceKey, recorderId: RECORDER.id, ttlSeconds } });
 
 export const reportLive = (status) => call('live', { json: { recorderId: RECORDER.id, status } });
+
+// A turn at a website, shared with every agent (hub-php/lib/turn-routes.php): ms to wait before asking it.
+export const hostTurn = async (host, intervalMs) =>
+  (await call('turn', { json: { host, intervalMs, agentId: RECORDER.id }, timeoutMs: 10000 })).waitMs || 0;
 
 // Reading a hub route (the live view: other agents and their addresses).
 export const hubGet = (route) => call(route, { method: 'GET' });

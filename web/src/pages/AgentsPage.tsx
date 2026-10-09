@@ -6,6 +6,7 @@ import { useRecords } from '../data/useRecords.ts';
 import { startSyncing } from '../data/sync.ts';
 import AddAgent from '../agents/AddAgent.tsx';
 import AgentCards from '../agents/AgentCards.tsx';
+import SiteTurns from '../agents/SiteTurns.tsx';
 import WorkQueue from '../agents/WorkQueue.tsx';
 import type { Agent, Job } from '../agents/types.ts';
 
@@ -59,6 +60,9 @@ export default function AgentsPage() {
       {admin && <AddAgent />}
       <AgentCards agents={agents} canEdit={can('edit.sources', account)} />
       <WorkQueue jobs={jobs} manage={can('publish', account)} />
+      <SiteTurns
+        names={Object.fromEntries((agents || []).map((agent) => [agent.recorderId, agent.status?.name || agent.name]))}
+      />
     </section>
   );
 }

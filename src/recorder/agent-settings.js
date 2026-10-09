@@ -1,9 +1,11 @@
 import fs from 'fs';
-import http from 'http';
 import os from 'os';
 import path from 'path';
 import { DATA_ROOT, RECORDER } from '../config/runtime-config.js';
 import { run } from '../media/encode.js';
+import { lanAddresses, tailscaleCommand, tailscalePath } from './peer-net.js';
+import { peerServer } from './peer-server.js';
+import { measureSpeed } from './peers.js';
 
 // What an agent is told on the hub's Agents page (its agent_settings record, id = the agent's id), applied here, and
 // what it finds, reported with its heartbeat (see live.js):
@@ -13,9 +15,15 @@ import { run } from '../media/encode.js';
 //                and writable or not, with its free space (recordings themselves stay where config.local.js says)
 //   ollama       { url, testAt }: an Ollama server on the network; its models are listed (each check, and when the
 //                page asks with testAt)
-//   peerPort     the port this agent answers pings on (4874 unless set), on its Tailscale address only; it pings the
-//                other agents (their addresses from the hub's live view) and reports who it reached
+//   peerPort     the port this agent answers the other agents on (4874 unless set), on its Tailscale address only
+//                (peer-server.js: pings, and its recordings' files); it pings the other agents (their addresses from
+//                the hub's live view) and reports who it reached, by which path (peer-net.js: the same network, a
+//                direct connection elsewhere, or a relay), and how fast a transfer from each goes
+//   peerTestAt   asks for the transfers to be timed again now (they are every six hours; relayed agents only when asked)
+//   keepsCopies  keeps a copy of every recording (a storage agent; copies.js), in copiesDir (its data folder's copies/
+//                unless set)
 // The report: { workDir, data, storage, ollama, tailscale, peers, checkedAt }.
+const SPEED_EVERY_MS = 6 * 3600000;
 
 const statusOf = (folder) => {
   try {
@@ -32,7 +40,7 @@ const statusOf = (folder) => {
 
 async function tailscale() {
   try {
-    const status = JSON.parse((await run('tailscale', ['status', '--json'])).stdout);
+    const status = JSON.parse((await run(tailscaleCommand(), ['status', '--json'])).stdout);
     const self = status.Self || {};
     return {
       ip: (self.TailscaleIPs || []).find((address) => address.includes('.')) || self.TailscaleIPs?.[0] || null,
@@ -74,12 +82,32 @@ async function ping(address, port) {
   }
 }
 
-export function agentSettings({ client, hubGet, log, detectNet = tailscale }) {
+export function agentSettings({
+  client,
+  hubGet,
+  log,
+  detectNet = tailscale,
+  findRecording = () => null,
+  findPath = tailscalePath,
+  speed = measureSpeed
+}) {
   let settings = {};
   let report = { checkedAt: null };
-  let server = null;
   let lastOllamaTest = null;
+  let lastPeerTest = null;
   let timer = 0;
+  let version = '';
+  // The other agents' Tailscale addresses (only they may fetch files), and the last transfer timed from each.
+  let allowed = new Set();
+  const speeds = new Map();
+  // The recordings each other agent holds (from its live report).
+  let holdings = new Map();
+  const server = peerServer({
+    identity: () => ({ id: RECORDER.id, name: RECORDER.name, version }),
+    findRecording: (...args) => findRecording(...args),
+    allowed: () => allowed,
+    log
+  });
 
   // The settings as last synced (the sync client keeps the hub's records).
   async function read() {
@@ -91,33 +119,34 @@ export function agentSettings({ client, hubGet, log, detectNet = tailscale }) {
     return settings;
   }
 
-  // Answering pings on the Tailscale address (and only there), started or moved as needed; true once listening.
-  async function listen(address, port, version) {
-    if (server && server.address()?.address === address && server.address()?.port === port) return true;
-    server?.close();
-    const created = http.createServer((request, response) => {
-      if (request.method !== 'GET' || request.url !== '/ping') {
-        response.writeHead(404).end();
-        return;
-      }
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ id: RECORDER.id, name: RECORDER.name, version, time: new Date().toISOString() }));
-    });
-    server = created;
-    return new Promise((resolve) => {
-      created.once('error', (error) => {
-        log(`Pings: can't listen on ${address}:${port} (${error.code || error.message})`);
-        if (server === created) server = null;
-        resolve(false);
-      });
-      created.listen(port, address, () => {
-        created.unref();
-        resolve(true);
-      });
-    });
+  // How this agent reaches another: its ping answered (and how fast), the path tailscale takes, and (when due) how fast
+  // a transfer goes.
+  async function reach(agent, { timeSpeed, asked }) {
+    const address = agent.status.settings.tailscale;
+    const port = address.port || 4874;
+    const [answer, route] = await Promise.all([ping(address.ip, port), findPath(address.ip)]);
+    const peer = {
+      agentId: agent.recorderId,
+      name: agent.status.name || agent.name,
+      ip: address.ip,
+      port,
+      ...answer,
+      path: route.ok ? route.path : null,
+      via: route.ok ? route.via : null,
+      pathMs: route.ok ? route.ms : null
+    };
+    const last = speeds.get(peer.agentId);
+    const due = timeSpeed && (asked || !last || Date.now() - Date.parse(last.at) > SPEED_EVERY_MS);
+    if (peer.ok && due && (peer.path !== 'relay' || asked)) {
+      const timed = await speed(peer, peer.path === 'local' ? 16 * 1024 * 1024 : 4 * 1024 * 1024);
+      speeds.set(peer.agentId, { ...timed, at: new Date().toISOString() });
+    }
+    const timed = speeds.get(peer.agentId);
+    return timed ? { ...peer, speed: timed } : peer;
   }
 
-  async function check({ version }) {
+  async function check(context) {
+    version = context.version || '';
     await read();
     const next = { checkedAt: new Date().toISOString() };
     next.workDir = statusOf(settings.workDir || os.tmpdir());
@@ -137,23 +166,20 @@ export function agentSettings({ client, hubGet, log, detectNet = tailscale }) {
     const net = await detectNet();
     const port = Number(settings.peerPort) || 4874;
     if (net?.ip) {
-      next.tailscale = { ...net, port, listening: await listen(net.ip, port, version) };
+      // (The port it listens on: the one set, or a later one if another agent on this machine has that.)
+      const listening = await server.listen(net.ip, port);
+      next.tailscale = { ...net, port: listening || port, listening: Boolean(listening), lan: lanAddresses() };
       // The other agents, by the addresses they report.
       try {
         const live = await hubGet('live');
         const others = (live.recorders || []).filter(
           (agent) => agent.recorderId !== RECORDER.id && agent.status?.settings?.tailscale?.ip
         );
-        next.peers = await Promise.all(
-          others.map(async (agent) => {
-            const address = agent.status.settings.tailscale;
-            return {
-              agentId: agent.recorderId,
-              name: agent.status.name || agent.name,
-              ...(await ping(address.ip, address.port || 4874))
-            };
-          })
-        );
+        allowed = new Set(others.map((agent) => agent.status.settings.tailscale.ip));
+        holdings = new Map(others.map((agent) => [agent.recorderId, new Set(agent.status.holds || [])]));
+        const asked = (settings.peerTestAt || null) !== lastPeerTest;
+        lastPeerTest = settings.peerTestAt || null;
+        next.peers = await Promise.all(others.map((agent) => reach(agent, { timeSpeed: true, asked })));
       } catch {
         next.peers = report.peers || [];
       }
@@ -163,10 +189,12 @@ export function agentSettings({ client, hubGet, log, detectNet = tailscale }) {
   }
 
   return {
-    // Checked every minute (and right away when the Ollama test is asked for).
+    // Checked every minute (and right away when an Ollama or transfer test is asked for).
     async tick(now, context) {
       await read();
-      if (now < timer && (settings.ollama?.testAt || null) === lastOllamaTest) return false;
+      const asked =
+        (settings.ollama?.testAt || null) !== lastOllamaTest || (settings.peerTestAt || null) !== lastPeerTest;
+      if (now < timer && !asked) return false;
       timer = now + 60000;
       await check(context);
       return true;
@@ -174,6 +202,11 @@ export function agentSettings({ client, hubGet, log, detectNet = tailscale }) {
     report: () => report,
     // Where working files go now.
     workDir: () => (report.workDir?.ok ? report.workDir.path : os.tmpdir()),
-    stop: () => server?.close()
+    // The other agents this one reaches, nearest first being the caller's choice (peers.js byNearness).
+    peers: () => report.peers || [],
+    holders: () => holdings,
+    // Its settings as last read.
+    current: () => settings,
+    stop: () => server.close()
   };
 }

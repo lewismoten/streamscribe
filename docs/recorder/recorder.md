@@ -122,8 +122,61 @@ who may edit sources) its settings, kept in the hub's `agent_settings` record fo
 - **Ollama server**: its address on the network (such as `http://100.64.0.5:11434`); the agent lists its models every
   15 minutes, and at once with **Test Ollama**.
 - **Pings**: on [Tailscale](https://tailscale.com), the agent answers `GET /ping` on its Tailscale address (port 4874
-  unless set; on no other address), pings the other agents at the addresses they report, and says which it reached.
-  **Ping from the hub** asks the hub to ping it, which works when the hub's server is on the same tailnet.
+  unless set, or the next free one when another agent on the machine has it; on no other address), pings the other
+  agents at the addresses they report, and says which it reached and how (see below). **Ping from the hub** asks the
+  hub to ping it, which works when the hub's server is on the same tailnet.
+
+## Taking turns at websites
+
+Agents fetch from the same websites (finding past meetings, official transcripts, first pictures), sometimes several at
+once. So that together they ask a site no more often than its robots.txt allows, each request to a site first takes a
+turn from the hub (`hub-php/lib/turn-routes.php`): turns at a site are spaced by the longer of its `Crawl-delay` and the
+rate setting for that kind of request (`http.profiles` in `config.local.js`; one a second unless set), however many
+agents ask. A live capture keeps its own pace (its profiles are marked `shared: false`), as only one agent records a
+meeting. If the hub can't be reached, an agent keeps to the rate by itself. The Agents page lists the sites fetched from
+in the last day, with each one's pace, who asked last, and how far ahead turns are booked.
+
+## Agents fetching from each other
+
+Agents on Tailscale fetch recordings from each other, so work on a meeting doesn't have to wait for the machine that
+recorded it (`src/recorder/peer-server.js`, `peers.js`, `peer-net.js`).
+
+**Who's nearby.** Each minute, an agent asks `tailscale ping` how its packets reach each other agent, which shows
+whether they share a network better than comparing addresses does (two routers at home give two machines addresses
+that look like different networks):
+
+- **same network**: straight to the other machine's private address (such as `via 192.168.54.109`)
+- **elsewhere, connected directly**: straight to a public address (a laptop taken to a meeting, say)
+- **elsewhere, through Tailscale's relay**: the slowest; used only when no nearer agent has what's needed
+
+Every six hours (or at once with **Time transfers now** on its card) it times a transfer from each agent it reaches
+directly: 16 MB from those on the same network, 4 MB from others; relayed ones only when asked. The Agents page shows
+each agent's own network addresses, and for each other agent the path, the ping time, and the speed.
+
+**What an agent serves.** On its Tailscale address only, and only to the agents the hub lists (by their Tailscale
+addresses; `/ping` is open to the tailnet): a recording part's segments (`segments/*.ts`) and the small `.json` and
+`.jsonl` files that describe them, never anything else of its folders. A fetch asks the nearest agents first, takes
+only the segments a stretch needs when given one, resumes a transfer that stopped partway, and lays the copy out as
+the original is, so the usual tools work on it.
+
+**Work on recordings held elsewhere.** Each agent reports which recordings it holds (its own, its library's, and
+copies it keeps). An agent can take a clip, video, or encoding job for a recording another agent nearby holds (on the
+same network or connected directly, never through the relay): it fetches what the work needs first, the stretch of a
+clip with a few seconds either side, or all of a recording to encode it.
+
+**A storage agent.** On a machine with lots of space, tick **Keeps a copy of every recording** in its card's settings
+(and say where the copies go, or they go in its data folder's `copies/`). Every ten minutes it copies each finished
+recording it doesn't have yet from whichever agent has it, nearest first, one part at a time, resuming where it
+stopped. The others then fetch from it, so a recording stays available while the machine that recorded it is away (a
+laptop taken to a meeting) or after its own copy is cleared. It stops copying while its drive has less than
+`recorder.minFreeGb` free, and its card shows how many recordings it keeps, the room left, and what it's copying.
+
+**From a terminal**, on a machine with an agent (it must be running for transfers, since agents serve only agents):
+
+```bash
+npm run peers                                                   # each agent: path, ping, speed
+npm run peers -- --fetch <recording id> --from 600 --to 1200    # a copy of 10 minutes of a recording
+```
 
 **Tasks**: an agent whose Ollama server answers takes `prompt` jobs (a task from the hub's Tasks page, on one
 meeting), and every five minutes queues the tasks marked to run after each meeting for meetings that have finished

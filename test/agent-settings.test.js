@@ -1,5 +1,6 @@
 // What an agent finds of its settings (src/recorder/agent-settings.js): its working folder and storage (writable, free
-// space), an Ollama server's models, answering pings on its (Tailscale) address, and reaching the other agents.
+// space), an Ollama server's models, answering pings on its (Tailscale) address, and reaching the other agents (by
+// which path, and how fast a transfer goes).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -40,7 +41,8 @@ test('agent settings: storage, Ollama, pings, and peers', async () => {
     client,
     hubGet,
     log: () => {},
-    detectNet: async () => ({ ip: '127.0.0.1', name: 'this.tailnet.ts.net', online: true })
+    detectNet: async () => ({ ip: '127.0.0.1', name: 'this.tailnet.ts.net', online: true }),
+    findPath: async () => ({ ok: true, path: 'local', via: '192.168.54.109', ms: 2 })
   });
   try {
     assert.equal(await told.tick(Date.now(), { version: '1.2.3' }), true);
@@ -57,6 +59,12 @@ test('agent settings: storage, Ollama, pings, and peers', async () => {
     assert.equal(answer.version, '1.2.3');
     assert.equal(report.peers[0].agentId, 'other');
     assert.equal(report.peers[0].ok, true, JSON.stringify(report.peers));
+    // The same network (by the path tailscale takes), and a transfer timed from it.
+    assert.equal(report.peers[0].path, 'local');
+    assert.equal(report.peers[0].via, '192.168.54.109');
+    assert.equal(report.peers[0].speed.ok, true, JSON.stringify(report.peers[0].speed));
+    assert.ok(report.peers[0].speed.mbps > 0);
+    assert.deepEqual(told.peers()[0].ip, '127.0.0.1');
     // Not again within the minute, unless an Ollama test is asked for.
     assert.equal(await told.tick(Date.now(), { version: '1.2.3' }), false);
     settingsRecord.ollama = { ...settingsRecord.ollama, testAt: new Date().toISOString() };

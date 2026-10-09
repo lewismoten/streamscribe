@@ -9,9 +9,19 @@ const defaultUserAgent = HTTP.userAgent;
 const cookieJar = new Map();
 const rateBuckets = new Map();
 const hostNextAllowedAt = new Map();
+// Turns shared with other machines (the recorder sets this to ask the hub: src/recorder/hub-api.js hostTurn), so
+// several agents fetching from one site together keep to its rate: (host, intervalMs) → ms to wait. Null: this process
+// keeps to the rate by itself.
+let sharedTurn = null;
+export function shareTurns(turn) {
+  sharedTurn = turn;
+}
 
 // Every web request goes through here: robots.txt is checked (from cache when fresh), then the request
-// waits for its rate profile and any robots.txt Crawl-delay for the host.
+// waits for its rate profile and any robots.txt Crawl-delay for the host. With shared turns (shareTurns), the wait
+// for the host is the hub's, shared by every agent: the longer of the Crawl-delay and the profile's cooldown, between
+// any two requests to the host from any of them (profiles marked shared: false, such as a live capture's, keep their
+// own pace).
 // Options beyond fetch's own:
 // - rateProfile: name of an `http.profiles` entry (defaults to the npm script name if configured, else 'default')
 // - quiet: skip the "Fetching ..." log line
@@ -317,6 +327,19 @@ export async function prepareRequest(requestUrl, { rateProfile } = {}) {
     crawlDelayMs = verdict.crawlDelayMs;
   }
   await takeRateToken(profileName);
+  const profile = HTTP.profiles[profileName];
+  if (url && sharedTurn && profile.shared !== false) {
+    const intervalMs = Math.max(crawlDelayMs, profile.cooldownMs);
+    try {
+      const waitMs = await sharedTurn(url.host, intervalMs);
+      if (waitMs > 0) {
+        await sleep(waitMs);
+      }
+      return;
+    } catch {
+      // The hub can't be asked: this process keeps to the rate by itself.
+    }
+  }
   if (url && crawlDelayMs > 0) {
     await waitForHostDelay(url.host, crawlDelayMs);
   }

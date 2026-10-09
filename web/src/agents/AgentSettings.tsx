@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { hubCall } from '../data/hub.ts';
 import { putRecord, useRecords } from '../data/useRecords.ts';
-import type { AgentSettingsData, PlaceStatus, SettingsReport } from './types.ts';
+import type { AgentSettingsData, CopiesReport, Peer, PlaceStatus, SettingsReport } from './types.ts';
 
 // An agent's settings (where its working files go, more storage to watch, an Ollama server, the port it answers pings
 // on) and what it found: each place there and writable, with its free space; the Ollama server's models; its
-// Tailscale address and which other agents it reaches; and a ping from the hub. People who may edit sources change
+// Tailscale address and which other agents it reaches (on the same network or elsewhere, and how fast a transfer goes);
+// and a ping from the hub. People who may edit sources change
 // the settings; the agent picks them up within a minute.
 const KINDS = { local: 'Local drive', usb: 'USB drive', network: 'Network folder' } as const;
 
@@ -19,13 +20,56 @@ function Place({ place, label }: { place?: PlaceStatus; label: string }) {
   );
 }
 
+const PATHS = {
+  local: 'same network',
+  direct: 'elsewhere, connected directly',
+  relay: "elsewhere, through Tailscale's relay"
+} as const;
+
+function PeerLine({ peer }: { peer: Peer }) {
+  if (!peer.ok)
+    return (
+      <li className="error">
+        Doesn&apos;t reach {peer.name || peer.agentId} ({peer.error})
+      </li>
+    );
+  const parts = [
+    peer.path ? `${PATHS[peer.path]}${peer.via ? ` (via ${peer.via})` : ''}` : 'path unknown',
+    `${peer.ms} ms`,
+    peer.speed?.ok ? `${peer.speed.mbps} Mbit/s` : peer.speed ? `transfer failed (${peer.speed.error})` : null
+  ];
+  return (
+    <li className={peer.path === 'relay' ? 'muted' : ''}>
+      Reaches {peer.name || peer.agentId}: {parts.filter(Boolean).join(' · ')}
+    </li>
+  );
+}
+
+// A storage agent's copies: how many, where, room left, and the one being copied.
+function Copies({ copies }: { copies: CopiesReport }) {
+  return (
+    <li className={copies.error ? 'error' : ''}>
+      Keeps a copy of every recording: {copies.recordings} recordings ({copies.parts} parts) in{' '}
+      <code>{copies.dir}</code>
+      {copies.freeGb !== null ? ` · ${copies.freeGb} GB free` : ''}
+      {copies.copying
+        ? ` · copying ${copies.copying.title} (${copies.copying.part}), ${Math.round(copies.copying.share * 100)}%`
+        : ''}
+      {copies.missing ? ` · ${copies.missing} not on any agent it reaches now` : ''}
+      {copies.error ? ` · ${copies.error}` : ''}
+    </li>
+  );
+}
+
 export default function AgentSettings({
   agentId,
   report,
+  copies,
   canEdit
 }: {
   agentId: string;
   report: SettingsReport | null | undefined;
+  copies?: CopiesReport | null;
   canEdit: boolean;
 }) {
   const { records } = useRecords<AgentSettingsData>('agent_settings');
@@ -39,6 +83,7 @@ export default function AgentSettings({
     await putRecord('agent_settings', agentId, {
       ...settings,
       storage: (settings.storage || []).filter((place) => place.path.trim()),
+      copiesDir: settings.copiesDir?.trim() || undefined,
       ollama: settings.ollama?.url?.trim() ? { ...settings.ollama, url: settings.ollama.url.trim() } : undefined
     });
     setDraft(null);
@@ -48,6 +93,7 @@ export default function AgentSettings({
       ...saved,
       ollama: { ...saved.ollama, url: saved.ollama?.url || '', testAt: new Date().toISOString() }
     });
+  const timeTransfers = () => putRecord('agent_settings', agentId, { ...saved, peerTestAt: new Date().toISOString() });
   const pingFromHub = async () => {
     setPing('Pinging…');
     try {
@@ -60,11 +106,12 @@ export default function AgentSettings({
 
   return (
     <details className="agent-settings small">
-      <summary>Storage, Ollama, and network</summary>
+      <summary>Storage, copies, Ollama, and network</summary>
       {report?.checkedAt ? (
         <ul>
           <Place place={report.workDir} label="Working files" />
           <Place place={report.data} label="Recordings" />
+          {copies && <Copies copies={copies} />}
           {(report.storage || []).map((place) => (
             <Place
               key={place.path}
@@ -82,13 +129,11 @@ export default function AgentSettings({
           )}
           <li>
             {report.tailscale
-              ? `Tailscale ${report.tailscale.name || ''} ${report.tailscale.ip}, answering pings on port ${report.tailscale.port}`
+              ? `Tailscale ${report.tailscale.name || ''} ${report.tailscale.ip}, answering the other agents on port ${report.tailscale.port}${report.tailscale.lan?.length ? ` · on its network as ${report.tailscale.lan.join(', ')}` : ''}`
               : 'Not on Tailscale (or tailscale is not installed)'}
           </li>
           {(report.peers || []).map((peer) => (
-            <li key={peer.agentId} className={peer.ok ? '' : 'error'}>
-              Reaches {peer.name || peer.agentId}: {peer.ok ? `${peer.ms} ms` : `no (${peer.error})`}
-            </li>
+            <PeerLine key={peer.agentId} peer={peer} />
           ))}
         </ul>
       ) : (
@@ -99,6 +144,11 @@ export default function AgentSettings({
           Ping from the hub
         </button>
         {ping && <output>{ping}</output>}
+        {canEdit && (report?.peers || []).length > 0 && (
+          <button type="button" className="button" onClick={timeTransfers}>
+            Time transfers now
+          </button>
+        )}
         {canEdit && saved.ollama?.url && (
           <button type="button" className="button" onClick={testOllama}>
             Test Ollama
@@ -177,6 +227,24 @@ export default function AgentSettings({
               ＋ A place to watch
             </button>
           </fieldset>
+          <label>
+            <input
+              type="checkbox"
+              checked={Boolean(settings.keepsCopies)}
+              onChange={(event) => set({ keepsCopies: event.target.checked })}
+            />{' '}
+            Keeps a copy of every recording (a storage agent: the others fetch from it)
+          </label>
+          {settings.keepsCopies && (
+            <label className="block">
+              Copies go in
+              <input
+                value={settings.copiesDir || ''}
+                onChange={(event) => set({ copiesDir: event.target.value })}
+                placeholder="/Volumes/Big/streamscribe-copies (its data folder's copies/ unless set)"
+              />
+            </label>
+          )}
           <label className="block">
             Ollama server
             <input
@@ -186,7 +254,7 @@ export default function AgentSettings({
             />
           </label>
           <label className="block">
-            Answers pings on port
+            Answers the other agents on port
             <input
               type="number"
               min={1024}

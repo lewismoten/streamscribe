@@ -8,12 +8,15 @@ import { SqliteStore } from '../sync/stores/node-sqlite.js';
 import { upcoming } from '../sync/recurrence.js';
 import { isAlive } from '../capture/jobs.js';
 import { overrunSettings } from './overrun.js';
-import { hubConfigured, hubGet } from './hub-api.js';
+import { hubConfigured, hubGet, hostTurn } from './hub-api.js';
+import { shareTurns } from '../net/fetch.js';
 import { quickTranscribe } from './quick-transcribe.js';
 import { syncMarks } from './marks.js';
 import { jobRunner } from './jobs.js';
 import { detectCapabilities } from './capabilities.js';
 import { agentSettings } from './agent-settings.js';
+import { copyKeeper } from './copies.js';
+import { remoteRecordings } from './remote-recordings.js';
 import { queueAutoPrompts } from './prompts.js';
 import { recordingControl } from './recordings.js';
 import { liveReports } from './live.js';
@@ -71,7 +74,7 @@ export async function main() {
   if (!hubConfigured())
     log('No hub configured (recorder.hubUrl and recorder.key in config.local.js): recording from local schedules only');
 
-  const timers = { sync: 0, heartbeat: 0, thumbnail: 0, quick: 0, marks: 0, register: 0, jobs: 0, tasks: 0 };
+  const timers = { sync: 0, heartbeat: 0, thumbnail: 0, quick: 0, marks: 0, register: 0, jobs: 0, tasks: 0, holds: 0 };
   // What the recordings and live reports share with the loop: publishing is the publish under way (or null), and
   // capabilities what this machine can do.
   const context = {
@@ -86,12 +89,29 @@ export async function main() {
     settings: null
   };
   // What the hub's Agents page tells this agent (its working folder, storage to watch, Ollama, pings), and what it finds.
-  const told = agentSettings({ client, hubGet, log });
+  // Its requests to websites take turns with the other agents' (the hub keeps the turns), so together they keep to
+  // each site's robots.txt and rate.
+  shareTurns(hostTurn);
+  // (It serves this agent's recordings to the other agents, so it finds them as the jobs do.)
+  const told = agentSettings({ client, hubGet, log, findRecording: (...args) => findRecording(...args) });
   context.settings = told;
-  const { findRecording, startRecording, startProcesses, followRecording, publishFinished } = recordingControl(context);
+  const { findRecording, findOwn, heldIds, startRecording, startProcesses, followRecording, publishFinished } =
+    recordingControl(context);
+  // A storage agent keeps a copy of every recording (copies.js); any agent can work on a recording another nearby
+  // holds, fetching what the work needs (remote-recordings.js).
+  const copies = copyKeeper({
+    client,
+    peers: () => told.peers(),
+    settings: () => told.current(),
+    isOwn: (id) => Boolean(findOwn(id)),
+    log
+  });
+  context.copies = copies;
+  const remote = remoteRecordings({ client, peers: () => told.peers(), holders: () => told.holders() });
   const jobs = jobRunner({
     client,
     findRecording,
+    remote,
     log,
     workDir: () => told.workDir(),
     settings: () => told.report()
@@ -154,6 +174,7 @@ export async function main() {
   }
   log('Recorder stopping (captures it started keep running; starting the recorder again picks them up)');
   await jobs.stop();
+  await copies.stop();
   told.stop();
   if (context.publishing) {
     log('Waiting for publishing to finish');
@@ -231,6 +252,13 @@ export async function main() {
       } catch (error) {
         log(`Settings: ${error.message}`);
       }
+    }
+
+    // Copies kept for the others (a storage agent), and which recordings it holds (reported with its state).
+    if (hubConfigured()) copies.tick(now);
+    if (now >= timers.holds) {
+      timers.holds = now + 5 * 60000;
+      context.holds = heldIds();
     }
 
     // 4. Live reports: state (and the lease) now and then, a picture, and quick transcripts.

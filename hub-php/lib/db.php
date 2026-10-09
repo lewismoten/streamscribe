@@ -15,7 +15,7 @@ function hub_db(array $config): PDO {
 
 // Brings a database of any earlier version up to date (schema.sql only creates what's missing; columns added later
 // are added here). Cheap when there's nothing to do.
-const HUB_SCHEMA_VERSION = 5;
+const HUB_SCHEMA_VERSION = 6;
 function hub_migrate(PDO $db): void {
   if ((int)$db->query('PRAGMA user_version')->fetchColumn() >= HUB_SCHEMA_VERSION) return;
   $db->exec('BEGIN IMMEDIATE');
@@ -27,6 +27,7 @@ function hub_migrate(PDO $db): void {
     }
     $version = (int)$db->query('PRAGMA user_version')->fetchColumn();
     $db->exec(file_get_contents(__DIR__ . '/../schema.sql'));
+    // Version 6: agents' turns at websites (host_turns, from schema.sql).
     // Version 5: public bodies. The built-in Editor group (made before) may edit them, as a new Editor group does.
     if ($version > 0 && $version < 5) {
       $editor = $db->query('SELECT permissions FROM groups WHERE id = 2 AND builtin = 1')->fetchColumn();

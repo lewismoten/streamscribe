@@ -26,6 +26,17 @@ CREATE TABLE IF NOT EXISTS ops (op_id TEXT PRIMARY KEY, response TEXT NOT NULL, 
 -- Who is recording each meeting occurrence, until when.
 CREATE TABLE IF NOT EXISTS leases (occurrence_key TEXT PRIMARY KEY, holder TEXT NOT NULL, lease_until INTEGER NOT NULL);
 
+-- Agents' turns at each website (lib/turn-routes.php): the next free turn (ms since the epoch, the hub's clock), and
+-- the last one taken.
+CREATE TABLE IF NOT EXISTS host_turns (
+  host TEXT PRIMARY KEY,
+  next_at INTEGER NOT NULL,
+  interval_ms INTEGER NOT NULL,
+  last_by TEXT NOT NULL,
+  last_at INTEGER NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0
+);
+
 -- Each recorder's latest status (overwritten; not part of the change feed).
 CREATE TABLE IF NOT EXISTS live (recorder_id TEXT PRIMARY KEY, body TEXT NOT NULL, updated_at TEXT NOT NULL);
 

@@ -148,10 +148,11 @@ function normalizeHttpConfig(value) {
   const cooldownMs = normalizeNonNegativeNumber(http.cooldownMs, 1000);
   const burst = normalizePositiveInteger(http.burst, 1);
   const defaultProfiles = {
-    // Playlist polls and live segments: about one request a second, with short bursts of three.
-    liveMedia: { cooldownMs: 1000, burst: 3 },
+    // Playlist polls and live segments: about one request a second, with short bursts of three. A live capture keeps
+    // its own pace (shared: false), not taking turns at the site with other agents' fetching.
+    liveMedia: { cooldownMs: 1000, burst: 3, shared: false },
     // Catching up on earlier segments when a live capture starts: two requests a second.
-    liveBackfill: { cooldownMs: 500, burst: 1 }
+    liveBackfill: { cooldownMs: 500, burst: 1, shared: false }
   };
   const configuredProfiles =
     http.profiles && typeof http.profiles === 'object' && !Array.isArray(http.profiles) ? http.profiles : {};
@@ -162,11 +163,12 @@ function normalizeHttpConfig(value) {
         name,
         {
           cooldownMs: normalizeNonNegativeNumber(profile.cooldownMs, cooldownMs),
-          burst: normalizePositiveInteger(profile.burst, burst)
+          burst: normalizePositiveInteger(profile.burst, burst),
+          shared: profile.shared !== false
         }
       ])
   );
-  profiles.default = { cooldownMs, burst };
+  profiles.default = { cooldownMs, burst, shared: true };
   const robots = http.robots && typeof http.robots === 'object' && !Array.isArray(http.robots) ? http.robots : {};
   return {
     userAgent: String(

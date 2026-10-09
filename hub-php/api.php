@@ -18,6 +18,8 @@
 //   GET podcast-chapters/<publication id>.json
 // Agents' uploads in pieces (lib/upload-routes.php): POST upload-begin, upload-chunk, upload-finish, files-prune,
 //   files-remove (recorder keys)
+// Agents' turns at websites, so together they keep to each site's rate (lib/turn-routes.php): POST turn (recorder
+//   keys), GET turns (view.meetings)
 // Adding agents (lib/agent-routes.php): GET agents, POST agents/create, agents/token, agents/revoke (manage.users);
 //   GET agent-install?token=, GET agent-download, POST agent-enroll
 // People (lib/users.php):
@@ -211,7 +213,8 @@ if ($method === 'POST' && $route === 'claim') {
 
 if ($method === 'POST' && $route === 'live') {
   $caller = hub_require($config, ['recorder']);
-  $input = hub_json_body(65536, true);
+  // (Room for a storage agent's list of the recordings it holds.)
+  $input = hub_json_body(262144, true);
   $recorder = substr((string)($input->recorderId ?? ''), 0, 200);
   if ($recorder === '') hub_fail(400, 'Expected recorderId');
   $body = json_encode(['recorderId' => $recorder, 'name' => $caller['name'], 'status' => $input->status ?? null], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -309,5 +312,6 @@ require __DIR__ . '/lib/people-routes.php';
 require __DIR__ . '/lib/podcast-routes.php';
 require __DIR__ . '/lib/upload-routes.php';
 require __DIR__ . '/lib/agent-routes.php';
+require __DIR__ . '/lib/turn-routes.php';
 
 hub_fail(404, 'No such route: ' . $method . ' ' . $route);

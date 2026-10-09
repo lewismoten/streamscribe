@@ -24,9 +24,24 @@ const safely = (read) => {
 export function recordingControl(context) {
   const { state, client, log, save } = context;
 
-  // A recording this agent has (one it recorded, or one in the local library), as the parts publish-media takes,
-  // and the folder of one part. Null when it isn't here.
+  // A recording this agent has (one it recorded, one in the local library, or a copy it keeps for the others), as the
+  // parts publish-media takes, and the folder of one part. Null when it isn't here.
   function findRecording(recordingId, partName) {
+    return findOwn(recordingId, partName) || context.copies?.find(recordingId, partName) || null;
+  }
+
+  // Every recording this agent holds (reported to the hub, so the others know whom to fetch from).
+  function heldIds() {
+    const ids = new Set();
+    for (const recording of [...Object.values(state.recordings), ...safely(recordersRecordings)])
+      if (recording.id && recording.parts?.length) ids.add(recording.id);
+    for (const item of safely(() => localRecordings({ all: true }))) ids.add(item.id);
+    for (const id of context.copies?.held() || []) ids.add(id);
+    return [...ids];
+  }
+
+  // One it recorded or has in its library (not a copy).
+  function findOwn(recordingId, partName) {
     let items = [];
     // Its own, else one another agent sharing this data folder recorded.
     const recorded = (recording) => recording.id === recordingId && recording.parts?.length;
@@ -248,7 +263,7 @@ export function recordingControl(context) {
     });
   }
 
-  return { findRecording, startRecording, startProcesses, followRecording, publishFinished };
+  return { findRecording, findOwn, heldIds, startRecording, startProcesses, followRecording, publishFinished };
 }
 
 // A capture of this source already running (started from a terminal, say) is used rather than starting another.

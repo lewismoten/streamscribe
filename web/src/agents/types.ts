@@ -27,6 +27,9 @@ export interface AgentStatus {
   capabilities?: Capabilities | null;
   // What it found of its settings (src/recorder/agent-settings.js).
   settings?: SettingsReport | null;
+  // The recordings it holds (the others fetch from it), and the copies it keeps as a storage agent.
+  holds?: string[];
+  copies?: CopiesReport | null;
 }
 export interface PlaceStatus {
   path: string;
@@ -49,8 +52,41 @@ export interface SettingsReport {
     error?: string;
     checkedAt: string;
   };
-  tailscale?: { ip: string; name: string; online: boolean; port: number; listening: boolean } | null;
-  peers?: { agentId: string; name: string; ok: boolean; ms?: number; error?: string }[];
+  tailscale?: {
+    ip: string;
+    name: string;
+    online: boolean;
+    port: number;
+    listening: boolean;
+    // Its own addresses on its networks.
+    lan?: string[];
+  } | null;
+  peers?: Peer[];
+}
+// A storage agent's copies (src/recorder/copies.js).
+export interface CopiesReport {
+  dir: string;
+  recordings: number;
+  parts: number;
+  freeGb: number | null;
+  copying?: { title: string; part: string; share: number } | null;
+  missing?: number;
+  error?: string | null;
+  checkedAt?: string;
+}
+// Another agent as this one reaches it (src/recorder/agent-settings.js): its ping, the path tailscale takes (local: the
+// same network; direct: elsewhere, connected directly; relay: elsewhere, through Tailscale's relay), and the last
+// transfer timed from it.
+export interface Peer {
+  agentId: string;
+  name: string;
+  ok: boolean;
+  ms?: number;
+  error?: string;
+  path?: 'local' | 'direct' | 'relay' | null;
+  via?: string | null;
+  pathMs?: number | null;
+  speed?: { ok: boolean; mbps?: number; error?: string; at: string };
 }
 // What an agent is told (collection agent_settings, id = its id).
 export interface AgentSettingsData {
@@ -58,6 +94,11 @@ export interface AgentSettingsData {
   storage?: { label: string; path: string; kind: 'local' | 'usb' | 'network' }[];
   ollama?: { url: string; testAt?: string };
   peerPort?: number;
+  // Asks for the transfers from the other agents to be timed again now.
+  peerTestAt?: string;
+  // A storage agent: keeps a copy of every recording, in copiesDir (its data folder's copies/ unless set).
+  keepsCopies?: boolean;
+  copiesDir?: string;
 }
 // Agents added here (with an install command), as the hub keeps them.
 // Agents added here (with an install command), as the hub keeps them.

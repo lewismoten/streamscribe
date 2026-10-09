@@ -41,7 +41,12 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
                 <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
               )}
               {status?.capabilities && <Capability value={status.capabilities} sharing={sharedWith(agents, agent)} />}
-              <AgentSettings agentId={agent.recorderId} report={status?.settings} canEdit={canEdit} />
+              <AgentSettings
+                agentId={agent.recorderId}
+                report={status?.settings}
+                copies={status?.copies}
+                canEdit={canEdit}
+              />
             </div>
           );
         })

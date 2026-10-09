@@ -13,7 +13,8 @@ import { discover, firstPicture, officialTranscript } from './discovery.js';
 
 // Work for agents: the hub only keeps the queue (`jobs` records, written by the web app or by agents); agents (the
 // recorder service, on machines with the video) do the work. Each tick an idle agent takes the oldest queued job it
-// can do (it has that recording here; a job for a named agent waits for it), claims it on the hub so no other agent
+// can do (it has that recording here, or an agent nearby does, which it then fetches what the work needs from: a
+// stretch of a part for a clip, all of it for encoding; a job for a named agent waits for it), claims it on the hub so no other agent
 // takes it too (renewed while it works), and reports its progress in the job record. Cancelling a job in the web app
 // stops it. Job types:
 //   clip    { publicationId, recordingId, part, from, to }  cut a published clip (MP4 with sound, and M4A), upload
@@ -27,8 +28,32 @@ import { discover, firstPicture, officialTranscript } from './discovery.js';
 //           answer saved in prompt_results (any agent whose Ollama server answers can do it)
 const LEASE_SECONDS = 180;
 
-export function jobRunner({ client, findRecording, log, workDir = () => os.tmpdir(), settings = () => ({}) }) {
+// How far either side of a clip's stretch is fetched from another agent (a segment or so), so its cut points are in it.
+const MARGIN_SECONDS = 15;
+
+export function jobRunner({
+  client,
+  findRecording,
+  remote = { canFetch: () => false },
+  log,
+  workDir = () => os.tmpdir(),
+  settings = () => ({})
+}) {
   let current = null;
+  // Here, or with an agent nearby.
+  const reachable = (recordingId, part) => Boolean(findRecording(recordingId, part)) || remote.canFetch(recordingId);
+  // The recording here, or the stretch the work needs fetched into a folder of tempDir from an agent nearby.
+  async function obtain(recordingId, part, { from = null, to = null, tempDir, signal, onProgress = () => {} }) {
+    const here = findRecording(recordingId, part);
+    if (here) return here;
+    return remote.fetch(recordingId, part, {
+      from: from === null ? null : Math.max(0, from - MARGIN_SECONDS),
+      to: to === null ? null : to + MARGIN_SECONDS,
+      destDir: fs.mkdtempSync(path.join(tempDir, 'fetched-')),
+      signal,
+      onProgress
+    });
+  }
   let stopping = false;
 
   const update = async (id, patch) => {
@@ -98,13 +123,19 @@ export function jobRunner({ client, findRecording, log, workDir = () => os.tmpdi
 
   const handlers = {
     clip: {
-      canDo: (job) => Boolean(findRecording(job.recordingId, job.part)),
+      canDo: (job) => reachable(job.recordingId, job.part),
       async run(job, { signal, progress }) {
-        const found = findRecording(job.recordingId, job.part);
         const publication = await client.get('publications', job.publicationId);
         if (!publication) throw new Error('The publication is gone (unpublished)');
         const tempDir = fs.mkdtempSync(path.join(workDir(), 'streamscribe-clip-'));
         try {
+          const found = await obtain(job.recordingId, job.part, {
+            from: job.from,
+            to: job.to,
+            tempDir,
+            signal,
+            onProgress: (share, message) => progress(share * 0.2, message)
+          });
           const session = await loadSessionSegments(found.dir);
           const made = await makeClip(found.dir, session, {
             from: job.from,
@@ -125,7 +156,7 @@ export function jobRunner({ client, findRecording, log, workDir = () => os.tmpdi
     video: {
       canDo: (job) =>
         (job.items || []).length > 0 &&
-        job.items.every((item) => findRecording(item.recordingId, item.part)) &&
+        job.items.every((item) => reachable(item.recordingId, item.part)) &&
         (!job.forAgent || job.forAgent === RECORDER.id),
       async run(job, { signal, progress }) {
         const toHub = (job.output?.destination || 'hub') === 'hub';
@@ -137,7 +168,13 @@ export function jobRunner({ client, findRecording, log, workDir = () => os.tmpdi
           const pieces = [];
           const share = 0.8 / job.items.length;
           for (const [index, item] of job.items.entries()) {
-            const found = findRecording(item.recordingId, item.part);
+            const found = await obtain(item.recordingId, item.part, {
+              from: item.from,
+              to: item.to,
+              tempDir,
+              signal,
+              onProgress: (part, message) => progress(index * share + part * share * 0.3, message)
+            });
             const session = await loadSessionSegments(found.dir);
             const made = await makeClip(found.dir, session, {
               from: item.from,
@@ -225,15 +262,28 @@ export function jobRunner({ client, findRecording, log, workDir = () => os.tmpdi
       }
     },
     encode: {
-      canDo: (job) => Boolean(findRecording(job.recordingId)),
+      canDo: (job) => reachable(job.recordingId),
       async run(job, { signal, progress }) {
-        await publishMedia({
-          items: findRecording(job.recordingId).items,
-          signal,
-          onProgress: progress,
-          log: () => {}
-        });
-        return {};
+        // (All of it, fetched from an agent nearby if it isn't here.)
+        const tempDir = fs.mkdtempSync(path.join(workDir(), 'streamscribe-encode-'));
+        // (Fetching, when it must, is the first 40% of the work.)
+        const fetching = findRecording(job.recordingId) ? 0 : 0.4;
+        try {
+          const found = await obtain(job.recordingId, undefined, {
+            tempDir,
+            signal,
+            onProgress: (share, message) => progress(share * fetching, message)
+          });
+          await publishMedia({
+            items: found.items,
+            signal,
+            onProgress: (share, message) => progress(fetching + share * (1 - fetching), message),
+            log: () => {}
+          });
+          return {};
+        } finally {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        }
       }
     }
   };

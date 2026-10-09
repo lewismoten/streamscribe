@@ -182,7 +182,8 @@ if [ "$OS" = mac ]; then
   mkdir -p "$PLIST_DIR" "$DATA_DIR/logs"
   PLIST="$PLIST_DIR/$LABEL.plist"
   AGENT_LOG="$DATA_DIR/logs/agent.log"
-  # caffeinate -i keeps the Mac from sleeping (when idle) while the agent runs; PATH finds Homebrew's tools.
+  # caffeinate -i keeps the Mac from sleeping (when idle) while the agent runs; PATH finds Homebrew's tools and the
+  # Tailscale app's command line (/usr/local/bin).
   cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -203,7 +204,7 @@ if [ "$OS" = mac ]; then
   <key>StandardErrorPath</key><string>$AGENT_LOG</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>PATH</key><string>$(dirname "$NODE_BIN"):$(brew --prefix)/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PATH</key><string>$(dirname "$NODE_BIN"):$(brew --prefix)/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>NODE_ENV</key><string>production</string>
   </dict>
 </dict>

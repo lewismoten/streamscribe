@@ -8,7 +8,7 @@ import { runCommand } from '../util/process.js';
 
 // The recorder's live reports to the hub (see service.js): its state and the leases of the meetings it is recording,
 // and a live picture. The context is the service's shared state:
-//   { state, log, version, jobs, capabilities } (capabilities is null until checked)
+//   { state, log, version, jobs, capabilities, settings, holds, copies } (capabilities is null until checked)
 export function liveReports(context) {
   const { state, log, version } = context;
 
@@ -40,6 +40,9 @@ export function liveReports(context) {
       job,
       capabilities: context.capabilities,
       settings: context.settings?.report() || null,
+      // The recordings it holds (the others fetch from it), and the copies it keeps if it's a storage agent.
+      holds: context.holds || [],
+      copies: context.copies?.report() || null,
       version,
       freeGb: freeGigabytes(),
       clockSkewSeconds: hub.clockSkewSeconds,
