@@ -25,8 +25,11 @@ fi
 
 # The agent's code, which new agents download through the hub (hub-php/lib/agent-routes.php): bin/, src/, and
 # package.json are all it needs (no npm packages).
+# build.json says which commit it is, so agents report it with their version (src/config/build.js).
 mkdir -p web/dist-agent
-COPYFILE_DISABLE=1 tar -czf web/dist-agent/streamscribe-agent.tgz --exclude .DS_Store bin src package.json config.example.js
+printf '{"commit":"%s","builtAt":"%s"}\n' "$(git rev-parse --short HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > web/dist-agent/build.json
+COPYFILE_DISABLE=1 tar -czf web/dist-agent/streamscribe-agent.tgz --exclude .DS_Store bin src package.json config.example.js \
+  -C web/dist-agent build.json
 
 $SSH "$REMOTE" "mkdir -p '$DEPLOY_PATH/hub/agent'"
 RSYNC=(rsync --recursive --links --checksum --compress --delete --itemize-changes --exclude .DS_Store -e "$SSH")

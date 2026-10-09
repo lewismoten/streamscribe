@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { putRecord, useRecords } from '../data/useRecords.ts';
 import {
   WHISPER_MODELS,
+  type LlmServerStatus,
   type AgentSettingsData,
   type CopiesReport,
   type Peer,
@@ -50,6 +51,18 @@ function PeerLine({ peer }: { peer: Peer }) {
     <li className={peer.path === 'relay' ? 'muted' : ''}>
       Reaches {peer.name || peer.agentId}
       {peer.host ? ` (${peer.host})` : ''}: {parts.filter(Boolean).join(' · ')}
+    </li>
+  );
+}
+
+// A language-model server: answering now (with its models) or not, as checked within the minute.
+function LlmLine({ server }: { server: LlmServerStatus }) {
+  return (
+    <li className={server.ok ? '' : 'muted'}>
+      {server.label || (server.kind === 'openai' ? 'OpenAI-style server' : 'Ollama')} at <code>{server.url}</code>:{' '}
+      {server.ok
+        ? `${server.models?.length || 0} models (${(server.models || []).map((model) => model.name).join(', ') || 'none'})`
+        : `off now (${server.error})`}
     </li>
   );
 }
@@ -110,7 +123,10 @@ export default function AgentSettings({
       ...settings,
       storage: (settings.storage || []).filter((place) => place.path.trim()),
       copiesDir: settings.copiesDir?.trim() || undefined,
-      ollama: settings.ollama?.url?.trim() ? { ...settings.ollama, url: settings.ollama.url.trim() } : undefined
+      ollama: settings.ollama?.url?.trim() ? { ...settings.ollama, url: settings.ollama.url.trim() } : undefined,
+      llmServers: (settings.llmServers || [])
+        .map((server) => ({ ...server, url: server.url.trim(), label: server.label.trim() }))
+        .filter((server) => server.url)
     });
     setDraft(null);
   };
@@ -133,7 +149,7 @@ export default function AgentSettings({
 
   return (
     <details className="agent-settings small">
-      <summary>Storage, copies, tools, Ollama, and network</summary>
+      <summary>Storage, copies, tools, language models, and network</summary>
       {report?.checkedAt ? (
         <ul>
           <Place place={report.workDir} label="Working files" />
@@ -147,14 +163,12 @@ export default function AgentSettings({
               label={`${place.label || 'Storage'} (${KINDS[place.kind as keyof typeof KINDS] || place.kind})`}
             />
           ))}
-          {report.ollama && (
-            <li className={report.ollama.ok ? '' : 'error'}>
-              Ollama at <code>{report.ollama.url}</code>:{' '}
-              {report.ollama.ok
-                ? `${report.ollama.models?.length || 0} models (${(report.ollama.models || []).map((model) => model.name).join(', ') || 'none'})`
-                : `no answer (${report.ollama.error})`}
-            </li>
+          {(report.llm || (report.ollama ? [{ ...report.ollama, label: 'Ollama', kind: 'ollama' as const }] : [])).map(
+            (server) => (
+              <LlmLine key={server.url} server={server} />
+            )
           )}
+          {saved.taskModel && <li>Tasks that name no model: {saved.taskModel}</li>}
           <li>
             {report.tailscale
               ? `Tailscale ${report.tailscale.name || ''} ${report.tailscale.ip}, answering the other agents on port ${report.tailscale.port}${report.tailscale.lan?.length ? ` · on its network as ${report.tailscale.lan.join(', ')}` : ''}`
@@ -293,6 +307,83 @@ export default function AgentSettings({
               onChange={(event) => set({ ollama: { ...settings.ollama, url: event.target.value } })}
               placeholder="http://100.64.0.5:11434"
             />
+          </label>
+          <fieldset>
+            <legend>More language-model servers (other ports, other builds; some may be off while others run)</legend>
+            {(settings.llmServers || []).map((server, index) => (
+              <div key={index} className="toolbar">
+                <input
+                  value={server.label}
+                  onChange={(event) =>
+                    set({
+                      llmServers: settings.llmServers!.map((item, at) =>
+                        at === index ? { ...item, label: event.target.value } : item
+                      )
+                    })
+                  }
+                  placeholder="Label"
+                  aria-label="Its label"
+                />
+                <input
+                  value={server.url}
+                  onChange={(event) =>
+                    set({
+                      llmServers: settings.llmServers!.map((item, at) =>
+                        at === index ? { ...item, url: event.target.value } : item
+                      )
+                    })
+                  }
+                  placeholder="http://localhost:8080"
+                  aria-label="Its address"
+                />
+                <select
+                  value={server.kind}
+                  onChange={(event) =>
+                    set({
+                      llmServers: settings.llmServers!.map((item, at) =>
+                        at === index ? { ...item, kind: event.target.value as 'ollama' | 'openai' } : item
+                      )
+                    })
+                  }
+                  aria-label="What it is"
+                >
+                  <option value="ollama">Ollama</option>
+                  <option value="openai">OpenAI-style (llama.cpp, vLLM, …)</option>
+                </select>
+                <button
+                  type="button"
+                  className="link-button danger"
+                  onClick={() => set({ llmServers: settings.llmServers!.filter((_, at) => at !== index) })}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="link-button"
+              onClick={() =>
+                set({ llmServers: [...(settings.llmServers || []), { label: '', url: '', kind: 'openai' }] })
+              }
+            >
+              ＋ A server
+            </button>
+          </fieldset>
+          <label className="block">
+            Model for tasks that don&apos;t name one (an agent without one leaves those to another)
+            <select
+              value={settings.taskModel || ''}
+              onChange={(event) => set({ taskModel: event.target.value || undefined })}
+            >
+              <option value="">None</option>
+              {[...new Set((report?.llm || []).flatMap((server) => (server.models || []).map((model) => model.name)))]
+                .concat(settings.taskModel && !(report?.llm || []).length ? [settings.taskModel] : [])
+                .map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+            </select>
           </label>
           <label className="block">
             Answers the other agents on port

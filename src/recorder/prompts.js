@@ -1,9 +1,10 @@
 import { stackMarks } from '../sync/layers.js';
 import { officialLinks } from '../sync/official.js';
 import { fillPrompt, promptJobId, resultId } from '../sync/prompts.js';
+import { chat, modelFor, serverFor } from './llm.js';
 
-// Running a task (a prompt from the hub's `prompts`; see src/sync/prompts.js) on a meeting with the Ollama server this
-// agent is set up to use: the meeting's record (transcript with speakers, chapters, votes, pictures, official links,
+// Running a task (a prompt from the hub's `prompts`; see src/sync/prompts.js) on a meeting with a language-model server
+// this agent is set up to use (llm.js), one that has the task's model: the meeting's record (transcript with speakers, chapters, votes, pictures, official links,
 // earlier meetings) fills the prompt's placeholders, the model answers, and the answer is saved as a `prompt_results`
 // record. A transcript too long for one request is read in parts first (notes on each), and the notes stand in for it.
 // Tasks marked `auto` are queued for each meeting that finishes (with its final transcript) after they were marked.
@@ -115,29 +116,15 @@ export async function meetingRecord(client, recordingId) {
   };
 }
 
-async function chat(ollama, model, content, { signal }) {
-  const response = await fetch(`${ollama.replace(/\/+$/, '')}/api/chat`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      messages: [{ role: 'user', content }],
-      options: { num_ctx: 32768, temperature: 0.3 }
-    }),
-    signal
-  });
-  const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`Ollama: ${value.error || response.status}`);
-  return String(value.message?.content || '').trim();
-}
-
-// Runs a task job: { recordingId, promptId }. ollama: { url, models } from this agent's settings report.
-export async function runPrompt(job, { client, ollama, signal, progress }) {
+// Runs a task job: { recordingId, promptId }, with the model it names (or the agent's default for tasks), on the
+// agent's server that has it now (llm.js). servers: the agent's checked servers, from its settings report.
+export async function runPrompt(job, { client, servers, taskModel, signal, progress }) {
   const prompt = (await client.get('prompts', job.promptId))?.data;
   if (!prompt) throw new Error('The task is gone');
-  const model = prompt.model || ollama.models?.[0]?.name;
-  if (!model) throw new Error('The Ollama server has no models');
+  const model = modelFor(prompt, taskModel);
+  if (!model) throw new Error('The task names no model, and this agent has no default model for tasks');
+  const server = serverFor(servers, model);
+  if (!server) throw new Error(`None of this agent's servers has ${model} now`);
   const started = Date.now();
   progress(0.05, 'Gathering the meeting');
   const values = await meetingRecord(client, job.recordingId);
@@ -160,7 +147,7 @@ export async function runPrompt(job, { client, ollama, signal, progress }) {
       progress(0.1 + (0.6 * index) / pieces.length, `Reading part ${index + 1} of ${pieces.length}`);
       notes.push(
         await chat(
-          ollama.url,
+          server,
           model,
           `Take careful notes on this part of a public meeting (${values.title}, ${values.date}): every topic, decision, motion and vote, figure, and name, each with its [h:mm:ss] time, and quote anything notable word for word.\n\n${text}`,
           { signal }
@@ -170,13 +157,14 @@ export async function runPrompt(job, { client, ollama, signal, progress }) {
     values.transcript = `(Notes on the transcript, part by part:)\n\n${notes.join('\n\n')}`;
   }
   progress(0.75, `Asking ${model}`);
-  const text = await chat(ollama.url, model, fillPrompt(prompt.prompt, values), { signal });
+  const text = await chat(server, model, fillPrompt(prompt.prompt, values), { signal });
   const id = resultId(job.recordingId, job.promptId);
   await client.put('prompt_results', id, {
     recordingId: job.recordingId,
     promptId: job.promptId,
     name: prompt.name,
     model,
+    server: server.label || server.url,
     text,
     seconds: Math.round((Date.now() - started) / 1000),
     createdAt: new Date().toISOString()

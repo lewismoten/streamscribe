@@ -95,6 +95,13 @@ function Capability({ value, sharing }: { value: Capabilities; sharing: string[]
       <li>
         {value.cpus} × {value.cpuModel || value.arch} · {value.memoryGb} GB memory · Node {value.node}
       </li>
+      {(value.accelerators || []).length > 0 && (
+        <li>
+          {value
+            .accelerators!.map((item) => `${item.name}${item.memoryGb ? ` (${item.memoryGb} GB)` : ''}`)
+            .join(' · ')}
+        </li>
+      )}
       <li className={value.ffmpeg ? '' : 'error'}>
         {value.ffmpeg ? `ffmpeg ${value.ffmpeg}: can record and encode` : "No ffmpeg: can't record or encode"}
       </li>

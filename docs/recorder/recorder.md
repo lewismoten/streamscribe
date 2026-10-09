@@ -128,8 +128,16 @@ who may edit sources) its settings, kept in the hub's `agent_settings` record fo
   website picks one, never a command. A tool or model path set in `config.local.js` still wins; an installed one is
   used where that isn't there. Agents installed before this need their Reinstall command run once on Linux, for the
   build tools.
-- **Ollama server**: its address on the network (such as `http://100.64.0.5:11434`); the agent lists its models every
-  15 minutes, and at once with **Test Ollama**.
+- **Language models**: its Ollama server (such as `http://100.64.0.5:11434`), and more servers on other ports or
+  builds, each either Ollama or OpenAI-style (llama.cpp's server, vLLM, LM Studio). All are checked every minute, so a
+  machine that swaps what runs on its GPUs shows which are on now. **Model for tasks that don't name one** sets this
+  agent's default. A task goes only to an agent with a server that has its model now (or, for a task naming none, to
+  one with a default), so a Raspberry Pi with a small model never takes a task meant for a larger one.
+- **Accelerators**: each card lists the machine's NVIDIA GPUs (with their memory), an Apple Silicon GPU, and a Hailo AI
+  accelerator (a Raspberry Pi's AI Kit or HAT). On Linux with NVIDIA's CUDA toolkit (`nvcc`), the whisper.cpp it
+  installs is built for the GPUs.
+- **Version**: each agent reports its version with the commit it was built from (such as `1.0.0+084f65d`; a deploy
+  writes it into the agent package), so the page shows which agents run the newest code.
 - **Pings**: on [Tailscale](https://tailscale.com), the agent answers `GET /ping` on its Tailscale address (port 4874
   unless set, or the next free one when another agent on the machine has it; on no other address). Each minute it reads
   the list of agents from the hub, pings the ones heard from in the last five minutes, and reports what it found (see

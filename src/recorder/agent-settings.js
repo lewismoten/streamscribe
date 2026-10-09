@@ -6,6 +6,7 @@ import { run } from '../media/encode.js';
 import { lanAddresses, tailscaleCommand, tailscalePath } from './peer-net.js';
 import { peerServer } from './peer-server.js';
 import { measureSpeed } from './peers.js';
+import { listModels } from './llm.js';
 
 // What an agent is told on the hub's Agents page (its agent_settings record, id = the agent's id), applied here, and
 // what it finds, reported with its heartbeat (see live.js):
@@ -22,6 +23,10 @@ import { measureSpeed } from './peers.js';
 //   peerTestAt   asks for the other agents to be checked again now, and transfers timed (they are every six hours;
 //                relayed agents only when asked): the website can't reach agents, so it asks through the hub
 // The website shows who reaches whom from these reports (the hub's server needn't be on the tailnet).
+//   llmServers   more language-model servers for tasks [{ label, url, kind: ollama | openai }] (llm.js), besides
+//                its Ollama server; all are checked every minute (some may be off while others use the GPUs), and
+//                reported as llm
+//   taskModel    the model for tasks that don't name one (an agent without one leaves those to another)
 //   tools        tools to install on itself (tools.js): { whisper: { model, at } }, a new `at` asking again; its
 //                progress and what's installed are reported as tools
 //   keepsCopies  keeps a copy of every recording (a storage agent; copies.js), in copiesDir (its data folder's copies/
@@ -171,6 +176,12 @@ export function agentSettings({
       label: place.label,
       kind: place.kind
     }));
+    // Every language-model server, each minute: which answer now, with which models.
+    const servers = [
+      ...(settings.ollama?.url ? [{ label: 'Ollama', url: settings.ollama.url, kind: 'ollama' }] : []),
+      ...(settings.llmServers || []).filter((item) => item?.url)
+    ];
+    next.llm = await Promise.all(servers.map((item) => listModels(item)));
     if (settings.ollama?.url) {
       const asked = settings.ollama.testAt || null;
       const due =

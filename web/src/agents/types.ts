@@ -11,6 +11,8 @@ export interface Capabilities {
   ffmpeg: string | null;
   whisper: 'ready' | 'no model' | null;
   whisperModel?: string;
+  // GPUs and AI accelerators (NVIDIA, Apple Silicon, Hailo).
+  accelerators?: { kind: 'nvidia' | 'apple' | 'hailo'; name: string; memoryGb?: number }[];
   sources: string[];
   hostname?: string;
   // Its data folder, and the recordings in it (agents with the same folder on one machine share them).
@@ -55,6 +57,8 @@ export interface SettingsReport {
     error?: string;
     checkedAt: string;
   };
+  // Its language-model servers for tasks (src/recorder/llm.js), as checked each minute.
+  llm?: LlmServerStatus[];
   // Tools it installs on itself when asked (src/recorder/tools.js).
   tools?: { whisper?: ToolStatus };
   tailscale?: {
@@ -67,6 +71,16 @@ export interface SettingsReport {
     lan?: string[];
   } | null;
   peers?: Peer[];
+}
+export interface LlmServerStatus {
+  label: string;
+  url: string;
+  kind: 'ollama' | 'openai';
+  ok: boolean;
+  ms?: number;
+  models?: { name: string; sizeGb: number | null }[];
+  error?: string;
+  checkedAt: string;
 }
 export interface ToolStatus {
   state: 'installing' | 'installed' | 'failed';
@@ -124,6 +138,9 @@ export interface AgentSettingsData {
   // A storage agent: keeps a copy of every recording, in copiesDir (its data folder's copies/ unless set).
   keepsCopies?: boolean;
   copiesDir?: string;
+  // More language-model servers for tasks, and the model for tasks that don't name one.
+  llmServers?: { label: string; url: string; kind: 'ollama' | 'openai' }[];
+  taskModel?: string;
   // Tools to install on itself: a new `at` asks again.
   tools?: { whisper?: { model: string; at: string } };
 }

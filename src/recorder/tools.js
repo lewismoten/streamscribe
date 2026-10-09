@@ -8,7 +8,8 @@ import { STATE_ROOT, TOOLS, TRANSCRIPTION } from '../config/runtime-config.js';
 // new `at` asks again). Only what's written here can be installed, from where it says: the website picks a tool and a
 // model from these lists, never a command. Nothing needs sudo:
 //   whisper.cpp   on a Mac, Homebrew's whisper-cpp; elsewhere the latest release built from source (needs git, cmake,
-//                 and a C++ compiler, which the Linux install command puts in) under ~/.local/share/streamscribe-tools
+//                 and a C++ compiler, which the Linux install command puts in) under ~/.local/share/streamscribe-tools,
+//                 for NVIDIA GPUs (CUDA) when NVIDIA's compiler (nvcc, from the CUDA toolkit) is there
 //   its model     one of WHISPER_MODELS from Hugging Face into ~/.cache/whisper-cpp, with the voice-activity model
 // What's installed is kept in <state>/tools.json and used when the configured (or default) tool or model isn't there
 // (applyInstalledTools), so a set path in config.local.js always wins.
@@ -41,9 +42,9 @@ function writeRecord(record) {
 }
 
 // A command, line by line (each line of its output to onLine); resolves with its output, rejects with its last lines.
-export function runStreaming(command, args, { cwd, onLine = () => {}, signal } = {}) {
+export function runStreaming(command, args, { cwd, env, onLine = () => {}, signal } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { cwd, env: env || process.env, stdio: ['ignore', 'pipe', 'pipe'] });
     const stop = () => child.kill('SIGTERM');
     signal?.addEventListener('abort', stop, { once: true });
     let output = '';
@@ -111,37 +112,54 @@ async function installWhisper({ step, signal, platform = process.platform }) {
     throw new Error(
       `Building whisper.cpp needs ${missing.map(([, name]) => name).join(', ')}: run the agent's Reinstall command (it adds them), or sudo apt install git cmake build-essential`
     );
+  // NVIDIA's compiler, for a build that runs on the GPUs.
+  const nvcc = [which('nvcc'), '/usr/local/cuda/bin/nvcc'].find((file) => file && fs.existsSync(file)) || null;
   step('Finding the newest whisper.cpp release', 0.03);
   const tag = newestTag(await runStreaming('git', ['ls-remote', '--tags', '--refs', REPO], { signal }));
   if (!tag) throw new Error('No release found');
   const folder = path.join(BUILD_ROOT, 'whisper.cpp');
   const built = path.join(folder, 'build', 'bin', 'whisper-cli');
   const record = readRecord();
-  if (record.whisper?.tag === tag && fs.existsSync(built)) return { command: built, version: tag };
+  const version = nvcc ? `${tag} (CUDA)` : tag;
+  if (record.whisper?.version === version && fs.existsSync(built)) return { command: built, version };
   fs.rmSync(folder, { recursive: true, force: true });
   fs.mkdirSync(BUILD_ROOT, { recursive: true });
   step(`Downloading whisper.cpp ${tag}`, 0.05);
   await runStreaming('git', ['clone', '--depth', '1', '--branch', tag, REPO, folder], { signal });
-  step('Building whisper.cpp (several minutes on a Raspberry Pi)', 0.1);
+  step(
+    `Building whisper.cpp${nvcc ? ' for NVIDIA GPUs' : ''} (several minutes on a Raspberry Pi, longer with CUDA)`,
+    0.1
+  );
+  const env = nvcc
+    ? { ...process.env, CUDACXX: nvcc, PATH: `${path.dirname(nvcc)}${path.delimiter}${process.env.PATH}` }
+    : process.env;
   await runStreaming(
     'cmake',
-    ['-B', 'build', '-DCMAKE_BUILD_TYPE=Release', '-DWHISPER_BUILD_TESTS=OFF', '-DBUILD_SHARED_LIBS=OFF'],
-    { cwd: folder, signal }
+    [
+      '-B',
+      'build',
+      '-DCMAKE_BUILD_TYPE=Release',
+      '-DWHISPER_BUILD_TESTS=OFF',
+      '-DBUILD_SHARED_LIBS=OFF',
+      ...(nvcc ? ['-DGGML_CUDA=1'] : [])
+    ],
+    { cwd: folder, env, signal }
   );
   await runStreaming(
     'cmake',
     ['--build', 'build', '--config', 'Release', '-j', String(Math.max(1, os.cpus().length))],
     {
       cwd: folder,
+      env,
       signal,
       onLine: (line) => {
         const percent = Number(line.match(/^\[\s*(\d+)%\]/)?.[1]);
-        if (Number.isFinite(percent)) step(`Building whisper.cpp ${tag}: ${percent}%`, 0.1 + (percent / 100) * 0.5);
+        if (Number.isFinite(percent)) step(`Building whisper.cpp ${version}: ${percent}%`, 0.1 + (percent / 100) * 0.5);
       }
     }
   );
   if (!fs.existsSync(built)) throw new Error(`The build didn't make ${built}`);
-  return { command: built, version: tag };
+  return { command: built, version };
 }
 
 // A file from the web into place (kept if already there at its size; resumed from a partial download).

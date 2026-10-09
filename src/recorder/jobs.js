@@ -9,6 +9,7 @@ import { publishMedia } from '../media/publish-media.js';
 import { claim } from './hub-api.js';
 import { hubFiles, sha256 } from './hub-files.js';
 import { runPrompt } from './prompts.js';
+import { modelFor, serverFor } from './llm.js';
 import { discover, firstPicture, officialTranscript } from './discovery.js';
 
 // Work for agents: the hub only keeps the queue (`jobs` records, written by the web app or by agents); agents (the
@@ -24,8 +25,8 @@ import { discover, firstPicture, officialTranscript } from './discovery.js';
 //           all of them), join them into one MP4 and M4A (compose.js), upload them to the publication, and mark it ready
 //   discover, official-transcript, first-segment  past meetings found from each source's feeds (discovery.js): any
 //           agent can do them (they need the web, not the recordings)
-//   prompt  { recordingId, promptId }  run a task on the meeting with this agent's Ollama server (prompts.js), its
-//           answer saved in prompt_results (any agent whose Ollama server answers can do it)
+//   prompt  { recordingId, promptId }  run a task on the meeting with a language-model server of this agent's that has
+//           its model (prompts.js, llm.js), its answer saved in prompt_results
 const LEASE_SECONDS = 180;
 
 // How far either side of a clip's stretch is fetched from another agent (a segment or so), so its cut points are in it.
@@ -37,7 +38,8 @@ export function jobRunner({
   remote = { canFetch: () => false },
   log,
   workDir = () => os.tmpdir(),
-  settings = () => ({})
+  settings = () => ({}),
+  taskModel = () => null
 }) {
   let current = null;
   // Here, or with an agent nearby.
@@ -255,8 +257,15 @@ export function jobRunner({
       run: (job, { progress }) => firstPicture(job, { client, progress, workDir: workDir() })
     },
     prompt: {
-      canDo: (job) => Boolean(settings().ollama?.ok) && (!job.forAgent || job.forAgent === RECORDER.id),
-      run: (job, { signal, progress }) => runPrompt(job, { client, ollama: settings().ollama, signal, progress }),
+      // Only an agent with a server that has the task's model now (or, for a task naming none, its default for tasks).
+      canDo: async (job) => {
+        if (job.forAgent && job.forAgent !== RECORDER.id) return false;
+        const prompt = (await client.get('prompts', job.promptId))?.data;
+        const model = modelFor(prompt, taskModel());
+        return Boolean(model && serverFor(settings().llm, model));
+      },
+      run: (job, { signal, progress }) =>
+        runPrompt(job, { client, servers: settings().llm, taskModel: taskModel(), signal, progress }),
       async failed(job, error) {
         await notify(job, `“${job.title}” couldn't be done`, error.message, { problem: true });
       }
@@ -399,7 +408,7 @@ export function jobRunner({
         )
         .sort((left, right) => String(left.data.createdAt).localeCompare(String(right.data.createdAt)));
       for (const record of queued) {
-        if (!handlers[record.data.type].canDo(record.data)) continue;
+        if (!(await handlers[record.data.type].canDo(record.data))) continue;
         await start(record);
         if (current) return;
       }

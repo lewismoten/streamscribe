@@ -2,7 +2,6 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { RECORDER, SOURCES, STATE_ROOT } from '../config/runtime-config.js';
-import { REPO_ROOT } from '../config/paths.js';
 import { SyncClient } from '../sync/client.js';
 import { SqliteStore } from '../sync/stores/node-sqlite.js';
 import { upcoming } from '../sync/recurrence.js';
@@ -15,6 +14,7 @@ import { syncMarks } from './marks.js';
 import { jobRunner } from './jobs.js';
 import { detectCapabilities } from './capabilities.js';
 import { agentSettings } from './agent-settings.js';
+import { buildVersion } from '../config/build.js';
 import { copyKeeper } from './copies.js';
 import { applyInstalledTools, toolInstaller } from './tools.js';
 import { remoteRecordings } from './remote-recordings.js';
@@ -33,7 +33,8 @@ import { liveReports } from './live.js';
 // outbox (data/state/recorder.sqlite), and live reports are simply skipped.
 // Starting, following, stopping, and publishing recordings is in recordings.js; the live reports are in live.js.
 //   npm run recorder [-- --tick-seconds 5]
-const version = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')).version;
+// (With the commit it was built from: see src/config/build.js.)
+const version = buildVersion();
 const log = (message) => console.log(`${new Date().toLocaleString()}  ${message}`);
 
 // One recorder per id at a time (they share a state file): a new one waits for an earlier one that is still finishing
@@ -119,7 +120,8 @@ export async function main() {
     remote,
     log,
     workDir: () => told.workDir(),
-    settings: () => told.report()
+    settings: () => told.report(),
+    taskModel: () => told.current().taskModel || null
   });
   context.jobs = jobs;
   const { heartbeat, sendLiveThumbnail } = liveReports(context);

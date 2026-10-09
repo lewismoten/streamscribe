@@ -91,7 +91,17 @@ test('a task run with Ollama (a long transcript read in parts), and automatic ta
       { recordingId: 'm1', promptId: 'summary' },
       {
         client,
-        ollama: { url: `http://127.0.0.1:${ollama.address().port}`, models: [{ name: 'llama3.1:8b' }] },
+        // The agent's server, and its default model (the task names none).
+        servers: [
+          {
+            label: 'Ollama',
+            kind: 'ollama',
+            ok: true,
+            url: `http://127.0.0.1:${ollama.address().port}`,
+            models: [{ name: 'palace-9:f16' }, { name: 'llama3.1:8b' }]
+          }
+        ],
+        taskModel: 'llama3.1:8b',
         signal: undefined,
         progress: (_, message) => steps.push(message)
       }

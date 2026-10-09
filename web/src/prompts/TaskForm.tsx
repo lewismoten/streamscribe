@@ -43,7 +43,7 @@ export default function TaskForm({
             value={prompt.model || ''}
             onChange={(event) => set({ model: event.target.value })}
             list="task-models"
-            placeholder="the agent's first model"
+            placeholder="an agent's default model for tasks"
           />
         </label>
       </div>
