@@ -1,20 +1,65 @@
+import { Link } from 'react-router';
 import { hubCall } from '../data/hub.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type Capabilities, type UpdateStatus } from './types.ts';
 import { Progress } from './WorkQueue.tsx';
 import { isBehind, useAgentBuild } from './useAgentBuild.ts';
-import AgentSettings from './AgentSettings.tsx';
 
-// A card for each agent that has reported to the hub: online or not (one not heard from for 90 seconds is offline),
-// what it's doing, and what its machine can do. An admin can remove an offline one from the list.
+// A card for each agent that has reported to the hub, kept short: online or not (one not heard from for 90 seconds is
+// offline), what it's doing, its machine in a line or two, and a link to its own page (AgentPage) with everything else
+// and its settings. An admin can remove an offline one from the list.
+export const ONLINE_MS = 90000;
+
+// Online and what it's doing (or when it was last heard from), its free space, version, and whether it's behind.
+export function StatusLine({
+  agent,
+  now,
+  behind,
+  latest
+}: {
+  agent: Agent;
+  now: number;
+  behind: boolean;
+  latest?: string | null;
+}) {
+  const status = agent.status;
+  const online = now - Date.parse(agent.updatedAt) < ONLINE_MS;
+  return (
+    <p className="muted">
+      {online
+        ? status?.state === 'recording'
+          ? `● Recording ${status.recordings[0]?.title || ''}`
+          : status?.state === 'working'
+            ? 'Working'
+            : 'Online, idle'
+        : `Offline · last heard from ${ago(agent.updatedAt, now)}`}
+      {status?.freeGb !== null && status?.freeGb !== undefined ? ` · ${status.freeGb} GB free` : ''}
+      {status?.version ? ` · v${status.version}` : ''}
+      {updateNote(status?.update, behind, latest)}
+    </p>
+  );
+}
+
+// Its machine in brief: processors and memory, accelerators, and what it can do.
+function Brief({ value }: { value: Capabilities }) {
+  const can = [
+    value.ffmpeg ? 'records and encodes' : "can't record",
+    value.whisper === 'ready' ? 'transcribes' : null,
+    (value.accelerators || []).map((item) => item.name).join(', ') || null
+  ].filter(Boolean);
+  return (
+    <p className="small">
+      {value.cpus} × {value.cpuModel || value.arch} · {value.memoryGb} GB · {can.join(' · ')}
+    </p>
+  );
+}
+
 export default function AgentCards({
   agents,
-  canEdit = false,
   admin = false,
   onForget = () => {}
 }: {
   agents: Agent[] | null;
-  canEdit?: boolean;
   admin?: boolean;
   onForget?: (agentId: string) => void;
 }) {
@@ -28,20 +73,26 @@ export default function AgentCards({
         <p className="empty">No agent has reported to this hub yet.</p>
       ) : (
         agents.map((agent) => {
-          const online = now - Date.parse(agent.updatedAt) < 90000;
+          const online = now - Date.parse(agent.updatedAt) < ONLINE_MS;
           const status = agent.status;
           return (
             <div key={agent.recorderId} className={`panel agent ${online ? 'online' : 'offline'}`}>
               <div className="panel-head">
                 <h2>
                   <span className="dot" aria-hidden="true" />
-                  {status?.name || agent.name}
+                  <Link to={`/agents/${encodeURIComponent(agent.recorderId)}`}>{status?.name || agent.name}</Link>
                 </h2>
                 <code>{agent.recorderId}</code>
               </div>
               <Machine status={status} />
-              {admin && !online && (
-                <p className="small">
+              <StatusLine agent={agent} now={now} behind={isBehind(agent, build)} latest={build?.commit} />
+              {online && status?.job && (
+                <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
+              )}
+              {status?.capabilities && <Brief value={status.capabilities} />}
+              <p className="small card-actions">
+                <Link to={`/agents/${encodeURIComponent(agent.recorderId)}`}>Details and settings →</Link>
+                {admin && !online && (
                   <button
                     type="button"
                     className="link-button danger"
@@ -58,34 +109,8 @@ export default function AgentCards({
                   >
                     Remove from this list
                   </button>
-                </p>
-              )}
-              <p className="muted">
-                {online
-                  ? status?.state === 'recording'
-                    ? `● Recording ${status.recordings[0]?.title || ''}`
-                    : status?.state === 'working'
-                      ? 'Working'
-                      : 'Online, idle'
-                  : `Offline · last heard from ${ago(agent.updatedAt, now)}`}
-                {status?.freeGb !== null && status?.freeGb !== undefined ? ` · ${status.freeGb} GB free` : ''}
-                {status?.version ? ` · v${status.version}` : ''}
-                {updateNote(status?.update, isBehind(agent, build), build?.commit)}
+                )}
               </p>
-              {online && status?.job && (
-                <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
-              )}
-              {status?.capabilities && <Capability value={status.capabilities} sharing={sharedWith(agents, agent)} />}
-              <AgentSettings
-                agentId={agent.recorderId}
-                report={status?.settings}
-                copies={status?.copies}
-                update={status?.update}
-                behind={isBehind(agent, build)}
-                latest={build?.commit || status?.update?.latest || null}
-                agent={agent}
-                canEdit={canEdit}
-              />
             </div>
           );
         })
@@ -106,7 +131,7 @@ function updateNote(update: UpdateStatus | null | undefined, behind: boolean, la
 }
 
 // The machine it runs on: its host name (as of its last report), and its Tailscale name when that differs.
-function Machine({ status }: { status: Agent['status'] }) {
+export function Machine({ status }: { status: Agent['status'] }) {
   const host = status?.hostname || status?.capabilities?.hostname;
   const tailnet = String(status?.settings?.tailscale?.name || '').split('.')[0];
   if (!host && !tailnet) return null;
@@ -124,7 +149,7 @@ function Machine({ status }: { status: Agent['status'] }) {
 }
 
 // The other agents with the same files: on the same machine, with the same data folder.
-function sharedWith(agents: Agent[], agent: Agent) {
+export function sharedWith(agents: Agent[], agent: Agent) {
   const mine = agent.status?.capabilities;
   if (!mine?.dataDir) return [];
   return agents
@@ -137,7 +162,7 @@ function sharedWith(agents: Agent[], agent: Agent) {
 }
 
 // What an agent's machine has, and so what it can do.
-function Capability({ value, sharing }: { value: Capabilities; sharing: string[] }) {
+export function Capability({ value, sharing }: { value: Capabilities; sharing: string[] }) {
   return (
     <ul className="capabilities small">
       <li>{[value.machine, value.system].filter(Boolean).join(' · ')}</li>

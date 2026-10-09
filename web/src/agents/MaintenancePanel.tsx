@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import type { HubRecord } from '../data/useRecords.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type AgentSettingsData, type Job } from './types.ts';
@@ -115,7 +116,9 @@ export default function MaintenancePanel({
               return (
                 <tr key={agent.recorderId} className={online ? '' : 'muted'}>
                   <td>
-                    {agent.status?.name || agent.name}
+                    <Link to={`/agents/${encodeURIComponent(agent.recorderId)}`}>
+                      {agent.status?.name || agent.name}
+                    </Link>
                     {!online && ` (offline ${ago(agent.updatedAt, now)})`}
                   </td>
                   <td>

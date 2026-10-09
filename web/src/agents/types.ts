@@ -96,14 +96,24 @@ export interface ToolStatus {
   error?: string;
   at?: string;
 }
-// The whisper.cpp models an agent can be asked to install (the same as WHISPER_MODELS in src/recorder/tools.js).
-export const WHISPER_MODELS: Record<string, string> = {
-  'tiny.en': 'Tiny (English), 75 MB: fastest, rough',
-  'base.en': 'Base (English), 142 MB: for a Raspberry Pi',
-  'small.en': 'Small (English), 466 MB: a fast Pi, or a PC without a GPU',
-  'medium.en': 'Medium (English), 1.5 GB',
-  'large-v3-turbo': 'Large v3 Turbo, 1.6 GB: nearly as accurate, much faster (best with a GPU)',
-  'large-v3': 'Large v3, 3.1 GB: the most accurate (practical with a GPU: NVIDIA or Apple Silicon)'
+// The whisper.cpp models an agent can be asked to install (the same as WHISPER_MODELS in src/recorder/tools.js): a
+// short name for the list, and what each is for.
+export const WHISPER_MODELS: Record<string, { label: string; note: string }> = {
+  'tiny.en': {
+    label: 'Tiny (English), 75 MB',
+    note: 'The fastest, and rough: for quick live transcripts on a slow machine.'
+  },
+  'base.en': { label: 'Base (English), 142 MB', note: 'For a Raspberry Pi.' },
+  'small.en': { label: 'Small (English), 466 MB', note: 'For a fast Pi, or a PC without a GPU.' },
+  'medium.en': { label: 'Medium (English), 1.5 GB', note: 'More accurate; slow without a GPU.' },
+  'large-v3-turbo': {
+    label: 'Large v3 Turbo, 1.6 GB',
+    note: 'Nearly as accurate as Large v3, much faster: best with a GPU (NVIDIA or Apple Silicon).'
+  },
+  'large-v3': {
+    label: 'Large v3, 3.1 GB',
+    note: 'The most accurate: practical with a GPU (NVIDIA or Apple Silicon); slow on a CPU alone.'
+  }
 };
 export interface UpdateStatus {
   current: string | null;

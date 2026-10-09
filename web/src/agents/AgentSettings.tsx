@@ -152,7 +152,7 @@ export default function AgentSettings({
   const chosenModel = whisperModel || saved.tools?.whisper?.model || 'base.en';
   const by = account.user?.displayName || account.user?.username || '';
   const installWhisper = () =>
-    requestInstall(agent, saved, chosenModel, WHISPER_MODELS[chosenModel] || chosenModel, by);
+    requestInstall(agent, saved, chosenModel, WHISPER_MODELS[chosenModel]?.label || chosenModel, by);
   const installing = report?.tools?.whisper?.state === 'installing';
   // (The website can't reach agents: the request goes through the hub, and the agent picks it up when it next syncs.)
   const updateNow = () => requestUpdate(agent, saved, by, latest);
@@ -160,284 +160,304 @@ export default function AgentSettings({
   const asked = saved.peerTestAt && (!report?.checkedAt || report.checkedAt < saved.peerTestAt);
 
   return (
-    <details className="agent-settings small">
-      <summary>Storage, copies, tools, language models, and network</summary>
-      {report?.checkedAt ? (
-        <ul>
-          <Place place={report.workDir} label="Working files" />
-          <Place place={report.data} label="Recordings" />
-          {copies && <Copies copies={copies} />}
-          <WhisperStatus status={report.tools?.whisper} />
-          {(report.storage || []).map((place) => (
-            <Place
-              key={place.path}
-              place={place}
-              label={`${place.label || 'Storage'} (${KINDS[place.kind as keyof typeof KINDS] || place.kind})`}
-            />
-          ))}
-          {(report.llm || (report.ollama ? [{ ...report.ollama, label: 'Ollama', kind: 'ollama' as const }] : [])).map(
-            (server) => (
-              <LlmLine key={server.url} server={server} />
-            )
-          )}
-          {saved.taskModel && <li>Tasks that name no model: {saved.taskModel}</li>}
-          <li>
-            {report.tailscale
-              ? `Tailscale ${report.tailscale.name || ''} ${report.tailscale.ip}, answering the other agents on port ${report.tailscale.port}${report.tailscale.lan?.length ? ` · on its network as ${report.tailscale.lan.join(', ')}` : ''}`
-              : 'Not on Tailscale (or tailscale is not installed)'}
-          </li>
-          {(report.peers || []).map((peer) => (
-            <PeerLine key={peer.agentId} peer={peer} />
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">Not reported yet (agents check their settings each minute).</p>
-      )}
-      <div className="toolbar">
-        {canEdit && behind && update?.state !== 'waiting' && (
-          <button type="button" className="button" onClick={updateNow}>
-            Update now (to {latest})
-          </button>
-        )}
-        {update?.note && <span className="muted">{update.note}</span>}
-        {canEdit && report?.tailscale && (
-          <button type="button" className="button" onClick={checkNow} disabled={Boolean(asked)}>
-            {asked ? 'Asked: checking within a minute' : 'Check the other agents now'}
-          </button>
-        )}
-        {canEdit && saved.ollama?.url && (
-          <button type="button" className="button" onClick={testOllama}>
-            Test Ollama
-          </button>
-        )}
-      </div>
-      {canEdit && (
-        <div className="toolbar">
-          <label>
-            whisper.cpp model{' '}
-            <select value={chosenModel} onChange={(event) => setWhisperModel(event.target.value)}>
-              {Object.entries(WHISPER_MODELS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="button" onClick={installWhisper} disabled={installing}>
-            {report?.tools?.whisper?.state === 'installed' ? 'Install again, or this model' : 'Install whisper.cpp'}
-          </button>
-        </div>
-      )}
-      {canEdit && (
-        <form className="schedule-form" onSubmit={save}>
-          <label className="block">
-            Working files (a local drive, a USB drive, or a network folder)
-            <input
-              value={settings.workDir || ''}
-              onChange={(event) => set({ workDir: event.target.value })}
-              placeholder="/Volumes/Work/streamscribe (the system's temporary folder unless set)"
-            />
-          </label>
-          <fieldset>
-            <legend>Storage to watch</legend>
-            {(settings.storage || []).map((place, index) => (
-              <div key={index} className="toolbar">
-                <input
-                  value={place.label}
-                  onChange={(event) =>
-                    set({
-                      storage: settings.storage!.map((item, at) =>
-                        at === index ? { ...item, label: event.target.value } : item
-                      )
-                    })
-                  }
-                  placeholder="Label"
-                  aria-label="Its label"
-                />
-                <input
-                  value={place.path}
-                  onChange={(event) =>
-                    set({
-                      storage: settings.storage!.map((item, at) =>
-                        at === index ? { ...item, path: event.target.value } : item
-                      )
-                    })
-                  }
-                  placeholder="/Volumes/Archive"
-                  aria-label="Its folder"
-                />
-                <select
-                  value={place.kind}
-                  onChange={(event) =>
-                    set({
-                      storage: settings.storage!.map((item, at) =>
-                        at === index ? { ...item, kind: event.target.value as 'local' | 'usb' | 'network' } : item
-                      )
-                    })
-                  }
-                  aria-label="What it is"
-                >
-                  {Object.entries(KINDS).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="link-button danger"
-                  onClick={() => set({ storage: settings.storage!.filter((_, at) => at !== index) })}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => set({ storage: [...(settings.storage || []), { label: '', path: '', kind: 'usb' }] })}
-            >
-              ＋ A place to watch
-            </button>
-          </fieldset>
-          <label>
-            <input
-              type="checkbox"
-              checked={Boolean(settings.autoUpdate)}
-              onChange={(event) => set({ autoUpdate: event.target.checked })}
-            />{' '}
-            Updates itself when the hub has a newer build (when idle, then restarts)
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={Boolean(settings.keepsCopies)}
-              onChange={(event) => set({ keepsCopies: event.target.checked })}
-            />{' '}
-            Keeps a copy of every recording (a storage agent: the others fetch from it)
-          </label>
-          {settings.keepsCopies && (
-            <label className="block">
-              Copies go in
-              <input
-                value={settings.copiesDir || ''}
-                onChange={(event) => set({ copiesDir: event.target.value })}
-                placeholder="/Volumes/Big/streamscribe-copies (its data folder's copies/ unless set)"
+    <div className="agent-page-grid">
+      <section className="panel">
+        <h2>What it found</h2>
+        {report?.checkedAt ? (
+          <ul>
+            <Place place={report.workDir} label="Working files" />
+            <Place place={report.data} label="Recordings" />
+            {copies && <Copies copies={copies} />}
+            {(report.storage || []).map((place) => (
+              <Place
+                key={place.path}
+                place={place}
+                label={`${place.label || 'Storage'} (${KINDS[place.kind as keyof typeof KINDS] || place.kind})`}
               />
-            </label>
-          )}
-          <label className="block">
-            Ollama server
-            <input
-              value={settings.ollama?.url || ''}
-              onChange={(event) => set({ ollama: { ...settings.ollama, url: event.target.value } })}
-              placeholder="http://100.64.0.5:11434"
-            />
-          </label>
-          <fieldset>
-            <legend>More language-model servers (other ports, other builds; some may be off while others run)</legend>
-            {(settings.llmServers || []).map((server, index) => (
-              <div key={index} className="toolbar">
-                <input
-                  value={server.label}
-                  onChange={(event) =>
-                    set({
-                      llmServers: settings.llmServers!.map((item, at) =>
-                        at === index ? { ...item, label: event.target.value } : item
-                      )
-                    })
-                  }
-                  placeholder="Label"
-                  aria-label="Its label"
-                />
-                <input
-                  value={server.url}
-                  onChange={(event) =>
-                    set({
-                      llmServers: settings.llmServers!.map((item, at) =>
-                        at === index ? { ...item, url: event.target.value } : item
-                      )
-                    })
-                  }
-                  placeholder="http://localhost:8080"
-                  aria-label="Its address"
-                />
-                <select
-                  value={server.kind}
-                  onChange={(event) =>
-                    set({
-                      llmServers: settings.llmServers!.map((item, at) =>
-                        at === index ? { ...item, kind: event.target.value as 'ollama' | 'openai' } : item
-                      )
-                    })
-                  }
-                  aria-label="What it is"
-                >
-                  <option value="ollama">Ollama</option>
-                  <option value="openai">OpenAI-style (llama.cpp, vLLM, …)</option>
-                </select>
-                <button
-                  type="button"
-                  className="link-button danger"
-                  onClick={() => set({ llmServers: settings.llmServers!.filter((_, at) => at !== index) })}
-                >
-                  Remove
-                </button>
-              </div>
             ))}
-            <button
-              type="button"
-              className="link-button"
-              onClick={() =>
-                set({ llmServers: [...(settings.llmServers || []), { label: '', url: '', kind: 'openai' }] })
-              }
-            >
-              ＋ A server
+            {(
+              report.llm || (report.ollama ? [{ ...report.ollama, label: 'Ollama', kind: 'ollama' as const }] : [])
+            ).map((server) => (
+              <LlmLine key={server.url} server={server} />
+            ))}
+            {saved.taskModel && <li>Tasks that name no model: {saved.taskModel}</li>}
+            <li>
+              {report.tailscale
+                ? `Tailscale ${report.tailscale.name || ''} ${report.tailscale.ip}, answering the other agents on port ${report.tailscale.port}${report.tailscale.lan?.length ? ` · on its network as ${report.tailscale.lan.join(', ')}` : ''}`
+                : 'Not on Tailscale (or tailscale is not installed)'}
+            </li>
+            {(report.peers || []).map((peer) => (
+              <PeerLine key={peer.agentId} peer={peer} />
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">Not reported yet (agents check their settings each minute).</p>
+        )}
+        <div className="toolbar">
+          {canEdit && behind && update?.state !== 'waiting' && (
+            <button type="button" className="button" onClick={updateNow}>
+              Update now (to {latest})
             </button>
-          </fieldset>
-          <label className="block">
-            Model for tasks that don&apos;t name one (an agent without one leaves those to another)
-            <select
-              value={settings.taskModel || ''}
-              onChange={(event) => set({ taskModel: event.target.value || undefined })}
-            >
-              <option value="">None</option>
-              {[...new Set((report?.llm || []).flatMap((server) => (server.models || []).map((model) => model.name)))]
-                .concat(settings.taskModel && !(report?.llm || []).length ? [settings.taskModel] : [])
-                .map((name) => (
-                  <option key={name} value={name}>
-                    {name}
+          )}
+          {update?.note && <span className="muted">{update.note}</span>}
+          {canEdit && report?.tailscale && (
+            <button type="button" className="button" onClick={checkNow} disabled={Boolean(asked)}>
+              {asked ? 'Asked: checking within a minute' : 'Check the other agents now'}
+            </button>
+          )}
+          {canEdit && saved.ollama?.url && (
+            <button type="button" className="button" onClick={testOllama}>
+              Test Ollama
+            </button>
+          )}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Tools</h2>
+        <ul>
+          <WhisperStatus status={report?.tools?.whisper} />
+          {!report?.tools?.whisper && (
+            <li className="muted">
+              {agent.status?.capabilities?.whisper === 'ready'
+                ? `whisper.cpp is there (${agent.status.capabilities.whisperModel || 'its model'})`
+                : 'No whisper.cpp yet: it can’t transcribe'}
+            </li>
+          )}
+        </ul>
+        {canEdit && (
+          <div className="field-stack">
+            <label className="block">
+              whisper.cpp model
+              <select value={chosenModel} onChange={(event) => setWhisperModel(event.target.value)}>
+                {Object.entries(WHISPER_MODELS).map(([key, model]) => (
+                  <option key={key} value={key}>
+                    {model.label}
                   </option>
                 ))}
-            </select>
-          </label>
-          <label className="block">
-            Answers the other agents on port
-            <input
-              type="number"
-              min={1024}
-              max={65535}
-              value={settings.peerPort || ''}
-              onChange={(event) => set({ peerPort: Number(event.target.value) || undefined })}
-              placeholder="4874"
-            />
-          </label>
-          <p className="muted">
-            Recordings stay where the agent&apos;s config.local.js says (each source&apos;s storageDir), so a
-            meeting&apos;s files are never split between drives.
-          </p>
-          <div className="toolbar">
-            <button type="submit" className="button primary" disabled={!draft}>
-              Save the settings
-            </button>
-            {draft && (
-              <button type="button" className="button" onClick={() => setDraft(null)}>
-                Cancel
+              </select>
+            </label>
+            <p className="muted small">{WHISPER_MODELS[chosenModel]?.note}</p>
+            <div className="toolbar">
+              <button type="button" className="button" onClick={installWhisper} disabled={installing}>
+                {report?.tools?.whisper?.state === 'installed' ? 'Install again, or this model' : 'Install whisper.cpp'}
               </button>
-            )}
+            </div>
           </div>
-        </form>
+        )}
+      </section>
+      {canEdit && (
+        <section className="panel agent-settings-form">
+          <h2>Settings</h2>
+          <form className="schedule-form" onSubmit={save}>
+            <label className="block">
+              Working files (a local drive, a USB drive, or a network folder)
+              <input
+                value={settings.workDir || ''}
+                onChange={(event) => set({ workDir: event.target.value })}
+                placeholder="/Volumes/Work/streamscribe (the system's temporary folder unless set)"
+              />
+            </label>
+            <fieldset>
+              <legend>Storage to watch</legend>
+              {(settings.storage || []).map((place, index) => (
+                <div key={index} className="toolbar">
+                  <input
+                    value={place.label}
+                    onChange={(event) =>
+                      set({
+                        storage: settings.storage!.map((item, at) =>
+                          at === index ? { ...item, label: event.target.value } : item
+                        )
+                      })
+                    }
+                    placeholder="Label"
+                    aria-label="Its label"
+                  />
+                  <input
+                    value={place.path}
+                    onChange={(event) =>
+                      set({
+                        storage: settings.storage!.map((item, at) =>
+                          at === index ? { ...item, path: event.target.value } : item
+                        )
+                      })
+                    }
+                    placeholder="/Volumes/Archive"
+                    aria-label="Its folder"
+                  />
+                  <select
+                    value={place.kind}
+                    onChange={(event) =>
+                      set({
+                        storage: settings.storage!.map((item, at) =>
+                          at === index ? { ...item, kind: event.target.value as 'local' | 'usb' | 'network' } : item
+                        )
+                      })
+                    }
+                    aria-label="What it is"
+                  >
+                    {Object.entries(KINDS).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="link-button danger"
+                    onClick={() => set({ storage: settings.storage!.filter((_, at) => at !== index) })}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => set({ storage: [...(settings.storage || []), { label: '', path: '', kind: 'usb' }] })}
+              >
+                ＋ A place to watch
+              </button>
+            </fieldset>
+            <label>
+              <input
+                type="checkbox"
+                checked={Boolean(settings.autoUpdate)}
+                onChange={(event) => set({ autoUpdate: event.target.checked })}
+              />{' '}
+              Updates itself when the hub has a newer build (when idle, then restarts)
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={Boolean(settings.keepsCopies)}
+                onChange={(event) => set({ keepsCopies: event.target.checked })}
+              />{' '}
+              Keeps a copy of every recording (a storage agent: the others fetch from it)
+            </label>
+            {settings.keepsCopies && (
+              <label className="block">
+                Copies go in
+                <input
+                  value={settings.copiesDir || ''}
+                  onChange={(event) => set({ copiesDir: event.target.value })}
+                  placeholder="/Volumes/Big/streamscribe-copies (its data folder's copies/ unless set)"
+                />
+              </label>
+            )}
+            <label className="block">
+              Ollama server
+              <input
+                value={settings.ollama?.url || ''}
+                onChange={(event) => set({ ollama: { ...settings.ollama, url: event.target.value } })}
+                placeholder="http://100.64.0.5:11434"
+              />
+            </label>
+            <fieldset>
+              <legend>More language-model servers (other ports, other builds; some may be off while others run)</legend>
+              {(settings.llmServers || []).map((server, index) => (
+                <div key={index} className="toolbar">
+                  <input
+                    value={server.label}
+                    onChange={(event) =>
+                      set({
+                        llmServers: settings.llmServers!.map((item, at) =>
+                          at === index ? { ...item, label: event.target.value } : item
+                        )
+                      })
+                    }
+                    placeholder="Label"
+                    aria-label="Its label"
+                  />
+                  <input
+                    value={server.url}
+                    onChange={(event) =>
+                      set({
+                        llmServers: settings.llmServers!.map((item, at) =>
+                          at === index ? { ...item, url: event.target.value } : item
+                        )
+                      })
+                    }
+                    placeholder="http://localhost:8080"
+                    aria-label="Its address"
+                  />
+                  <select
+                    value={server.kind}
+                    onChange={(event) =>
+                      set({
+                        llmServers: settings.llmServers!.map((item, at) =>
+                          at === index ? { ...item, kind: event.target.value as 'ollama' | 'openai' } : item
+                        )
+                      })
+                    }
+                    aria-label="What it is"
+                  >
+                    <option value="ollama">Ollama</option>
+                    <option value="openai">OpenAI-style (llama.cpp, vLLM, …)</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="link-button danger"
+                    onClick={() => set({ llmServers: settings.llmServers!.filter((_, at) => at !== index) })}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() =>
+                  set({ llmServers: [...(settings.llmServers || []), { label: '', url: '', kind: 'openai' }] })
+                }
+              >
+                ＋ A server
+              </button>
+            </fieldset>
+            <label className="block">
+              Model for tasks that don&apos;t name one (an agent without one leaves those to another)
+              <select
+                value={settings.taskModel || ''}
+                onChange={(event) => set({ taskModel: event.target.value || undefined })}
+              >
+                <option value="">None</option>
+                {[...new Set((report?.llm || []).flatMap((server) => (server.models || []).map((model) => model.name)))]
+                  .concat(settings.taskModel && !(report?.llm || []).length ? [settings.taskModel] : [])
+                  .map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="block">
+              Answers the other agents on port
+              <input
+                type="number"
+                min={1024}
+                max={65535}
+                value={settings.peerPort || ''}
+                onChange={(event) => set({ peerPort: Number(event.target.value) || undefined })}
+                placeholder="4874"
+              />
+            </label>
+            <p className="muted">
+              Recordings stay where the agent&apos;s config.local.js says (each source&apos;s storageDir), so a
+              meeting&apos;s files are never split between drives.
+            </p>
+            <div className="toolbar">
+              <button type="submit" className="button primary" disabled={!draft}>
+                Save the settings
+              </button>
+              {draft && (
+                <button type="button" className="button" onClick={() => setDraft(null)}>
+                  Cancel
+                </button>
+              )}
+            </div>
+          </form>
+        </section>
       )}
-    </details>
+    </div>
   );
 }

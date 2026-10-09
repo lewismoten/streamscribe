@@ -40,6 +40,7 @@ import TasksPage from './prompts/TasksPage.tsx';
 import { MapPage, MapsPage } from './maps/MapsPage.tsx';
 import ExplorePage from './maps/ExplorePage.tsx';
 import SourcesPage from './sources/SourcesPage.tsx';
+import AgentPage from './pages/AgentPage.tsx';
 import SetupPage from './pages/SetupPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
@@ -147,6 +148,7 @@ export default function App() {
             <Route path="/published" element={<PublishedList />} />
             <Route path="/published/:id" element={<PublicationPage />} />
             <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/agents/:id" element={<AgentPage />} />
             {local && <Route path="/recordings/:id" element={<RecordingPage />} />}
             {local && <Route path="/search" element={<SearchPage config={config} />} />}
             {local && <Route path="/capture" element={<CapturePage />} />}

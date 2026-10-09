@@ -83,7 +83,6 @@ export default function AgentsPage() {
       {admin && <AddAgent />}
       <AgentCards
         agents={agents}
-        canEdit={can('edit.sources', account)}
         admin={admin}
         onForget={(id) => setAgents((list) => (list || []).filter((agent) => agent.recorderId !== id))}
       />

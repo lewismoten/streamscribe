@@ -81,3 +81,33 @@ pre.command {
 .reach-grid tbody th {
   text-align: left;
 }
+
+/* One agent's page: its panels side by side where there's room (the settings form across the whole width). */
+.agent-page > .toolbar h1 code {
+  font-size: 0.9rem;
+}
+.agent-page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+.agent-page-grid > .panel {
+  min-width: 0;
+}
+.agent-page-grid .agent-settings-form {
+  grid-column: 1 / -1;
+}
+.agent-page-grid ul {
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+/* Fields never wider than where they are (a long option shouldn't push a list out of its panel). */
+.agent-page select,
+.agent-page input:not([type='checkbox']) {
+  max-width: 100%;
+}
+.agent-page .field-stack select {
+  width: 100%;
+}

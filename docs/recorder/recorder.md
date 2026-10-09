@@ -122,9 +122,11 @@ The recorder is also an agent: it takes work from the hub's queue, cutting publi
 
 ## Settings from the hub
 
-Each agent card on the hub's Agents page has **Storage, Ollama, and network**: what the agent found, and (for people
-who may edit sources) its settings, kept in the hub's `agent_settings` record for it and picked up within a minute
-(`src/recorder/agent-settings.js`):
+The hub's Agents page is the overview: a short card for each agent, Maintenance, who reaches whom, the work queue,
+and the websites being fetched. Each agent's own page (**Details and settings** on its card, at `/agents/<id>`) has
+everything about it: its machine, **What it found** (storage, copies, language models, network, and the agents it
+reaches), **Tools**, its **Settings** (for people who may edit sources; kept in the hub's `agent_settings` record for
+it and picked up within a minute: `src/recorder/agent-settings.js`), and its own work:
 
 - **Working files**: where temporary files and renders go (a local drive, a USB drive, a network folder); the
   system's temporary folder unless set, or if it can't be written. Recordings stay where `config.local.js` says (each
