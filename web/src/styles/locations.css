@@ -61,7 +61,38 @@
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  padding: 2px 0;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.map-roads li.lit {
+  background: color-mix(in srgb, #c8412f 14%, transparent);
+  box-shadow: inset 3px 0 0 #c8412f;
+}
+.map-roads li.hidden-stretch {
+  opacity: 0.55;
+}
+.map-roads-tools {
+  margin: 4px 0 0;
+}
+/* A road stretch's number, on the map. */
+.leaflet-tooltip.map-stretch-label {
+  padding: 0 5px;
+  border: 1px solid #017f72;
+  border-radius: 9px;
+  background: #fff;
+  color: #017f72;
+  font:
+    600 11px/16px system-ui,
+    sans-serif;
+  box-shadow: none;
+}
+.leaflet-tooltip.map-stretch-label::before {
+  display: none;
+}
+.leaflet-tooltip.map-stretch-label.lit {
+  border-color: #c8412f;
+  background: #c8412f;
+  color: #fff;
 }
 /* Handles to drag a road's or outline's points, and the GPS pin. */
 .map-handle {

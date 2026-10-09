@@ -9,8 +9,22 @@ import { curved, gpsOf, pointsOf, type Draw, type LatLng, type Place } from './t
 // approximate area (two clicks: its middle, then its edge). Each point of a road or outline has a handle to drag it;
 // right-clicking a handle removes that point. While drawing, the map doesn't pan (so clicks land as points) and the
 // pointer is a crosshair. Find moves the map to an address. Other places can be shown faintly, for context.
+// A road's stretches are numbered on the map; hovering one in the list highlights it there (and hovering it there
+// highlights it in the list), and each can be hidden, zoomed to, kept alone, or removed (a road search can find many).
+// Every change to the map's shapes can be undone (Undo, or Ctrl/⌘+Z when not typing).
 const round = (value: number) => Number(value.toFixed(6));
 const pointOf = (latlng: L.LatLng): LatLng => [round(latlng.lat), round(latlng.lng)];
+// What the map changes, and so what Undo puts back (the form's other fields are left as they are).
+const shapesOf = (place: Place): Partial<Place> => ({
+  latitude: place.latitude,
+  longitude: place.longitude,
+  marker: place.marker,
+  circle: place.circle,
+  areas: place.areas,
+  paths: place.paths,
+  curves: place.curves
+});
+const HIGHLIGHT = '#c8412f';
 const handle = L.divIcon({ className: 'map-handle', iconSize: [12, 12] });
 const handleSelected = L.divIcon({ className: 'map-handle selected', iconSize: [16, 16] });
 const pin = L.divIcon({ className: 'map-pin', iconSize: [22, 22], iconAnchor: [11, 22] });
@@ -51,6 +65,12 @@ export default function MapView({
   const [query, setQuery] = useState(search);
   const [message, setMessage] = useState('');
   const [nextCurve, setNextCurve] = useState(0);
+  // The shapes as they were before each change, for Undo (the latest last).
+  const [history, setHistory] = useState<Partial<Place>[]>([]);
+  // Road stretches hidden from the map, and the one highlighted (hovered in the list, or on the map).
+  const [hidden, setHidden] = useState<Set<number>>(() => new Set());
+  const [highlighted, setHighlighted] = useState<number | null>(null);
+  const [hoveredLine, setHoveredLine] = useState<number | null>(null);
   const editing = Boolean(onChange && draw);
   const key = draw === 'path' ? 'paths' : 'areas';
   const shapeList = (now: Place) => (draw === 'path' ? now.paths : now.areas) || [];
@@ -61,12 +81,36 @@ export default function MapView({
     active,
     middle,
     onChange,
+    change: (_place: Place) => {},
     addPoint: (_point: LatLng) => {},
-    removeSelected: () => {}
+    removeSelected: () => {},
+    undo: () => {}
   });
   useEffect(() => {
-    latest.current = { place, draw, active, middle, onChange, addPoint, removeSelected };
+    latest.current = { place, draw, active, middle, onChange, change, addPoint, removeSelected, undo };
   });
+  // Every change to the shapes goes through here, so it can be undone.
+  function change(next: Place) {
+    if (!onChange) return;
+    const before = shapesOf(latest.current.place);
+    setHistory((list) => [...list.slice(-99), before]);
+    onChange(next);
+  }
+  function undo() {
+    const before = history.at(-1);
+    if (!before || !onChange) return;
+    setHistory(history.slice(0, -1));
+    onChange({ ...latest.current.place, ...before });
+    setSelected(null);
+    setHidden(new Set());
+    setHighlighted(null);
+    setMiddle(null);
+    const count = (draw === 'path' ? before.paths : before.areas)?.length || 0;
+    if (active !== null && active >= count) setActive(null);
+  }
+  // A stretch gone: the hidden ones after it move up one.
+  const shiftHidden = (removed: number) =>
+    setHidden(new Set([...hidden].filter((at) => at !== removed).map((at) => (at > removed ? at - 1 : at))));
 
   // A point added to the stretch (or outline) being drawn, or a new one started with it (a new outline replaces the
   // old: an area is one outline). The same point twice in a row (a double-click's two clicks) counts once.
@@ -78,15 +122,15 @@ export default function MapView({
       const last = shape.at(-1);
       if (last && last[0] === point[0] && last[1] === point[1]) return;
       const next = list.map((item, at) => (at === active ? [...item, point] : item));
-      onChange({ ...place, [key]: next });
+      change({ ...place, [key]: next });
       return;
     }
     if (draw === 'area') {
-      onChange({ ...place, areas: [[point]] });
+      change({ ...place, areas: [[point]] });
       setActive(0);
     } else {
       const paths = place.paths || [];
-      onChange({
+      change({
         ...place,
         paths: [...paths, [point]],
         curves: [...paths.map((_, at) => place.curves?.[at] ?? 0), nextCurve]
@@ -107,7 +151,8 @@ export default function MapView({
       draw === 'path'
         ? (now.paths || []).map((_, at) => now.curves?.[at] ?? 0).filter((_, at) => keep || at !== shapeIndex)
         : now.curves;
-    onChange?.({ ...now, [key]: list, ...(draw === 'path' ? { curves } : {}) });
+    change({ ...now, [key]: list, ...(draw === 'path' ? { curves } : {}) });
+    if (!keep && draw === 'path') shiftHidden(shapeIndex);
     if (!keep && active !== null && active > shapeIndex) setActive(active - 1);
     if (!keep && active === shapeIndex) setActive(null);
   };
@@ -136,6 +181,20 @@ export default function MapView({
     return () => window.removeEventListener('keydown', press);
   }, [selected]);
 
+  // Ctrl/⌘+Z undoes the latest change to the map's shapes (when not typing, where it undoes the typing).
+  useEffect(() => {
+    if (!editing) return;
+    const press = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        latest.current.undo();
+      }
+    };
+    window.addEventListener('keydown', press);
+    return () => window.removeEventListener('keydown', press);
+  }, [editing]);
+
   // The map, once: its tiles, where it starts, and what a click and a double-click do.
   useEffect(() => {
     if (!box.current || map.current) return;
@@ -156,13 +215,12 @@ export default function MapView({
       if (!now.onChange || !now.draw || event.originalEvent.shiftKey || holding.current) return;
       const point = pointOf(event.latlng);
       setSelected(null);
-      if (now.draw === 'gps')
-        now.onChange({ ...now.place, latitude: point[0], longitude: point[1], marker: undefined });
+      if (now.draw === 'gps') now.change({ ...now.place, latitude: point[0], longitude: point[1], marker: undefined });
       else if (now.draw === 'circle') {
         if (!now.middle) setMiddle(point);
         else {
           const radius = Math.round(created.distance(now.middle, point));
-          now.onChange({ ...now.place, circle: { center: now.middle, radius } });
+          now.change({ ...now.place, circle: { center: now.middle, radius } });
           setMiddle(null);
         }
       } else now.addPoint(point);
@@ -189,6 +247,8 @@ export default function MapView({
     setActive(null);
     setMiddle(null);
     setSelected(null);
+    setHidden(new Set());
+    setHighlighted(null);
   }, [draw]);
   useEffect(() => {
     const current = map.current;
@@ -273,7 +333,7 @@ export default function MapView({
       const marker = L.marker(spot, { draggable: true, icon: pin, title: 'Drag to adjust' }).addTo(group);
       marker.on('dragend', () => {
         const [latitude, longitude] = pointOf(marker.getLatLng());
-        onChange?.({ ...latest.current.place, latitude, longitude, marker: undefined });
+        latest.current.change({ ...latest.current.place, latitude, longitude, marker: undefined });
       });
     } else if (spot) L.circleMarker(spot, { ...strong, radius: 8, fillOpacity: 0.8 }).addTo(group);
     if (place.circle) L.circle(place.circle.center, { ...strong, radius: place.circle.radius }).addTo(group);
@@ -302,18 +362,46 @@ export default function MapView({
       outline.addTo(group);
       if (editable && area.length >= 3) outline.on('click', insertAt(shapeIndex, area, true));
     });
-    (place.paths || []).forEach((path, shapeIndex) => {
-      const line = L.polyline(curved(path, place.curves?.[shapeIndex]), {
+    const paths = place.paths || [];
+    const numbered = editing && draw === 'path' && paths.length > 1;
+    paths.forEach((path, shapeIndex) => {
+      if (editing && hidden.has(shapeIndex)) return;
+      const lit = highlighted === shapeIndex;
+      const style = {
         ...strong,
-        weight: 5,
+        weight: lit ? 8 : 5,
+        color: lit ? HIGHLIGHT : strong.color,
+        opacity: highlighted === null || lit ? 1 : 0.35
+      };
+      const line = L.polyline(curved(path, place.curves?.[shapeIndex]), {
+        ...style,
         bubblingMouseEvents: !editable
       }).addTo(group);
-      if (editable && draw === 'path') line.on('click', insertAt(shapeIndex, path, false));
+      if (lit) line.bringToFront();
+      if (numbered)
+        line.bindTooltip(String(shapeIndex + 1), {
+          permanent: true,
+          direction: 'center',
+          className: `map-stretch-label${lit ? ' lit' : ''}`
+        });
+      if (editable && draw === 'path') {
+        line.on('click', insertAt(shapeIndex, path, false));
+        // Hovered on the map: lit there, and its row in the list too (without redrawing the map).
+        line.on('mouseover', () => {
+          line.setStyle({ weight: 8, color: HIGHLIGHT, opacity: 1 });
+          setHoveredLine(shapeIndex);
+        });
+        line.on('mouseout', () => {
+          line.setStyle(style);
+          setHoveredLine(null);
+        });
+      }
     });
     // Handles on each point: click to select it (Delete removes it), drag to move it, right-click to remove it.
     if (editable) {
       shapeList(place).forEach((shape, shapeIndex) =>
         shape.forEach((point, pointIndex) => {
+          if (draw === 'path' && hidden.has(shapeIndex)) return;
           const chosen = selected?.shape === shapeIndex && selected.point === pointIndex;
           const dot = L.marker(point, {
             draggable: true,
@@ -338,32 +426,52 @@ export default function MapView({
       );
     }
     // oxlint-disable-next-line react/exhaustive-deps
-  }, [place, others, draw, middle, selected, active, editing, onChange]);
+  }, [place, others, draw, middle, selected, active, editing, onChange, hidden, highlighted]);
 
   // Done with this stretch (or outline): the next click starts another stretch.
   const finish = () => {
     setActive(null);
     setMessage('');
   };
-  const undoPoint = () => {
-    if (active === null) return;
-    const shape = shapeList(place)[active] || [];
-    changeShape(active, shape.slice(0, -1));
-    if (shape.length <= 1) setActive(null);
-  };
   const setCurve = (index: number, curve: number) =>
-    onChange?.({
+    change({
       ...place,
       curves: (place.paths || []).map((_, at) => (at === index ? curve : (place.curves?.[at] ?? 0)))
     });
-  const removePath = (index: number) => {
-    onChange?.({
+  // Stretches kept (by index), the rest removed.
+  const keepPaths = (keep: (index: number) => boolean) => {
+    const paths = place.paths || [];
+    change({
       ...place,
-      paths: (place.paths || []).filter((_, at) => at !== index),
-      curves: (place.paths || []).map((_, at) => place.curves?.[at] ?? 0).filter((_, at) => at !== index)
+      paths: paths.filter((_, at) => keep(at)),
+      curves: paths.map((_, at) => place.curves?.[at] ?? 0).filter((_, at) => keep(at))
     });
-    if (active === index) setActive(null);
+    setActive(null);
     setSelected(null);
+    setHighlighted(null);
+  };
+  const removePath = (index: number) => {
+    keepPaths((at) => at !== index);
+    shiftHidden(index);
+  };
+  const keepOnly = (index: number) => {
+    keepPaths((at) => at === index);
+    setHidden(new Set());
+  };
+  const removeHidden = () => {
+    keepPaths((at) => !hidden.has(at));
+    setHidden(new Set());
+  };
+  const toggleHidden = (index: number) => {
+    const next = new Set(hidden);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
+    setHidden(next);
+  };
+  const zoomTo = (index: number) => {
+    const path = place.paths?.[index];
+    if (path?.length) map.current?.fitBounds(L.latLngBounds(path), { maxZoom: 18, padding: [32, 32] });
+    setHidden(new Set([...hidden].filter((at) => at !== index)));
   };
   // The road on OpenStreetMap, by its name or route number, in the area shown: each stretch of it becomes a stretch here.
   const findRoad = async () => {
@@ -392,12 +500,16 @@ export default function MapView({
       if (!stretches.length)
         return setMessage("That road isn't on the map in the area shown (move or zoom out the map, and try again)");
       const paths = place.paths || [];
-      onChange({
+      change({
         ...place,
         paths: [...paths, ...stretches],
         curves: [...paths.map((_, at) => place.curves?.[at] ?? 0), ...stretches.map(() => 0)]
       });
-      setMessage(`Found ${stretches.length} stretch${stretches.length === 1 ? '' : 'es'} of road`);
+      setMessage(
+        stretches.length === 1
+          ? 'Found 1 stretch of road'
+          : `Found ${stretches.length} stretches of road, numbered on the map: hover one in the list below to see it, then hide the ones you don't want (or keep only the one you do)`
+      );
     } catch {
       setMessage("OpenStreetMap's road search didn't answer; draw it instead");
     }
@@ -437,22 +549,27 @@ export default function MapView({
               />
             </label>
           )}
+          {(draw === 'area' || draw === 'path') && active !== null && (
+            <button type="button" className="button" onClick={finish}>
+              {draw === 'path' ? 'Finish this stretch' : 'Finish the outline'}
+            </button>
+          )}
+          <button
+            type="button"
+            className="button"
+            onClick={undo}
+            disabled={!history.length}
+            title="Undo the latest change to the map (Ctrl/⌘+Z)"
+          >
+            ↶ Undo
+          </button>
+          <span className="grow" />
+          {/* Kept away from Finish (on the other side), with the other searches. */}
           {draw === 'path' && (place.roadName || place.routeNumber) && (
             <button type="button" className="button" onClick={findRoad}>
               Find this road
             </button>
           )}
-          {(draw === 'area' || draw === 'path') && active !== null && (
-            <>
-              <button type="button" className="button" onClick={finish}>
-                {draw === 'path' ? 'Finish this stretch' : 'Finish the outline'}
-              </button>
-              <button type="button" className="link-button" onClick={undoPoint}>
-                Undo point
-              </button>
-            </>
-          )}
-          <span className="grow" />
           <input
             type="search"
             value={query}
@@ -482,18 +599,18 @@ export default function MapView({
             <button
               type="button"
               className="link-button"
-              onClick={() => onChange?.({ ...place, latitude: undefined, longitude: undefined, marker: undefined })}
+              onClick={() => change({ ...place, latitude: undefined, longitude: undefined, marker: undefined })}
             >
               Remove the pin
             </button>
           )}
           {draw === 'circle' && place.circle && (
-            <button type="button" className="link-button" onClick={() => onChange?.({ ...place, circle: undefined })}>
+            <button type="button" className="link-button" onClick={() => change({ ...place, circle: undefined })}>
               Remove the area
             </button>
           )}
           {draw === 'area' && (place.areas || []).length > 0 && (
-            <button type="button" className="link-button" onClick={() => onChange?.({ ...place, areas: [] })}>
+            <button type="button" className="link-button" onClick={() => change({ ...place, areas: [] })}>
               Remove the outline
             </button>
           )}
@@ -501,28 +618,78 @@ export default function MapView({
         </div>
       )}
       {editing && draw === 'path' && (place.paths || []).length > 0 && (
-        <ul className="map-roads small">
-          {(place.paths || []).map((path, index) => (
-            <li key={index}>
-              Stretch {index + 1} <span className="muted">({path.length} points)</span>
-              <label className="inline">
-                curve{' '}
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  value={place.curves?.[index] ?? 0}
-                  onChange={(event) => setCurve(index, Number(event.target.value))}
-                  aria-label={`How curved stretch ${index + 1} is`}
-                />
-              </label>
-              <button type="button" className="link-button" onClick={() => removePath(index)}>
-                Remove
+        <>
+          {(place.paths || []).length > 1 && (
+            <div className="toolbar small map-roads-tools">
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => setHidden(new Set())}
+                disabled={!hidden.size}
+              >
+                Show all
               </button>
-            </li>
-          ))}
-        </ul>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => setHidden(new Set((place.paths || []).map((_, at) => at)))}
+              >
+                Hide all
+              </button>
+              <button type="button" className="link-button danger" onClick={removeHidden} disabled={!hidden.size}>
+                Remove the hidden ones{hidden.size ? ` (${hidden.size})` : ''}
+              </button>
+            </div>
+          )}
+          <ul className="map-roads small">
+            {(place.paths || []).map((path, index) => (
+              // Hovering (or tabbing into) a row only lights its stretch on the map; its controls do the work.
+              // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+              <li
+                key={index}
+                className={`${highlighted === index || hoveredLine === index ? 'lit' : ''}${hidden.has(index) ? ' hidden-stretch' : ''}`}
+                onMouseEnter={() => setHighlighted(index)}
+                onMouseLeave={() => setHighlighted(null)}
+                onFocus={() => setHighlighted(index)}
+                onBlur={() => setHighlighted(null)}
+              >
+                <label className="inline">
+                  <input
+                    type="checkbox"
+                    checked={!hidden.has(index)}
+                    onChange={() => toggleHidden(index)}
+                    aria-label={`Show stretch ${index + 1} on the map`}
+                  />{' '}
+                  Stretch {index + 1}
+                </label>
+                <span className="muted">({path.length} points)</span>
+                <label className="inline">
+                  curve{' '}
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    value={place.curves?.[index] ?? 0}
+                    onChange={(event) => setCurve(index, Number(event.target.value))}
+                    aria-label={`How curved stretch ${index + 1} is`}
+                  />
+                </label>
+                <button type="button" className="link-button" onClick={() => zoomTo(index)}>
+                  Zoom to it
+                </button>
+                {(place.paths || []).length > 1 && (
+                  <button type="button" className="link-button" onClick={() => keepOnly(index)}>
+                    Keep only this
+                  </button>
+                )}
+                <button type="button" className="link-button" onClick={() => removePath(index)}>
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
