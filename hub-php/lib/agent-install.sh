@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Stream Scribe agent installer, served by the hub with this agent's details filled in (lib/agent-routes.php):
 #   curl -fsSL '<hub>/api.php/agent-install?token=…' | bash
-# For Debian-based Linux with systemd: Raspberry Pi OS (64-bit), Debian, Ubuntu. Run it as the user the agent should
-# run as (it asks for sudo where it must). It installs ffmpeg and Node.js 24, puts the agent in ~/streamscribe, its
-# data in ~/streamscribe-data, joins the hub with this one-time token, and sets up the streamscribe-agent service,
-# which restarts if it stops and starts when the machine does. Running it again (with a new command) updates the
+# For Debian-based Linux with systemd (Raspberry Pi OS (64-bit), Debian, Ubuntu), or macOS with Homebrew. Run it as
+# the user the agent should run as (on Linux it asks for sudo where it must). It installs ffmpeg and Node.js 24 (apt,
+# or Homebrew), puts the agent in ~/streamscribe, its data in ~/streamscribe-data, joins the hub with this one-time
+# token, and sets up the agent's service (systemd's streamscribe-agent, or a launchd agent on a Mac, which also keeps
+# the Mac from sleeping while it runs), which restarts if it stops and starts when the machine does (on a Mac, when
+# the user logs in). Running it again (with a new command) updates the
 # agent and gives it a new key; its other settings are kept. It shows each step as it goes and keeps a log
 # (~/streamscribe-install.log); if a step fails, it says which and prints the log's last lines.
 set -euo pipefail
@@ -17,6 +19,9 @@ INSTALL_DIR="${STREAMSCRIBE_DIR:-$HOME/streamscribe}"
 DATA_DIR="${STREAMSCRIBE_DATA:-$HOME/streamscribe-data}"
 SERVICE=streamscribe-agent
 UNIT_DIR="${STREAMSCRIBE_UNIT_DIR:-/etc/systemd/system}"
+LABEL="${STREAMSCRIBE_LABEL:-com.streamscribe.agent}"
+PLIST_DIR="${STREAMSCRIBE_LAUNCHD_DIR:-$HOME/Library/LaunchAgents}"
+case "$(uname -s)" in Darwin) OS=mac ;; *) OS=linux ;; esac
 
 LOG="${STREAMSCRIBE_LOG:-$HOME/streamscribe-install.log}"
 STEP=0
@@ -50,42 +55,63 @@ APT_OPTIONS=(-o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef -o Dp
 apt_get() { $SUDO "${QUIET_ENV[@]}" apt-get "${APT_OPTIONS[@]}" "$@" < /dev/null; }
 
 step "Checking this machine"
-command -v apt-get >/dev/null || fail "This installer is for Debian-based Linux (Raspberry Pi OS, Debian, Ubuntu)."
-command -v systemctl >/dev/null || fail "This installer needs systemd."
-note "$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") · $(uname -m) · $(nproc 2>/dev/null) CPUs · $(awk '/MemTotal/ {printf "%.1f GB memory", $2 / 1048576}' /proc/meminfo 2>/dev/null)"
-[ -r /proc/device-tree/model ] && note "$(tr -d '\0' < /proc/device-tree/model)"
-FREE_GB=$(df -Pk "$HOME" | awk 'NR == 2 {printf "%d", $4 / 1048576}')
-note "${FREE_GB} GB free in $HOME"
-[ "$FREE_GB" -lt 2 ] && warn "Less than 2 GB free: installing may fail, and recordings need much more."
-case "$(uname -m)" in armv6l|armv7l) warn "This is a 32-bit system; Node.js 24 may not install. A 64-bit OS (Raspberry Pi 4 or 5) is best." ;; esac
-# A Raspberry Pi that is short of power can lose its network or reset partway through an install.
-if command -v vcgencmd >/dev/null; then
-  # (On some systems, Ubuntu among them, reading it needs permission: try without, then with sudo if it won't ask.)
-  THROTTLED=$(vcgencmd get_throttled 2>/dev/null | sed -n 's/^throttled=//p' || true)
-  if [ -z "$THROTTLED" ]; then THROTTLED=$($SUDO -n vcgencmd get_throttled 2>/dev/null | sed -n 's/^throttled=//p' || true); fi
-  if ! [[ "$THROTTLED" =~ ^0x[0-9a-fA-F]+$ ]]; then note "Power: couldn't check (vcgencmd needs permission here)"
-  elif (( THROTTLED & 0x1 )); then warn "Under-voltage right now ($THROTTLED): use the official power supply; the install may stop or the Pi reset."
-  elif (( THROTTLED & 0x10000 )); then warn "This Pi has had under-voltage since it started ($THROTTLED): check the power supply."
-  else note "Power: OK"; fi
-fi
-# Interrupted package installs (a reset, a lost connection) are finished first.
-if [ -n "$($SUDO dpkg --audit 2>/dev/null)" ] || [ -n "$(ls -A /var/lib/dpkg/updates 2>/dev/null)" ]; then
-  warn "A package install was interrupted earlier: finishing it (dpkg --configure -a)"
-  $SUDO "${QUIET_ENV[@]}" dpkg --force-confdef --force-confold --configure -a < /dev/null
-  apt_get -f install -y
+if [ "$OS" = mac ]; then
+  # Homebrew installs ffmpeg and Node.js; it's installed by hand once (it asks questions a piped script can't answer).
+  for BREW in "$(command -v brew || true)" /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$BREW" ] && break; done
+  [ -x "$BREW" ] || fail "This installer needs Homebrew on a Mac: install it from https://brew.sh, then run the same install command again."
+  eval "$("$BREW" shellenv)"
+  note "$(sw_vers -productName) $(sw_vers -productVersion) · $(uname -m) · $(sysctl -n hw.ncpu) CPUs · $(sysctl -n hw.memsize | awk '{printf "%.1f GB memory", $1 / 1073741824}')"
+  note "Homebrew $("$BREW" --version | head -1 | awk '{print $2}') in $(brew --prefix)"
+  FREE_GB=$(df -Pk "$HOME" | awk 'NR == 2 {printf "%d", $4 / 1048576}')
+  note "${FREE_GB} GB free in $HOME"
+  [ "$FREE_GB" -lt 2 ] && warn "Less than 2 GB free: installing may fail, and recordings need much more."
+else
+  command -v apt-get >/dev/null || fail "This installer is for Debian-based Linux (Raspberry Pi OS, Debian, Ubuntu)."
+  command -v systemctl >/dev/null || fail "This installer needs systemd."
+  note "$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") · $(uname -m) · $(nproc 2>/dev/null) CPUs · $(awk '/MemTotal/ {printf "%.1f GB memory", $2 / 1048576}' /proc/meminfo 2>/dev/null)"
+  [ -r /proc/device-tree/model ] && note "$(tr -d '\0' < /proc/device-tree/model)"
+  FREE_GB=$(df -Pk "$HOME" | awk 'NR == 2 {printf "%d", $4 / 1048576}')
+  note "${FREE_GB} GB free in $HOME"
+  [ "$FREE_GB" -lt 2 ] && warn "Less than 2 GB free: installing may fail, and recordings need much more."
+  case "$(uname -m)" in armv6l|armv7l) warn "This is a 32-bit system; Node.js 24 may not install. A 64-bit OS (Raspberry Pi 4 or 5) is best." ;; esac
+  # A Raspberry Pi that is short of power can lose its network or reset partway through an install.
+  if command -v vcgencmd >/dev/null; then
+    # (On some systems, Ubuntu among them, reading it needs permission: try without, then with sudo if it won't ask.)
+    THROTTLED=$(vcgencmd get_throttled 2>/dev/null | sed -n 's/^throttled=//p' || true)
+    if [ -z "$THROTTLED" ]; then THROTTLED=$($SUDO -n vcgencmd get_throttled 2>/dev/null | sed -n 's/^throttled=//p' || true); fi
+    if ! [[ "$THROTTLED" =~ ^0x[0-9a-fA-F]+$ ]]; then note "Power: couldn't check (vcgencmd needs permission here)"
+    elif (( THROTTLED & 0x1 )); then warn "Under-voltage right now ($THROTTLED): use the official power supply; the install may stop or the Pi reset."
+    elif (( THROTTLED & 0x10000 )); then warn "This Pi has had under-voltage since it started ($THROTTLED): check the power supply."
+    else note "Power: OK"; fi
+  fi
+  # Interrupted package installs (a reset, a lost connection) are finished first.
+  if [ -n "$($SUDO dpkg --audit 2>/dev/null)" ] || [ -n "$(ls -A /var/lib/dpkg/updates 2>/dev/null)" ]; then
+    warn "A package install was interrupted earlier: finishing it (dpkg --configure -a)"
+    $SUDO "${QUIET_ENV[@]}" dpkg --force-confdef --force-confold --configure -a < /dev/null
+    apt_get -f install -y
+  fi
 fi
 
-step "Installing ffmpeg and tools (this can take several minutes on a Raspberry Pi)"
-apt_get update
-# Without recommended extras: ffmpeg would otherwise bring desktop packages (icons, sound, GTK) a headless machine
-# doesn't need.
-apt_get install -y --no-install-recommends ca-certificates curl ffmpeg tar
+if [ "$OS" = mac ]; then
+  step "Installing ffmpeg (Homebrew; this can take several minutes)"
+  if command -v ffmpeg >/dev/null; then note "Already installed"; else brew install ffmpeg < /dev/null; fi
+else
+  step "Installing ffmpeg and tools (this can take several minutes on a Raspberry Pi)"
+  apt_get update
+  # Without recommended extras: ffmpeg would otherwise bring desktop packages (icons, sound, GTK) a headless machine
+  # doesn't need.
+  apt_get install -y --no-install-recommends ca-certificates curl ffmpeg tar
+fi
 note "$(ffmpeg -version | head -1)"
 
 step "Installing Node.js 24"
 NODE_MAJOR=0
 if command -v node >/dev/null; then NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"; fi
-if [ "$NODE_MAJOR" -lt 24 ]; then
+if [ "$NODE_MAJOR" -lt 24 ] && [ "$OS" = mac ]; then
+  # Homebrew's own Node.js (the latest), used by the agent even if an older one (nvm, say) comes first in PATH.
+  if brew list --formula node >/dev/null 2>&1; then brew upgrade node < /dev/null || true; else brew install node < /dev/null; fi
+  PATH="$(brew --prefix node)/bin:$PATH"
+elif [ "$NODE_MAJOR" -lt 24 ]; then
   note "Adding the NodeSource package source"
   curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh
   $SUDO "${QUIET_ENV[@]}" bash /tmp/nodesource-setup.sh < /dev/null
@@ -93,7 +119,8 @@ if [ "$NODE_MAJOR" -lt 24 ]; then
 else
   note "Already installed"
 fi
-note "Node $(node --version)"
+NODE_BIN="$(command -v node)"
+note "Node $(node --version) ($NODE_BIN)"
 
 step "Downloading the agent into $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR" "$DATA_DIR"
@@ -121,6 +148,62 @@ fs.writeFileSync(file, `export default ${JSON.stringify(settings, null, 2)};\n`,
 JS
 
 note "Joined; settings in $INSTALL_DIR/config.local.js"
+
+if [ "$OS" = mac ]; then
+  step "Setting up the $LABEL launchd agent"
+  mkdir -p "$PLIST_DIR" "$DATA_DIR/logs"
+  PLIST="$PLIST_DIR/$LABEL.plist"
+  AGENT_LOG="$DATA_DIR/logs/agent.log"
+  # caffeinate -i keeps the Mac from sleeping (when idle) while the agent runs; PATH finds Homebrew's tools.
+  cat > "$PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string><string>-i</string>
+    <string>$NODE_BIN</string><string>bin/recorder.js</string>
+  </array>
+  <key>WorkingDirectory</key><string>$INSTALL_DIR</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>ExitTimeOut</key><integer>120</integer>
+  <key>StandardOutPath</key><string>$AGENT_LOG</string>
+  <key>StandardErrorPath</key><string>$AGENT_LOG</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>$(dirname "$NODE_BIN"):$(brew --prefix)/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>NODE_ENV</key><string>production</string>
+  </dict>
+</dict>
+</plist>
+PLIST
+  plutil -lint "$PLIST" >/dev/null || fail "The launchd file didn't check out: $PLIST"
+  note "$PLIST: restarts if it stops, starts when you log in"
+  DOMAIN="gui/$(id -u)"
+  launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+  sleep 1
+  launchctl bootstrap "$DOMAIN" "$PLIST" \
+    || fail "launchd didn't take the agent; over ssh, someone must be logged in to this Mac (or run the command in Terminal on it)."
+
+  step "Checking that it runs"
+  sleep 5
+  if launchctl print "$DOMAIN/$LABEL" 2>/dev/null | grep -q 'state = running'; then
+    printf '\n\033[1;32mDone: %s is running and should show as online on the hub'"'"'s Agents page within a minute.\033[0m\n' "$AGENT_NAME"
+  else
+    tail -n 20 "$AGENT_LOG" 2>/dev/null || true
+    fail "The agent didn't start; see above, or: tail -n 50 $AGENT_LOG"
+  fi
+  echo "  Logs:     tail -f $AGENT_LOG"
+  echo "  Restart:  launchctl kickstart -k $DOMAIN/$LABEL"
+  echo "  Stop:     launchctl bootout $DOMAIN/$LABEL"
+  echo "  Settings: $CONFIG"
+  echo "  This log: $LOG"
+  exit 0
+fi
 
 step "Setting up the $SERVICE service"
 $SUDO tee "$UNIT_DIR/$SERVICE.service" >/dev/null <<UNIT

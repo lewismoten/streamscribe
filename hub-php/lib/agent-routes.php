@@ -1,6 +1,6 @@
 <?php
 // Adding agents (included by api.php). An admin adds one in the web app (Agents) with a short id and a name, and
-// gets a command to run on the machine (a Raspberry Pi, say), with a one-time token good for 48 hours:
+// gets a command to run on the machine (a Raspberry Pi or a Mac, say), with a one-time token good for 48 hours:
 //   curl -fsSL '<hub>/api.php/agent-install?token=…' | bash
 // The script installs what the agent needs, downloads it from this hub, trades the token for the agent's own key
 // (kept here only as a hash), and sets it up as a service that restarts if it stops and starts with the machine.

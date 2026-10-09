@@ -8,7 +8,7 @@ npm run recorder
 
 ## Setup
 
-The easiest way, on a Raspberry Pi or another Debian or Ubuntu machine, is the one-line install from the hub's Agents page: see [Installing an agent](#installing-an-agent-raspberry-pi-debian-ubuntu) below. To set one up by hand (on a Mac, say):
+The easiest way, on a Raspberry Pi, another Debian or Ubuntu machine, or a Mac with Homebrew, is the one-line install from the hub's Agents page: see [Installing an agent](#installing-an-agent-raspberry-pi-debian-ubuntu-macos) below. To set one up by hand (to record from a copy of the repository you work in, say):
 
 1. Set up the hub ([hub/hub.md](../hub/hub.md)) and make a key for this recorder, on the hub's server:
 
@@ -56,7 +56,7 @@ It checks what to do every 5 seconds (`npm run recorder -- --tick-seconds N` cha
 - **A capture started by hand:** if one is already running for the source, from a terminal say, the recorder uses it rather than starting another.
 - **Low disk:** with less free space than `minFreeGb`, it doesn't start a meeting and reports why.
 
-## Installing an agent (Raspberry Pi, Debian, Ubuntu)
+## Installing an agent (Raspberry Pi, Debian, Ubuntu, macOS)
 
 On the hub's Agents page, as an admin, add an agent with a short id (such as `pi1`) and a name. You get a command; ssh into the machine and run it there as the user the agent should run as:
 
@@ -66,19 +66,24 @@ curl -fsSL 'https://example.com/hub/api.php/agent-install?token=…' | bash
 
 The script:
 
-- installs ffmpeg and Node.js 24 (asking for sudo where it must)
+- installs ffmpeg and Node.js 24: with apt on Linux (asking for sudo where it must), with Homebrew on a Mac
 - puts the agent in `~/streamscribe` and its data in `~/streamscribe-data`
 - trades the command's token for the agent's own key and writes `~/streamscribe/config.local.js`
-- sets up the `streamscribe-agent` systemd service, which restarts if it stops and starts with the machine
+- sets up the agent's service, which restarts if it stops:
+  - **Linux:** the `streamscribe-agent` systemd service, which starts with the machine
+  - **Mac:** the `com.streamscribe.agent` launchd agent (`~/Library/LaunchAgents/com.streamscribe.agent.plist`), which starts when you log in and keeps the Mac from sleeping while it runs
+
+**On a Mac,** install [Homebrew](https://brew.sh) first; the script stops and says so if it's missing. Run the command in Terminal on the Mac itself, or over ssh while someone is logged in to it, since launchd agents belong to a login session. A laptop still sleeps when its lid is closed.
 
 The token works once and expires after 48 hours, and the key never appears in the command or your shell history. Within a minute the agent shows as online on the Agents page, with what its machine has (CPU, memory, ffmpeg, whisper.cpp) and so what it can do.
 
 To update the agent or give it a new key, use Reinstall command on the Agents page and run that; its other settings stay. Revoke stops its key at once. On the machine:
 
-- **Logs:** `journalctl -u streamscribe-agent -f`
-- **Restart:** `sudo systemctl restart streamscribe-agent`
+- **Logs:** `journalctl -u streamscribe-agent -f` (Mac: `tail -f ~/streamscribe-data/logs/agent.log`)
+- **Restart:** `sudo systemctl restart streamscribe-agent` (Mac: `launchctl kickstart -k gui/$(id -u)/com.streamscribe.agent`)
+- **Stop (Mac):** `launchctl bootout gui/$(id -u)/com.streamscribe.agent`
 
-**If the install stops.** The script works in seven numbered steps and keeps a log in `~/streamscribe-install.log`. If a step fails, it says which one, and the lines just above are what went wrong. Fix that, or paste those lines into an issue, then run the same command again. It's good until it joins the hub or 48 hours pass, and finished steps go quickly the second time. Along the way it:
+**If the install stops.** The script works in seven numbered steps (the Linux details below don't apply to a Mac) and keeps a log in `~/streamscribe-install.log`. If a step fails, it says which one, and the lines just above are what went wrong. Fix that, or paste those lines into an issue, then run the same command again. It's good until it joins the hub or 48 hours pass, and finished steps go quickly the second time. Along the way it:
 
 - **Repairs:** finishes an earlier package install that was interrupted (`dpkg --configure -a`).
 - **Waits:** if automatic updates are installing packages, it waits for them.

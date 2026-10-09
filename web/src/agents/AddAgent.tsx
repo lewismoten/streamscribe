@@ -43,9 +43,10 @@ export default function AddAgent() {
     <section className="panel add-agent">
       <h2>Add an agent</h2>
       <p className="muted small">
-        For a Raspberry Pi (64-bit Raspberry Pi OS) or another Debian or Ubuntu machine. The command installs what the
-        agent needs, joins this hub, and sets it up as a service that restarts if it stops and starts with the machine.
-        Run it there as the user the agent should run as.
+        For a Raspberry Pi (64-bit Raspberry Pi OS), another Debian or Ubuntu machine, or a Mac with Homebrew. The
+        command installs what the agent needs, joins this hub, and sets it up as a service that restarts if it stops and
+        starts with the machine (on a Mac, when you log in). Run it there, in a terminal, as the user the agent should
+        run as.
       </p>
       <form
         className="toolbar"
