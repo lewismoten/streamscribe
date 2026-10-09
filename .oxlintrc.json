@@ -10,7 +10,7 @@
     "browser": true,
     "es2024": true
   },
-  "ignorePatterns": ["data/**", "notes/**", "web/dist*/**", "node_modules/**"],
+  "ignorePatterns": ["data/**", "notes/**", "web/dist*/**", "node_modules/**", "src/vendor/**"],
   "rules": {
     "react/react-in-jsx-scope": "off",
     "react-hooks/rules-of-hooks": "error",

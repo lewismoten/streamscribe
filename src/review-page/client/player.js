@@ -282,7 +282,8 @@ if (window.ResizeObserver) new ResizeObserver(sizeTranscript).observe($('stage')
 // Clicking the video itself (but not the overlays that are clicked to edit or record) plays or pauses it.
 $('stage').addEventListener('click', (event) => {
   if (
-    event.target.closest('.vote-overlay, .title-overlay, .agenda-overlay, .inline-edit, .view-chip') ||
+    // (Nor while editing a camera view over it: clicks there draw and move boxes.)
+    event.target.closest('.vote-overlay, .title-overlay, .agenda-overlay, .inline-edit, .view-chip, #zoom-canvas') ||
     zoomSelecting ||
     Date.now() - zoomSelectedAt < 300
   )

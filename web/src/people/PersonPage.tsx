@@ -153,13 +153,15 @@ function meetingRows(
           ? 'Presided'
           : attendance.present?.includes(person.id)
             ? 'Attended'
-            : attendance.absent?.includes(person.id)
-              ? 'Absent'
-              : expected.length
-                ? `${[...new Set(expected)].join(', ')} (not marked)`
-                : spoke
-                  ? 'Spoke'
-                  : '';
+            : attendance.audience?.some((member) => member.id === person.id)
+              ? 'In the audience'
+              : attendance.absent?.includes(person.id)
+                ? 'Absent'
+                : expected.length
+                  ? `${[...new Set(expected)].join(', ')} (not marked)`
+                  : spoke
+                    ? 'Spoke'
+                    : '';
       return { recordingId: record.id, title: record.data.title, startedAt: record.data.startedAt, role, spoke };
     })
     .filter((row) => row.role);

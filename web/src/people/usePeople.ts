@@ -40,6 +40,13 @@ export interface Attendance {
   present?: string[];
   absent?: string[];
   presiding?: string;
+  // People seen in the audience, and when.
+  audience?: AudienceMember[];
+}
+export interface AudienceMember {
+  id: string;
+  part?: string;
+  at?: number;
 }
 interface Turn {
   at: number;

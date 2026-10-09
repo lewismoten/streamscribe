@@ -52,6 +52,7 @@ export const CLIENT_PARTS = [
   'camera-views',
   'magnifier',
   'zoom-editor',
+  'zoom-modes',
   'startup'
 ];
 // Each file is indented two spaces inside the page's <style> or <script>.

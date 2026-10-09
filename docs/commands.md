@@ -14,6 +14,10 @@ Each command is `npm run <command>` (add options after `--`, as in `npm run capt
 | [`combine-transcripts`](transcription/combine-transcripts.md)       | Combines the usual transcript with a `--best` one, chunk by chunk                                             |
 | [`extract-thumbnails`](review/extract-thumbnails.md)                | Builds a session's thumbnails, camera changes, and review page                                                |
 | [`extract-slides`](media/extract-slides.md)                         | Saves each presentation slide shown during a session                                                          |
+| [`ocr-slides`](media/ocr-slides.md)                                 | Reads the text on each saved slide with a vision model (DeepSeek OCR on Ollama)                               |
+| [`fetch-maps`](maps/maps.md)                                        | Downloads public map data (boundaries, roads, parcels, buildings) into data/maps                              |
+| [`build-maps`](maps/maps.md)                                        | Draws SVG maps of the state, county, and town from it, with credits                                           |
+| [`publish-maps`](maps/maps.md)                                      | Sends the maps to the hub's Maps section                                                                      |
 | [`extract-clip`](media/extract-clip.md)                             | Cuts an MP4 clip of a session                                                                                 |
 | `render-playlist`                                                   | Joins a playlist of clips into one video (used by the review page)                                            |
 | [`render-mp4`](media/render-mp4.md)                                 | Stitches a session's segments into one MP4, optionally with a clock                                           |

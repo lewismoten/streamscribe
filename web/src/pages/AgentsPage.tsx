@@ -57,7 +57,7 @@ export default function AgentsPage() {
         <code>npm run recorder</code>.
       </p>
       {admin && <AddAgent />}
-      <AgentCards agents={agents} />
+      <AgentCards agents={agents} canEdit={can('edit.sources', account)} />
       <WorkQueue jobs={jobs} manage={can('publish', account)} />
     </section>
   );

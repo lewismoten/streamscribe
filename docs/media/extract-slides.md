@@ -35,4 +35,6 @@ Options:
 
 Lower the distances if different slides are merged; raise them if a re-shown slide is saved twice.
 
+[ocr-slides](ocr-slides.md) then reads the text on each slide, and `publish-library` sends the slides (with their text) to the hub.
+
 Changing a detection option (`--min-seconds`, `--noise`, or the match settings) scans every part again; saved slides are kept. `split-session` divides an existing `slides/` folder between the two sessions, so it can run before or after a split.

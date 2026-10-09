@@ -4,6 +4,8 @@
 node_modules/
 web/dist*/
 hub-php/
+# Copied as is from elsewhere (see its README).
+src/vendor/
 package-lock.json
 *.local.js
 *.local.json

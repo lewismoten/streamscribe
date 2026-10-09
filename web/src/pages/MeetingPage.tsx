@@ -33,6 +33,11 @@ import { newId } from '../../../src/sync/collections.js';
 import { transcriptEdits } from '../meeting/edits.ts';
 import { useFollowAlong } from '../meeting/useFollowAlong.ts';
 import { correctedBy, markList, useMeetingMarks } from '../meeting/useMeetingMarks.ts';
+import ReviewProgress from '../meeting/ReviewProgress.tsx';
+import MeetingTasks from '../prompts/MeetingTasks.tsx';
+import SlidesPanel from '../meeting/SlidesPanel.tsx';
+import { slidesIn, useSlides } from '../meeting/slides.ts';
+import { minutesByPart, minutesOf, reviewedMarkId, reviewProgress, type ReviewField } from '../meeting/review.ts';
 import {
   buildLines,
   lineText,
@@ -44,7 +49,7 @@ import {
   type Turn,
   type Word
 } from '../meeting/words.ts';
-import { mergeOfficial, officialLinks, parseOfficialUrl } from '../../../src/sync/official.js';
+import { isTimed, mergeOfficial, officialLinks, parseOfficialUrl, videoAt } from '../../../src/sync/official.js';
 
 // One meeting from the hub: its stills, chapters, votes, and transcript (the final one when it's ready, the quick
 // one while recording), with the word corrections and speakers everyone may see. Signed in, a click on a word of the
@@ -129,6 +134,18 @@ export default function MeetingPage() {
   // Links on phrases of the transcript (web pages, Bible passages), a mark per part.
   const scriptureSite = useScriptureSite();
   const linksFor = (part: string) => linksIn(stacks, id, part);
+  const slides = useSlides(id);
+  // Checking the transcript a minute at a time.
+  const checksOf = (part: string) => minutesOf(stacks, id, part);
+  const toggleMinute = (part: string, minute: number, field: ReviewField) => {
+    const minutes = checksOf(part);
+    const check = { ...minutes[minute], [field]: !minutes[minute]?.[field] };
+    return save(
+      reviewedMarkId(id, part),
+      { minutes: { ...minutes, [minute]: check } },
+      `${clock(minute * 60)}: ${field} ${check[field] ? 'checked' : 'not checked'}`
+    );
+  };
   const saveLink = (part: string, link: Omit<TranscriptLink, 'id'> & { id?: string }) => {
     const items = linksFor(part).filter((item) => item.id !== link.id);
     const saved = { ...link, id: link.id || newId() } as TranscriptLink;
@@ -415,7 +432,9 @@ export default function MeetingPage() {
             onAddFile={
               editChapters ? (chapter) => setAddingDocuments({ kind: 'chapter', chapterId: chapter.id }) : null
             }
+            slidesOf={(from, to) => (playing ? slidesIn(slides, playing.part, from, to) : [])}
           />
+          <SlidesPanel slides={slides} playAt={playing ? playAt : null} />
           <ConsentPanel
             items={consent}
             canEdit={editChapters}
@@ -458,6 +477,7 @@ export default function MeetingPage() {
             canEdit={Boolean(account.user)}
             playAt={playing ? playAt : null}
           />
+          <MeetingTasks recordingId={id} title={data.title} />
           <AttendancePanel
             recordingId={id}
             recording={data}
@@ -466,9 +486,27 @@ export default function MeetingPage() {
             nameOf={nameOf}
             canEdit={Boolean(account.user)}
             onSave={(next, message) => save(attendanceId, { ...next }, message)}
+            people={people}
+            moment={() => (playing ? { part: playing.part, seconds: follow.currentTime() } : null)}
+            onPlay={playing ? playAt : null}
+            onAddPerson={edits.newPerson}
           />
         </div>
         <Transcript
+          recordingId={id}
+          minuteChecks={kind === 'final' ? checksOf : undefined}
+          onMinuteCheck={toggleMinute}
+          progress={
+            kind === 'final' && (
+              <ReviewProgress
+                progress={reviewProgress(minutesByPart(lines), checksOf)}
+                onNext={(part, minute) => {
+                  document.querySelector(`[data-minute="${minute}"]`)?.scrollIntoView({ block: 'center' });
+                  if (canPlay(part)) playAt(part, minute * 60);
+                }}
+              />
+            )
+          }
           kind={kind}
           lines={lines}
           status={status}
@@ -499,6 +537,12 @@ export default function MeetingPage() {
           onUnlink={removeLink}
           documents={documents}
           around={around}
+          officialAt={
+            // The official video's times are lined up with a single-part recording's.
+            isTimed(official) && (data.parts || []).length <= 1
+              ? (_part, seconds) => videoAt(official, seconds)
+              : undefined
+          }
           onClip={(part, from, to, text) =>
             setClipDraft({ part, from, to, title: text.length > 60 ? `${text.slice(0, 57)}…` : text })
           }

@@ -1,37 +1,54 @@
-// Zoom area editor for the current view: a box per person, drawn on the current frame (or the view's picture).
+// Zoom area editor for the current view, over the video itself: its boxes are drawn on the playing video (which keeps
+// playing, so people can be watched moving in the shot), with the editor's controls under the player. Each person has
+// a box where they sit and their copy's box; what their copy shows (a larger copy, a picture in picture, or nothing);
+// and, for a copy, places from a moment on (keyframes).
 let zoomEditing = null;
 let zoomPerson = null;
 let zoomPicture = null;
+let zoomLoop = 0;
 const zoomCanvas = $('zoom-canvas');
+// What's on the player now (the video, or the frame picture before it has loaded).
+const liveSource = () => (playerReady && !video.hidden ? video : $('frame'));
 async function openZoomEditor() {
   const view = currentView;
   if (!view) {
     $('snapshot-status').textContent = 'Pick or create a camera view for this shot first (📷 above the transcript)';
     return;
   }
-  zoomEditing = { ...view, regions: { ...view.regions } };
+  // A copy of each area, so nothing changes until saved.
+  zoomEditing = {
+    ...view,
+    regions: Object.fromEntries(Object.entries(view.regions || {}).map(([id, region]) => [id, { ...region }])),
+    members: [...(view.members || [])]
+  };
   $('zoom-title').textContent = 'Zoom areas: ' + view.name;
   $('zoom-view-name').value = view.name;
   $('zoom-status').textContent = '';
   zoomPerson = voteData.members[0]?.id || null;
   renderZoomPeople();
-  await loadZoomPicture(playerReady);
+  // On the player: the canvas over the video, the controls just under it.
+  const stage = $('stage');
+  if (zoomCanvas.parentElement !== stage) stage.appendChild(zoomCanvas);
+  stage.after($('zoom-dialog'));
+  stage.classList.add('editing-view');
+  $('zoom-dialog').classList.add('docked');
+  loadZoomPicture();
   $('zoom-dialog').show();
+  // Drawn each frame while open, so copies follow the playing video.
+  const loop = () => {
+    drawZoomCanvas();
+    zoomLoop = requestAnimationFrame(loop);
+  };
+  cancelAnimationFrame(zoomLoop);
+  zoomLoop = requestAnimationFrame(loop);
 }
-async function loadZoomPicture(fromVideo) {
-  if (fromVideo && playerReady && video.videoWidth) {
-    zoomPicture = document.createElement('canvas');
-    zoomPicture.width = video.videoWidth;
-    zoomPicture.height = video.videoHeight;
-    zoomPicture.getContext('2d').drawImage(video, 0, 0);
-  } else {
-    zoomPicture = await new Promise((resolve) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = () => resolve(null);
-      image.src = zoomEditing.scene || currentSceneFile();
-    });
-  }
+$('zoom-dialog').addEventListener('close', () => {
+  cancelAnimationFrame(zoomLoop);
+  $('stage').classList.remove('editing-view');
+});
+function loadZoomPicture() {
+  zoomPicture = liveSource();
+  renderZoomMode();
   drawZoomCanvas();
 }
 function renderZoomPeople() {
@@ -55,6 +72,8 @@ function renderZoomPeople() {
     });
     box.appendChild(button);
   });
+  renderInView();
+  renderZoomMode();
   // Anyone else (presenters, staff) from a menu.
   const select = document.createElement('select');
   const first = document.createElement('option');
@@ -78,6 +97,42 @@ function renderZoomPeople() {
   });
   box.appendChild(select);
 }
+// Which voting members this camera view shows (when they're there): anyone with a box is; others can be checked
+// (seen, but too small or too far for a box) or not (out of the shot). Saved with the view as `members`.
+const inView = (id) => Boolean(zoomEditing.regions[id]) || zoomEditing.members.includes(id);
+function renderInView() {
+  const row = $('zoom-in-view');
+  row.textContent = '';
+  if (!voteData.members.length) return;
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = 'In this view';
+  row.appendChild(label);
+  voteData.members.forEach((member) => {
+    const item = document.createElement('label');
+    item.className = 'inline';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = inView(member.id);
+    box.disabled = Boolean(zoomEditing.regions[member.id]);
+    box.title = box.disabled ? 'Has a box, so is in this view' : '';
+    box.addEventListener('change', () => {
+      zoomEditing.members = box.checked
+        ? [...new Set([...zoomEditing.members, member.id])]
+        : zoomEditing.members.filter((id) => id !== member.id);
+    });
+    item.append(box, ' ' + lastName(peopleMap.get(member.id) || member));
+    row.appendChild(item);
+  });
+  const all = document.createElement('button');
+  all.type = 'button';
+  all.textContent = 'All of them';
+  all.addEventListener('click', () => {
+    zoomEditing.members = voteData.members.map((member) => member.id);
+    renderInView();
+  });
+  row.appendChild(all);
+}
 // Which box of the selected person is being edited: where they sit ('source') or their larger copy ('copy').
 let zoomEditBox = 'source';
 function setZoomEditBox(box) {
@@ -90,7 +145,9 @@ $('zoom-edit-source').addEventListener('click', () => setZoomEditBox('source'));
 $('zoom-edit-copy').addEventListener('click', () => setZoomEditBox('copy'));
 setZoomEditBox('source');
 const boxOf = (region, which) =>
-  which === 'copy' ? targetOf(region) : { x: region.x, y: region.y, w: region.w, h: regionHeight(region) };
+  which === 'copy'
+    ? targetAt(region, currentSeconds())
+    : { x: region.x, y: region.y, w: region.w, h: regionHeight(region) };
 // The 8 resize handles of a box: corners and edge midpoints, with which sides each one moves.
 function boxHandles(box) {
   const left = box.x,
@@ -111,13 +168,24 @@ function boxHandles(box) {
   ];
 }
 function drawZoomCanvas() {
-  if (!zoomPicture || !zoomEditing) return;
-  zoomCanvas.width = zoomPicture.width;
-  zoomCanvas.height = zoomPicture.height;
+  if (!zoomEditing) return;
+  zoomPicture = liveSource();
+  // The canvas covers the player; the video shows through it.
+  const stage = $('stage');
+  const ratio = window.devicePixelRatio || 1;
+  const canvasWidth = Math.round((stage.clientWidth || 960) * ratio);
+  const canvasHeight = Math.round((stage.clientHeight || 540) * ratio);
+  if (zoomCanvas.width !== canvasWidth) zoomCanvas.width = canvasWidth;
+  if (zoomCanvas.height !== canvasHeight) zoomCanvas.height = canvasHeight;
   const W = zoomCanvas.width;
   const H = zoomCanvas.height;
   const context = zoomCanvas.getContext('2d');
-  context.drawImage(zoomPicture, 0, 0, W, H);
+  if (!context || !context.clearRect) return;
+  context.clearRect(0, 0, W, H);
+  const pictureWidth = zoomPicture.videoWidth || zoomPicture.naturalWidth || 0;
+  const pictureHeight = zoomPicture.videoHeight || zoomPicture.naturalHeight || 0;
+  // (A picture still loading, or that didn't load, has no copy to show yet; its boxes still do.)
+  const pictureReady = pictureWidth > 0 && pictureHeight > 0;
   const line = Math.max(2, W / 400);
   context.font = '600 ' + Math.round(H * 0.022) + 'px system-ui, sans-serif';
   context.textBaseline = 'top';
@@ -134,7 +202,7 @@ function drawZoomCanvas() {
     context.fillText(text, x + line * 2, y + line);
   };
   const drawCopy = (region, active) => {
-    const target = targetOf(region);
+    const target = targetAt(region, currentSeconds());
     const border = Math.max(2, W / 320);
     context.save();
     context.globalAlpha = active ? 1 : 0.45;
@@ -148,17 +216,23 @@ function drawZoomCanvas() {
       target.h * H + border * 2
     );
     context.shadowColor = 'transparent';
-    context.drawImage(
-      zoomPicture,
-      region.x * zoomPicture.width,
-      region.y * zoomPicture.height,
-      region.w * zoomPicture.width,
-      regionHeight(region) * zoomPicture.height,
-      target.x * W,
-      target.y * H,
-      target.w * W,
-      target.h * H
-    );
+    // (A picture that didn't load can't be drawn from; its box still shows.)
+    if (pictureReady)
+      try {
+        context.drawImage(
+          zoomPicture,
+          region.x * pictureWidth,
+          region.y * pictureHeight,
+          region.w * pictureWidth,
+          regionHeight(region) * pictureHeight,
+          target.x * W,
+          target.y * H,
+          target.w * W,
+          target.h * H
+        );
+      } catch {
+        /* nothing to copy */
+      }
     context.restore();
   };
   const drawHandles = (box) => {
@@ -242,13 +316,20 @@ function resizedBox(box, sides, point, minimum) {
 function setZoomBox(which, box) {
   const region = zoomEditing.regions[zoomPerson];
   if (which === 'copy') {
-    region.target = box;
+    // From this moment on (a keyframe), or always.
+    if ($('zoom-keyframe').checked) {
+      const at = Math.round(currentSeconds() * 10) / 10;
+      region.moves = [...(region.moves || []).filter((move) => Math.abs(move.at - at) > 0.5), { at, target: box }].sort(
+        (a, b) => a.at - b.at
+      );
+    } else region.target = box;
     return;
   }
   // Changing where they sit keeps the larger copy where it is, at the same size (reshaped to match if needed).
   const target = targetOf(region);
   const shape = box.h / box.w;
   zoomEditing.regions[zoomPerson] = {
+    ...region,
     x: box.x,
     y: box.y,
     w: box.w,
@@ -330,7 +411,8 @@ $('zoom-area-remove').addEventListener('click', () => {
     drawZoomCanvas();
   }
 });
-$('zoom-frame').addEventListener('click', () => loadZoomPicture(true));
+// The video plays (and pauses) under the editor.
+$('zoom-frame').addEventListener('click', () => togglePlay());
 $('zoom-cancel').addEventListener('click', () => $('zoom-dialog').close());
 $('zoom-view-delete').addEventListener('click', async () => {
   if (!zoomEditing || !confirm('Delete the view "' + zoomEditing.name + '" and its zoom areas?')) return;
@@ -342,7 +424,9 @@ $('zoom-view-delete').addEventListener('click', async () => {
 $('zoom-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const name = $('zoom-view-name').value.trim() || zoomEditing.name;
-  const edited = { ...zoomEditing, name };
+  // Everyone with a box is in the view, with whoever else was checked.
+  const members = voteData.members.map((member) => member.id).filter(inView);
+  const edited = { ...zoomEditing, name, members };
   viewData.views = viewData.views.map((view) => (view.id === edited.id ? edited : view));
   if (await saveViews('Saved the zoom areas for ' + name)) {
     $('zoom-dialog').close();

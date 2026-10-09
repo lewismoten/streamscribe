@@ -21,6 +21,39 @@ export interface AgentStatus {
   job: { id: string; title: string; progress: number; message: string } | null;
   recordings: { title: string }[];
   capabilities?: Capabilities | null;
+  // What it found of its settings (src/recorder/agent-settings.js).
+  settings?: SettingsReport | null;
+}
+export interface PlaceStatus {
+  path: string;
+  ok: boolean;
+  freeGb?: number;
+  error?: string;
+  label?: string;
+  kind?: string;
+}
+export interface SettingsReport {
+  checkedAt: string | null;
+  workDir?: PlaceStatus;
+  data?: PlaceStatus;
+  storage?: PlaceStatus[];
+  ollama?: {
+    url: string;
+    ok: boolean;
+    ms?: number;
+    models?: { name: string; sizeGb: number }[];
+    error?: string;
+    checkedAt: string;
+  };
+  tailscale?: { ip: string; name: string; online: boolean; port: number; listening: boolean } | null;
+  peers?: { agentId: string; name: string; ok: boolean; ms?: number; error?: string }[];
+}
+// What an agent is told (collection agent_settings, id = its id).
+export interface AgentSettingsData {
+  workDir?: string;
+  storage?: { label: string; path: string; kind: 'local' | 'usb' | 'network' }[];
+  ollama?: { url: string; testAt?: string };
+  peerPort?: number;
 }
 // Agents added here (with an install command), as the hub keeps them.
 // Agents added here (with an install command), as the hub keeps them.

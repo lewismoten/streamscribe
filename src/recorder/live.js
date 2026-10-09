@@ -39,6 +39,7 @@ export function liveReports(context) {
       name: RECORDER.name,
       job,
       capabilities: context.capabilities,
+      settings: context.settings?.report() || null,
       version,
       freeGb: freeGigabytes(),
       clockSkewSeconds: hub.clockSkewSeconds,

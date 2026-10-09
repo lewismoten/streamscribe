@@ -2,6 +2,8 @@ import { Fragment, useRef, useState, type DragEvent, type PointerEvent } from 'r
 import { clock } from '../format.ts';
 import { mediaUrlOf } from '../pages/MeetingsPage.tsx';
 import type { Overlay } from './overlays.ts';
+import type { Layer } from './layers.ts';
+import LayerTrack from './LayerTrack.tsx';
 import { layout, type VideoItem } from './types.ts';
 
 // The video's timeline: a ruler (a click or a drag moves the playhead), the picture track (each clip a block as long
@@ -25,7 +27,11 @@ export default function Timeline({
   overlaysOf,
   onSeek,
   onSelect,
-  onChange
+  onChange,
+  layers = [],
+  selectedLayer = null,
+  onSelectLayer = () => {},
+  onLayerChange = () => {}
 }: {
   items: VideoItem[];
   time: number;
@@ -35,6 +41,10 @@ export default function Timeline({
   onSeek: (seconds: number) => void;
   onSelect: (key: string) => void;
   onChange: (items: VideoItem[]) => void;
+  layers?: Layer[];
+  selectedLayer?: string | null;
+  onSelectLayer?: (id: string) => void;
+  onLayerChange?: (layer: Layer) => void;
 }) {
   const [scale, setScale] = useState(4); // pixels a second
   const [trimming, setTrimming] = useState<{ key: string; from: number; to: number } | null>(null);
@@ -168,6 +178,15 @@ export default function Timeline({
               </span>
             ))}
           </div>
+          <LayerTrack
+            layers={layers}
+            scale={scale}
+            gutter={GUTTER}
+            total={total}
+            selected={selectedLayer}
+            onSelect={onSelectLayer}
+            onChange={onLayerChange}
+          />
           <div className="timeline-track video-track">
             <span className="track-label">Picture</span>
             {shown.map((item, index) => {

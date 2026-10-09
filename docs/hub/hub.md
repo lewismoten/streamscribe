@@ -48,6 +48,9 @@ Every record is `{ collection, id, data, rev, updated_at, updated_by, deleted, o
 | `bodies`            | public bodies (boards, committees, staff): how members are chosen, which meetings are theirs                                        | Edit public bodies permission                            |
 | `locations`         | places mentioned in meetings: a name, an address, GPS coordinates, a tax map id, and shapes on a map                                | the Chapters and the meeting name permission             |
 | `rooms`             | where meetings are held: a room in a building, its address, and the camera views its meetings share                                 | Edit public bodies permission                            |
+| `topics`            | subjects meetings discuss, tagged on transcript words (with stances)                                                                | the Chapters and the meeting name permission             |
+| `laws`              | laws and documents cited in meetings: level, kind, citation, where to read it                                                       | the Chapters and the meeting name permission             |
+| `library`           | links and pictures kept for videos' layers (private)                                                                                | the Camera views, audio boosts, and clips permission     |
 | `elections`         | an organization's elections: the day, a name, general, special, or primary                                                          | Edit public bodies permission                            |
 | `profiles`          | a person's formal name, nicknames, and ids on other sites (such as state election results)                                          | Edit public bodies permission                            |
 | `terms`             | who served on a body, as what, and when: elected, appointed, officer, staff, interim, candidate                                     | Edit public bodies permission                            |
@@ -137,6 +140,14 @@ This archive is independent, but it points to the originals. Each meeting keeps 
 - **Publications:** the official player embedded, "watch this part on the official site" at the same moment, the links, and each chapter's official moment and files.
 - **The podcast:** each episode's notes link to the official video at the clip's start.
 
+**Lined up with the official video.** Each transcript line's time has a small ↗ to the official video at the same
+moment, when the official video is lined up with the recording (a single-part recording). **Sync points…** (people
+who may edit chapters) lists matching moments, this recording's time and the official video's, with times between
+worked out in step: add one at the player's moment, type the official time, and put one on each side of anything the
+official video leaves out (a recess). build-meeting's points are the starting list. **Another video of the meeting**
+(YouTube, a town's site), with the time setting its address takes (`t` for YouTube), is linked at each moment the
+same way when there's no Swagit video.
+
 ## Publishing
 
 On a meeting page, people whose group may publish see a Publish panel:
@@ -225,11 +236,11 @@ People in terms are the ones on each source's roster. Saving a term lists the pe
 
 **Person pages** show a person's public service body by body, then (for people who may see meetings) the meetings they presided at, attended, or missed, or were expected at (on the body that day) and spoke in.
 
-**Attendance.** A meeting's Attendance panel lists the people on its body that day (from their terms) and anyone who spoke, to mark present or absent, and who presided. It's a mark (`<recording>:attendance`) with layers like the others, made public by the "Choose who is speaking" permission. When a recording isn't matched to the right body, choose it there.
+**Attendance.** A meeting's Attendance panel lists the people on its body that day (from their terms) and anyone who spoke, to mark present or absent, and who presided. **In the audience** tags anyone seen on a camera view that shows the audience (county staff, vendors, officials of other bodies, residents): pick them from the source's people, or add a new name and role, and they're tagged at the player's moment (a click on "seen at" goes back there); their page then lists the meeting as "In the audience". It's a mark (`<recording>:attendance`) with layers like the others, made public by the "Choose who is speaking" permission. When a recording isn't matched to the right body, choose it there.
 
 ## Rooms
 
-The Rooms page lists where meetings are held, by building (with its address and a map): a room (the Board Room) in a building (the Warren County Government Center). A room keeps the **camera views** its meetings share (a view is a camera angle with a zoom area for each seat, as the review page makes them).
+The Rooms page lists where meetings are held, by building (with its address and a map): a room (the Board Room) in a building (the Warren County Government Center). A room keeps the **camera views** its meetings share (a view is a camera angle with a zoom area for each seat, as the review page makes them). A view also says which voting members it shows (the review page's zoom editor: **In this view**, checked for anyone with a box and for others who are in the shot), and the room's page counts them.
 
 **A meeting's room** is the one chosen on its page (its Where panel; saved in its meeting-info mark), else its schedule's **Location**, else the room its body **usually meets in** (on the body's form). A schedule's location starts as its body's usual room. On a meeting's page, **Save this meeting's camera views to the room** shares them (people who may edit public bodies), and a meeting with none can **Use the room's camera views** (copied into its own views, so the review page has them too). A room's page shows its views, the bodies that usually meet there, what's coming up there, and (for people who may see meetings) the meetings held there.
 
@@ -238,6 +249,14 @@ The Rooms page lists where meetings are held, by building (with its address and 
 Selecting words in a meeting's transcript offers **Mark as a place…**: a dialog to choose a place already known (found by its name, road, route number, other names, address, or tax map id) or add one. A place is one thing, of one **type**: a place or building, a street address, a road, an area (outlined), an approximate area (a circle), a tax parcel, or a GPS point. The form shows what fits its type, all of it optional as long as something is given: a name (a business, an area, an HOA), a road's name and route number (Poe Drive, 682), a street address (town, county, state, ZIP), GPS coordinates, a tax map id, other names, and a note; and the map (OpenStreetMap; **Find** moves it to an address) draws its one shape. A GPS spot is a pin: a click places it, and it can be dragged. A road is drawn a click for each point: each goes straight into the place (saving keeps what's drawn), and **Finish this stretch** (or a double-click) ends a stretch, so the next click starts another; a road can have several, each with its own curve from straight to smooth, or be found on OpenStreetMap by its name or route number in the area shown (**Find this road**). An outline is drawn the same way; an approximate area is its middle, then its edge. Editing a road or outline: a click on it adds a point there; a click on a point selects it (Delete removes it); a point can be dragged, or right-clicked to remove it. While drawing, the map doesn't pan unless Shift (or Space) is held while dragging, and the pointer is a crosshair. A road's stretches are numbered on the map; hovering one in the list lights it up there (and hovering it on the map lights its row), and each can be hidden, zoomed to, kept alone (**Keep only this**), or removed; **Hide all** and **Remove the hidden ones** clear out a road search that found too many. **Undo** (or Ctrl/⌘+Z when not typing) takes back the latest change to the map, and changing the type keeps the map where it is. Password managers are told to leave the form alone. The words get a 📍 link to the place, here and in published transcripts.
 
 A place is called by its name, else its road (Poe Drive (Route 682)), else its street address (with its town, county, and ZIP when they aren't the meeting room's), else its coordinates, else its tax map id. The **Locations** tab shows every place on a map and in a list grouped by type, with how often each has come up; a place's page has its details, its map, and each time it was mentioned (for people who may see meetings), linked to that moment. Places are the public collection `locations`; the links are the transcript's `links` marks.
+
+## Slides
+
+Slides shown during a meeting ([extract-slides](../media/extract-slides.md), their text read by
+[ocr-slides](../media/ocr-slides.md)) go to the hub with the meeting (collection `slides`, private): its page has a
+**Slides** panel (each picture with when it was first shown and how often, found by the words on it; a click opens it
+large with its text and every time it was shown), and small pictures of up to five slides beside each chapter they
+were shown in.
 
 ## Consent agenda and documents
 
@@ -250,6 +269,16 @@ Selecting words in the transcript also offers **Link to a meeting document…**:
 **Clips** are stretches of meetings saved to build videos from: on a meeting's page, select words in its transcript and choose **Save as a clip…** (its title starts as those words; its start and end can be adjusted). A meeting's **Clips** panel lists its clips (each plays from its start, can be changed or removed, or added to a video), and brings in the review page's playlist (**Bring in N clips…**) for clips there that aren't clips yet.
 
 **Videos** (the Videos page) are clips of any meetings in order, put together like a movie: the clip library on the left, the preview in the middle (each meeting's sound and picture played together, with its overlays), the selected clip's settings on the right (its name, exact start and end, volume or muted, earlier or later), and the timeline along the bottom. On the timeline, clips are dragged before or after each other, their ends dragged to trim them, split at the playhead (✂ Split, or S), and deleted (Delete); each shows tiny pictures of what's shown along it; the sound track shows each clip's volume, and a track shows who is speaking when. Zoom changes how much fits; a click or drag on the ruler moves the playhead (Space plays and pauses). **Overlays** (who is speaking, with their role; the public body; the chapter; the time of day, to the minute; votes as they're taken) come from the meetings' marks and can each be turned off.
+
+**Layers** go over the clips (later ones on top): QR codes (a library link or a meeting's document, with a title,
+colors, error correction, and size), a QR code to the official video at the moment shown (changing each second),
+pictures (uploaded to the hub's private store; any part of a large picture, zoomed and panned), a part of the video
+itself shown again (picture in picture), and blurred areas (rectangle, oval, or a drawn shape; blurred, pixelated, or
+blacked out, as for children in the audience). Each shows for a stretch of the video, with a fade, at a fixed size;
+drag it on the preview and a keyframe is made at the playhead, and it moves in step between keyframes (pictures also
+keyframe their zoom and pan). The timeline has a row per layer (drag to move it in time, drag its ends), and the
+**Over the video** panel holds the **Library** (collection `library`, shared by every video): drag a link or picture
+onto the preview, or press its ＋.
 
 **Render…** (the Publish permission) has an agent with the meetings' recordings make it from them (not the hub's small copies): **standard** (720p, for the web) or **production** (1080p, from the recordings at their best), with the overlays drawn on. It goes to **the hub** (a public page for it, saying which meetings its clips come from; rendering again replaces it) or **a folder** on the agent (or a network folder it can reach; `~/streamscribe-videos` unless given), on a chosen agent or any that has the recordings. A notification says when it's ready, and where (a page, or the file's location on the agent). Clips and videos are private, like the meetings; a video keeps its own copy of each clip's range, so changing a clip later doesn't change a video.
 
@@ -266,6 +295,41 @@ Selecting words in the transcript also offers **Link to a meeting document…**:
 **Prayer.** A meeting's Prayer panel says who led prayer (a prayer, an invocation, a moment of silence, a reading), when, and their church, denomination, and tradition (Front Royal Church of the Nazarene, Church of the Nazarene, Christian). A person's church is kept once for the source (its `faith` mark) and filled in the next time they pray; a denomination already known fills in its tradition. Each meeting's prayers are its `prayers` mark. Both are private, like the meetings.
 
 **The Religion page** is an internal reference, only for people who may see meetings and edit public bodies (never shown to the public): every prayer, counted by tradition, denomination, church, and person so a rotation shows, filtered by body and year; every passage named in a transcript, by book; and where passages link.
+
+## Notes, topics, quotes, and laws
+
+Selecting words in a transcript also offers four ways to say something about them (kept on the part's `links` mark,
+like links, and never published):
+
+- **Add a note…**: text, with links to moments: of this meeting (plays there), of another meeting here (its part and
+  time), or a video elsewhere.
+- **Tag a topic…**: a topic (collection `topics`; typed new or picked) and the speaker's stance: for, against, mixed,
+  or neither. The **Topics** page lists them by how often they come up; a topic's page lists each meeting with up to
+  five of its chapters, five speakers (vendors first, then voting members, staff, and residents), and five moments.
+- **Mark as a quote…**: the actual words, who the speaker attributes them to, who really said them, where they're
+  from, and a link. The **Quotes** page lists every quote, found by its words, author, or who quoted it.
+- **Cite a law or document…**: federal, state, county, or town; a code section, act, bill, ordinance, resolution,
+  regulation, or document; its citation and where to read it (collection `laws`), and the section meant. The **Laws**
+  page groups them by level or kind (public); a law's page lists where it was cited.
+
+Each shows as a marker after its words (📝, 🏷, ❝, ⚖); a click shows it, with Change and Remove. Topics, Quotes,
+and the moments behind Laws are for people who may see meetings; topics and laws are written with the "chapters"
+permission.
+
+## Tasks (language models)
+
+The **Tasks** page (under Research, for people who may see meetings; changed by people who may publish) keeps prompts
+for agents to run on a meeting's transcript with a language model on your network: an Ollama server an agent is set up
+to use (its Agents card). **Add the suggested tasks** adds a dozen: a summary, meeting minutes, an article with where
+screenshots go, a YouTube title, description, and chapter markers, a blog post, past meetings on the same topics,
+topics with when, notes and links, people, places, topics, and events, an analysis of the meeting (how it was run,
+what members cared about, speakers' backgrounds, what's newsworthy), a playlist of public comments, and questions to
+follow up. Each is a prompt with the meeting in its placeholders (`{{title}}`, `{{transcript}}` with speakers and
+times, `{{chapters}}`, `{{votes}}`, `{{speakers}}`, `{{stills}}`, `{{official}}`, `{{pastMeetings}}`, …), a model
+(the agent's first unless chosen), and **Run after each meeting**, which queues it for every meeting that finishes from
+then on. A meeting's **Tasks** panel runs one (a `prompt` job any agent with a working Ollama server takes) and shows
+each answer (collection `prompt_results`), with its model and a Copy button. A transcript too long for one request is
+read in parts first, and the notes on each stand in for it.
 
 ## Schedules
 
@@ -297,6 +361,9 @@ A schedule says when a meeting happens, in its own time zone, so a 6 pm meeting 
 - **Cancellations and moves:** `exdates` cancels single meetings and `overrides` moves or shortens one. Both name the meeting by its original start.
 - **`overrun`** (optional): when the recorder stops after the scheduled end, in place of its own `recorder.overrun` settings (docs/recorder/recorder.md).
 - **`preferredRecorder`** (optional): a recorder id. That recorder starts at the lead time; others wait until the scheduled start and take the meeting only if it hasn't.
+
+- **`notStreamed`** (optional): a meeting held without a livestream (no live or archived video or audio), listed so
+  it's known (tagged "not streamed") and needing no source; recorders leave it alone. The form's checkbox sets it.
 
 Recorders and the web app work out the dates (`src/sync/recurrence.js`); the hub only stores schedules.
 

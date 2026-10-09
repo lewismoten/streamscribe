@@ -8,11 +8,13 @@ import { SqliteStore } from '../sync/stores/node-sqlite.js';
 import { upcoming } from '../sync/recurrence.js';
 import { isAlive } from '../capture/jobs.js';
 import { overrunSettings } from './overrun.js';
-import { hubConfigured } from './hub-api.js';
+import { hubConfigured, hubGet } from './hub-api.js';
 import { quickTranscribe } from './quick-transcribe.js';
 import { syncMarks } from './marks.js';
 import { jobRunner } from './jobs.js';
 import { detectCapabilities } from './capabilities.js';
+import { agentSettings } from './agent-settings.js';
+import { queueAutoPrompts } from './prompts.js';
 import { recordingControl } from './recordings.js';
 import { liveReports } from './live.js';
 
@@ -69,12 +71,31 @@ export async function main() {
   if (!hubConfigured())
     log('No hub configured (recorder.hubUrl and recorder.key in config.local.js): recording from local schedules only');
 
-  const timers = { sync: 0, heartbeat: 0, thumbnail: 0, quick: 0, marks: 0, register: 0, jobs: 0 };
+  const timers = { sync: 0, heartbeat: 0, thumbnail: 0, quick: 0, marks: 0, register: 0, jobs: 0, tasks: 0 };
   // What the recordings and live reports share with the loop: publishing is the publish under way (or null), and
   // capabilities what this machine can do.
-  const context = { state, client, log, save, version, jobs: null, capabilities: null, publishing: null };
+  const context = {
+    state,
+    client,
+    log,
+    save,
+    version,
+    jobs: null,
+    capabilities: null,
+    publishing: null,
+    settings: null
+  };
+  // What the hub's Agents page tells this agent (its working folder, storage to watch, Ollama, pings), and what it finds.
+  const told = agentSettings({ client, hubGet, log });
+  context.settings = told;
   const { findRecording, startRecording, startProcesses, followRecording, publishFinished } = recordingControl(context);
-  const jobs = jobRunner({ client, findRecording, log });
+  const jobs = jobRunner({
+    client,
+    findRecording,
+    log,
+    workDir: () => told.workDir(),
+    settings: () => told.report()
+  });
   context.jobs = jobs;
   const { heartbeat, sendLiveThumbnail } = liveReports(context);
   // What this machine can do (shown on the Agents page), checked now and hourly.
@@ -133,6 +154,7 @@ export async function main() {
   }
   log('Recorder stopping (captures it started keep running; starting the recorder again picks them up)');
   await jobs.stop();
+  told.stop();
   if (context.publishing) {
     log('Waiting for publishing to finish');
     await context.publishing;
@@ -167,10 +189,13 @@ export async function main() {
       });
     }
 
-    // 2. Meetings of the sources this recorder handles, from a day ago to two weeks ahead.
+    // 2. Meetings of the sources this recorder handles, from a day ago to two weeks ahead (not ones held without a
+    // livestream: they're on the calendar only so they're known).
     const schedules = (await client.list('schedules')).map((record) => ({ ...record.data, id: record.id }));
     const occurrences = upcoming(
-      schedules.filter((schedule) => handled.some((source) => source.key === schedule.sourceKey)),
+      schedules.filter(
+        (schedule) => !schedule.notStreamed && handled.some((source) => source.key === schedule.sourceKey)
+      ),
       now - 86400000,
       now + 14 * 86400000
     );
@@ -197,6 +222,15 @@ export async function main() {
     }
     for (const recording of Object.values(state.recordings)) {
       if (recording.status === 'recording') await followRecording(recording, now);
+    }
+
+    // Its settings from the hub, checked (reported at once when they've changed).
+    if (hubConfigured()) {
+      try {
+        if (await told.tick(now, { version })) timers.heartbeat = 0;
+      } catch (error) {
+        log(`Settings: ${error.message}`);
+      }
     }
 
     // 4. Live reports: state (and the lease) now and then, a picture, and quick transcripts.
@@ -234,7 +268,18 @@ export async function main() {
       await syncMarks(state, client);
     }
 
-    // 7. Work from the hub's queue (jobs.js): clips to cut, recordings to encode.
+    // Tasks to run after each meeting (prompts marked automatic), queued for any agent with Ollama to take.
+    if (hubConfigured() && now >= timers.tasks) {
+      timers.tasks = now + 5 * 60000;
+      try {
+        const queued = await queueAutoPrompts(client);
+        if (queued) log(`Queued ${queued} automatic task${queued === 1 ? '' : 's'}`);
+      } catch (error) {
+        log(`Automatic tasks: ${error.message}`);
+      }
+    }
+
+    // 7. Work from the hub's queue (jobs.js): clips to cut, recordings to encode, tasks to run.
     if (hubConfigured() && now >= timers.jobs) {
       timers.jobs = now + 10000;
       try {

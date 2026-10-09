@@ -220,6 +220,26 @@ if ($method === 'POST' && $route === 'live') {
   hub_send(200, ['ok' => true, 'time' => hub_now()]);
 }
 
+// Pinging an agent from the hub, at the Tailscale address it reports (works when the hub's server is on the same
+// tailnet): { ok, ms } or { ok: false, error }.
+if ($method === 'POST' && $route === 'agent-ping') {
+  hub_require_permission($viewer, 'view.meetings');
+  $input = hub_json_body(4096);
+  $statement = $db->prepare('SELECT body FROM live WHERE recorder_id = ?');
+  $statement->execute([(string)($input['agentId'] ?? '')]);
+  $body = json_decode((string)$statement->fetchColumn(), true);
+  $address = $body['status']['settings']['tailscale'] ?? null;
+  $ip = (string)($address['ip'] ?? '');
+  $port = (int)($address['port'] ?? 4874);
+  if (!filter_var($ip, FILTER_VALIDATE_IP) || $port < 1 || $port > 65535) hub_send(200, ['ok' => false, 'error' => 'This agent reports no Tailscale address']);
+  $started = microtime(true);
+  $context = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => true]]);
+  $reply = @file_get_contents("http://$ip:$port/ping", false, $context);
+  $answer = $reply === false ? null : json_decode($reply, true);
+  hub_send(200, $answer ? ['ok' => true, 'ms' => (int)round((microtime(true) - $started) * 1000), 'id' => $answer['id'] ?? null]
+    : ['ok' => false, 'error' => "No answer from $ip:$port (is the hub's server on the tailnet?)"]);
+}
+
 if ($method === 'GET' && $route === 'live') {
   // What's being recorded is part of the meetings: private.
   if ($viewer['kind'] !== 'key') hub_require_permission($viewer, 'view.meetings');
@@ -228,7 +248,9 @@ if ($method === 'GET' && $route === 'live') {
 }
 
 if ($method === 'POST' && ($route === 'media' || $route === 'live-thumbnail')) {
-  hub_require($config, $route === 'media' ? ['editor', 'recorder'] : ['recorder']);
+  // Pictures for videos' layers can also come from people who may make videos (signed in).
+  if ($route === 'media' && $viewer['kind'] !== 'key') hub_require_permission($viewer, 'contribute.other');
+  else hub_require($config, $route === 'media' ? ['editor', 'recorder'] : ['recorder']);
   $types = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
   $type = (string)($_GET['type'] ?? 'image/jpeg');
   if (!isset($types[$type])) hub_fail(415, 'JPEG, PNG, or WebP images only');

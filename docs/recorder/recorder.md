@@ -95,6 +95,27 @@ The recorder is also an agent: it takes work from the hub's queue, cutting publi
 - **Uploads.** Results go up through the hub's API in pieces, with the agent's own key, so no SSH access to the server is needed.
 - **Keep it running.** It only works while `npm run recorder` is running; see below.
 
+## Settings from the hub
+
+Each agent card on the hub's Agents page has **Storage, Ollama, and network**: what the agent found, and (for people
+who may edit sources) its settings, kept in the hub's `agent_settings` record for it and picked up within a minute
+(`src/recorder/agent-settings.js`):
+
+- **Working files**: where temporary files and renders go (a local drive, a USB drive, a network folder); the
+  system's temporary folder unless set, or if it can't be written. Recordings stay where `config.local.js` says (each
+  source's `storageDir`), so a meeting's files are never split between drives.
+- **Storage to watch**: more places (each a local drive, USB drive, or network folder), each reported as there and
+  writable or not, with its free space; so is the working folder and the recordings' folder.
+- **Ollama server**: its address on the network (such as `http://100.64.0.5:11434`); the agent lists its models every
+  15 minutes, and at once with **Test Ollama**.
+- **Pings**: on [Tailscale](https://tailscale.com), the agent answers `GET /ping` on its Tailscale address (port 4874
+  unless set; on no other address), pings the other agents at the addresses they report, and says which it reached.
+  **Ping from the hub** asks the hub to ping it, which works when the hub's server is on the same tailnet.
+
+**Tasks**: an agent whose Ollama server answers takes `prompt` jobs (a task from the hub's Tasks page, on one
+meeting), and every five minutes queues the tasks marked to run after each meeting for meetings that have finished
+since (`src/recorder/prompts.js`).
+
 ## Keeping it running (macOS)
 
 A launchd agent starts the recorder at login, restarts it if it stops, and keeps the Mac from sleeping while it runs. Save it as `~/Library/LaunchAgents/com.streamscribe.recorder.plist`, with the paths changed to yours:

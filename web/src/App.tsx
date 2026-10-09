@@ -30,6 +30,14 @@ import LocationPage from './locations/LocationPage.tsx';
 import RoomPage from './rooms/RoomPage.tsx';
 import VideoPage from './videos/VideoPage.tsx';
 import AgentsPage from './pages/AgentsPage.tsx';
+import NavMenu from './NavMenu.tsx';
+import TopicsPage from './annotations/TopicsPage.tsx';
+import TopicPage from './annotations/TopicPage.tsx';
+import QuotesPage from './annotations/QuotesPage.tsx';
+import LawsPage from './annotations/LawsPage.tsx';
+import LawPage from './annotations/LawPage.tsx';
+import TasksPage from './prompts/TasksPage.tsx';
+import { MapPage, MapsPage } from './maps/MapsPage.tsx';
 import SetupPage from './pages/SetupPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
@@ -84,19 +92,33 @@ export default function App() {
             Published
           </NavLink>
           {(local || viewer) && <NavLink to="/meetings">Meetings</NavLink>}
-          <NavLink to="/people">People</NavLink>
-          <NavLink to="/bodies">Bodies</NavLink>
-          <NavLink to="/elections">Elections</NavLink>
-          <NavLink to="/rooms">Rooms</NavLink>
-          <NavLink to="/locations">Locations</NavLink>
-          {/* An internal reference: never for the public. */}
-          {viewer && can('edit.bodies', account) && <NavLink to="/religion">Religion</NavLink>}
           {viewer && <NavLink to="/videos">Videos</NavLink>}
           {viewer && <NavLink to="/live">Live</NavLink>}
-          {viewer && <NavLink to="/agents">Agents</NavLink>}
           <NavLink to="/schedules">Schedules</NavLink>
-          {(can('manage.users', account) || can('review', account)) && <NavLink to="/accounts">Accounts</NavLink>}
-          <NavLink to="/settings">Settings</NavLink>
+          <NavMenu label="Public bodies" paths={['/people', '/bodies', '/elections', '/rooms']}>
+            <NavLink to="/people">People</NavLink>
+            <NavLink to="/bodies">Bodies</NavLink>
+            <NavLink to="/elections">Elections</NavLink>
+            <NavLink to="/rooms">Rooms</NavLink>
+          </NavMenu>
+          <NavMenu
+            label="Research"
+            paths={['/topics', '/quotes', '/laws', '/locations', '/maps', '/religion', '/tasks']}
+          >
+            {viewer && <NavLink to="/topics">Topics</NavLink>}
+            {viewer && <NavLink to="/quotes">Quotes</NavLink>}
+            <NavLink to="/laws">Laws</NavLink>
+            <NavLink to="/locations">Locations</NavLink>
+            <NavLink to="/maps">Maps</NavLink>
+            {viewer && <NavLink to="/tasks">Tasks</NavLink>}
+            {/* An internal reference: never for the public. */}
+            {viewer && can('edit.bodies', account) && <NavLink to="/religion">Religion</NavLink>}
+          </NavMenu>
+          <NavMenu label="Manage" paths={['/agents', '/accounts', '/settings']}>
+            {viewer && <NavLink to="/agents">Agents</NavLink>}
+            {(can('manage.users', account) || can('review', account)) && <NavLink to="/accounts">Accounts</NavLink>}
+            <NavLink to="/settings">Settings</NavLink>
+          </NavMenu>
           <NavLink to="/account" className="account-link">
             {account.user ? `👤 ${account.user.displayName || account.user.username}` : 'Sign in'}
           </NavLink>
@@ -141,6 +163,14 @@ export default function App() {
             <Route path="/locations" element={<LocationsPage />} />
             <Route path="/locations/:id" element={<LocationPage />} />
             <Route path="/rooms" element={<RoomsPage />} />
+            <Route path="/topics" element={<TopicsPage />} />
+            <Route path="/topics/:id" element={<TopicPage />} />
+            <Route path="/quotes" element={<QuotesPage />} />
+            <Route path="/laws" element={<LawsPage />} />
+            <Route path="/laws/:id" element={<LawPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/maps" element={<MapsPage />} />
+            <Route path="/maps/:id" element={<MapPage />} />
             <Route path="/rooms/:id" element={<RoomPage />} />
             <Route path="/videos" element={<VideosPage />} />
             <Route path="/videos/:id" element={<VideoPage />} />

@@ -315,3 +315,168 @@ button.player-picture {
 .document-pick .link-button {
   text-align: left;
 }
+/* Notes, topics, quotes, and laws cited on the transcript's words (see web/src/annotations). */
+.transcript-link.annotation {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.annotation-topic {
+  color: #6a4fb3;
+}
+.annotation-quote {
+  font-style: italic;
+}
+.note-ref {
+  align-items: end;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.note-text {
+  white-space: pre-wrap;
+}
+blockquote.quote {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid var(--accent);
+}
+.topic-list,
+.quote-list {
+  list-style: none;
+  padding: 0;
+}
+.topic-list li {
+  padding: 4px 0;
+}
+.tag.stance-for {
+  background: color-mix(in srgb, #1f8a4c 20%, transparent);
+}
+.tag.stance-against {
+  background: color-mix(in srgb, #c8412f 20%, transparent);
+}
+.tag.stance-mixed {
+  background: color-mix(in srgb, #b26b00 20%, transparent);
+}
+/* The official video at a transcript line's moment, beside its time. */
+.official-at {
+  margin-left: 2px;
+  font-size: 0.75em;
+  text-decoration: none;
+  opacity: 0.55;
+}
+.official-at:hover,
+.official-at:focus-visible {
+  opacity: 1;
+}
+.sync-points table input {
+  width: 7em;
+}
+/* Checking the transcript a minute at a time (see web/src/meeting/review.ts). */
+.minute-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.minute-check.done {
+  border-top-color: color-mix(in srgb, #1f8a4c 60%, transparent);
+}
+.minute-time {
+  font-variant-numeric: tabular-nums;
+}
+.check-toggle {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+button.check-toggle {
+  cursor: pointer;
+}
+.check-toggle.on {
+  border-color: #1f8a4c;
+  color: #1f8a4c;
+}
+.review-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.review-progress meter {
+  width: 120px;
+}
+/* Tasks (web/src/prompts): their answers on a meeting's page, and the list of tasks. */
+.task-results,
+.task-list {
+  list-style: none;
+  padding: 0;
+}
+.task-results li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+.task-text {
+  white-space: pre-wrap;
+  max-height: 420px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--code);
+  font-size: 0.9rem;
+}
+/* Slides shown during the meeting (web/src/meeting/SlidesPanel.tsx), and beside chapters. */
+.slide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+}
+.slide-thumb {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+.slide-thumb img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.slide-large {
+  width: 100%;
+  border-radius: 8px;
+}
+.chapter-slides {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.chapter-slide {
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+.chapter-slide img {
+  width: 40px;
+  height: 22px;
+  object-fit: cover;
+}

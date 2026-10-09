@@ -293,3 +293,7 @@ label.block textarea,
 .building {
   margin-bottom: 24px;
 }
+/* A meeting held without a livestream (no live or archived video or audio). */
+.tag.not-streamed {
+  background: color-mix(in srgb, #b26b00 18%, transparent);
+}

@@ -21,6 +21,11 @@ function setOverlay(mode) {
   updateOverlay();
 }
 $('overlay-mode').addEventListener('change', () => setOverlay($('overlay-mode').value));
+$('clock-format').value = clockLook;
+$('clock-format').addEventListener('change', () => {
+  setClockFormat($('clock-format').value);
+  updateOverlay();
+});
 try {
   // Earlier pages had a single "Show clock" checkbox, which showed both.
   setOverlay(

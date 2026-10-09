@@ -114,3 +114,25 @@ test('times: lined up by matching points, by an offset, or not claimed', () => {
   assert.equal(officialTime({ swagit }, 100), null, 'not lined up: no time claimed');
   assert.equal(swagitAt({ swagit }, 100), 'https://warrencountyva.new.swagit.com/videos/403089');
 });
+
+test('another video (YouTube) lined up by sync points, linked at its time', async () => {
+  const { videoAt, isTimed } = await import('../src/sync/official.js');
+  const official = {
+    video: {
+      url: 'https://www.youtube.com/watch?v=abc',
+      param: 't',
+      // The archive left out a 10-minute recess at 1:00:00 of this recording.
+      timeline: [
+        [0, 30],
+        [3600, 3630],
+        [4200, 3630]
+      ]
+    }
+  };
+  assert.equal(isTimed(official), true);
+  assert.equal(videoAt(official, 60), 'https://www.youtube.com/watch?v=abc&t=90');
+  assert.equal(videoAt(official, 4300), 'https://www.youtube.com/watch?v=abc&t=3730');
+  assert.equal(officialLinks(official, { at: 60 })[0].url, 'https://www.youtube.com/watch?v=abc&t=90');
+  assert.equal(isTimed({ video: { url: 'https://example.com/v' } }), false);
+  assert.equal(videoAt({ video: { url: 'https://example.com/v' } }, 60), 'https://example.com/v');
+});

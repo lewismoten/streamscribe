@@ -8,6 +8,7 @@ import { makeClip } from '../media/encode.js';
 import { publishMedia } from '../media/publish-media.js';
 import { claim } from './hub-api.js';
 import { hubFiles, sha256 } from './hub-files.js';
+import { runPrompt } from './prompts.js';
 
 // Work for agents: the hub only keeps the queue (`jobs` records, written by the web app or by agents); agents (the
 // recorder service, on machines with the video) do the work. Each tick an idle agent takes the oldest queued job it
@@ -19,9 +20,11 @@ import { hubFiles, sha256 } from './hub-files.js';
 //   encode  { recordingId }  make and upload the recording's private audio and silent video (publish-media.js)
 //   video   { publicationId, items: [{ recordingId, part, from, to }] }  cut each clip (from recordings this agent has,
 //           all of them), join them into one MP4 and M4A (compose.js), upload them to the publication, and mark it ready
+//   prompt  { recordingId, promptId }  run a task on the meeting with this agent's Ollama server (prompts.js), its
+//           answer saved in prompt_results (any agent whose Ollama server answers can do it)
 const LEASE_SECONDS = 180;
 
-export function jobRunner({ client, findRecording, log }) {
+export function jobRunner({ client, findRecording, log, workDir = () => os.tmpdir(), settings = () => ({}) }) {
   let current = null;
   let stopping = false;
 
@@ -97,7 +100,7 @@ export function jobRunner({ client, findRecording, log }) {
         const found = findRecording(job.recordingId, job.part);
         const publication = await client.get('publications', job.publicationId);
         if (!publication) throw new Error('The publication is gone (unpublished)');
-        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'streamscribe-clip-'));
+        const tempDir = fs.mkdtempSync(path.join(workDir(), 'streamscribe-clip-'));
         try {
           const session = await loadSessionSegments(found.dir);
           const made = await makeClip(found.dir, session, {
@@ -126,7 +129,7 @@ export function jobRunner({ client, findRecording, log }) {
         if (toHub && !(await client.get('publications', job.publicationId)))
           throw new Error('The publication is gone (unpublished)');
         const quality = job.output?.quality === 'production' ? 'production' : 'standard';
-        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'streamscribe-video-'));
+        const tempDir = fs.mkdtempSync(path.join(workDir(), 'streamscribe-video-'));
         try {
           const pieces = [];
           const share = 0.8 / job.items.length;
@@ -145,6 +148,15 @@ export function jobRunner({ client, findRecording, log }) {
             pieces.push({ video: made.video, overlays: item.overlays || [], volume: item.volume, muted: item.muted });
           }
           progress(0.82, 'Joining the clips');
+          // The layers' pictures, from the hub.
+          const layers = [];
+          for (const [index, layer] of (job.layers || []).entries()) {
+            if (layer.kind !== 'image') layers.push(layer);
+            else if (layer.image) {
+              const file = path.join(tempDir, `layer-${index}${path.extname(layer.image)}`);
+              layers.push({ ...layer, file: await hubFiles().download(layer.image, file, { signal }) });
+            }
+          }
           const video = path.join(tempDir, 'video.mp4');
           const audio = path.join(tempDir, 'video.m4a');
           const size = await joinClips(pieces, {
@@ -152,7 +164,8 @@ export function jobRunner({ client, findRecording, log }) {
             audio,
             height: quality === 'production' ? 1080 : 720,
             tempDir,
-            signal
+            signal,
+            layers
           });
           if (toHub) {
             progress(0.92, 'Uploading');
@@ -187,6 +200,13 @@ export function jobRunner({ client, findRecording, log }) {
       async failed(job, error) {
         if ((job.output?.destination || 'hub') === 'hub') await markFailed(job, error);
         await notify(job, `“${job.videoTitle || job.title}” couldn't be made`, error.message, { problem: true });
+      }
+    },
+    prompt: {
+      canDo: (job) => Boolean(settings().ollama?.ok) && (!job.forAgent || job.forAgent === RECORDER.id),
+      run: (job, { signal, progress }) => runPrompt(job, { client, ollama: settings().ollama, signal, progress }),
+      async failed(job, error) {
+        await notify(job, `“${job.title}” couldn't be done`, error.message, { problem: true });
       }
     },
     encode: {

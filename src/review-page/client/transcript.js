@@ -196,9 +196,10 @@ function renderTranscript() {
     row.className = 'turn ' + (ids.length && ids.every((id) => votingIds.has(id)) ? 'right' : 'left');
     const face = document.createElement('div');
     face.className = 'face';
-    // Faces at the start of each speaker change (and again after a heading, camera change, or gap).
+    // Faces beside every group of their words: full size where the speaker changes (and after a heading or camera
+    // change), smaller where the same people carry on after a minute mark, a vote, or a gap.
     const key = ids.join(',');
-    if (ids.length && key !== previousSpeakers) {
+    if (ids.length) {
       ids.forEach((id) => {
         const person = peopleMap.get(id) || { id, name: id };
         const item = document.createElement('span');
@@ -214,7 +215,7 @@ function renderTranscript() {
         item.append(avatar(person), label);
         face.appendChild(item);
       });
-      row.classList.add('first');
+      row.classList.add(key !== previousSpeakers ? 'first' : 'again');
     }
     previousSpeakers = key;
     const body = document.createElement('div');

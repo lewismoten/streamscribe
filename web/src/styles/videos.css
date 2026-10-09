@@ -410,3 +410,149 @@
 .notice-location code {
   word-break: break-all;
 }
+/* Overlays slide in as they change (each change is a new element). */
+.preview-overlay {
+  animation: preview-overlay-in 0.3s ease-out;
+}
+@keyframes preview-overlay-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4em);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preview-overlay {
+    animation: none;
+  }
+}
+/* Layers over the preview (see web/src/videos/layers.ts): drawn on a canvas, the selected one in a box to move. */
+.editor-left {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.layer-frame {
+  position: absolute;
+  inset: 0;
+}
+.layer-frame.editable {
+  cursor: default;
+}
+.layer-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.layer-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dashed #ffd166;
+  box-shadow: 0 0 0 1px #0008;
+  cursor: move;
+  touch-action: none;
+}
+.layer-box.drawing {
+  cursor: crosshair;
+}
+.layer-resize {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #000;
+  background: #ffd166;
+  cursor: nwse-resize;
+}
+.layer-track .layer-block {
+  background: color-mix(in srgb, #6a4fb3 35%, var(--card));
+  touch-action: none;
+  cursor: grab;
+}
+.layer-block.layer-blur {
+  background: color-mix(in srgb, #888 40%, var(--card));
+}
+.layer-block.layer-image,
+.layer-block.layer-pip {
+  background: color-mix(in srgb, #1f8a4c 30%, var(--card));
+}
+.layer-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: #0003;
+}
+.layer-edge.start {
+  left: 0;
+}
+.layer-edge.end {
+  right: 0;
+}
+.layer-key {
+  position: absolute;
+  bottom: 2px;
+  width: 7px;
+  height: 7px;
+  margin-left: -3px;
+  background: #ffd166;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.library-list {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+.library-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: grab;
+}
+.library-item:hover {
+  background: var(--code);
+}
+.keyframes {
+  list-style: none;
+  padding: 0;
+}
+.timeline-track.layer-track {
+  height: 30px;
+}
+.layer-block .block-select {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.library-panel form input {
+  min-width: 0;
+  flex: 1 1 8em;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+}
+.timeline-track.layer-track {
+  height: 30px;
+}
+.layer-block .block-select {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.library-panel form input {
+  min-width: 0;
+  flex: 1 1 8em;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+}

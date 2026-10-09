@@ -28,7 +28,15 @@ function updateAgendaCurrent() {
   }
   // The item being played, on the video (under the meeting name) when "Show agenda item" is checked.
   const overlay = $('agenda-overlay');
-  if (!inlineEditing) overlay.textContent = index < 0 ? '' : agendaItems[index].title;
+  const title = index < 0 ? '' : agendaItems[index].title;
+  // A new chapter's title slides in (not while it's being edited, or when only the text was corrected in place).
+  if (!inlineEditing && title && overlay.textContent !== title && overlay.dataset.index !== String(index)) {
+    overlay.classList.remove('changing');
+    void overlay.offsetWidth;
+    overlay.classList.add('changing');
+  }
+  overlay.dataset.index = String(index);
+  if (!inlineEditing) overlay.textContent = title;
   overlay.hidden = !$('show-agenda').checked || index < 0;
   stackChapter();
 }

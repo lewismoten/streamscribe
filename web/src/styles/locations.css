@@ -131,3 +131,39 @@
 .map-box.drawing.panning .leaflet-interactive {
   cursor: grab;
 }
+/* The Maps section (web/src/maps). */
+.map-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+}
+.map-cards img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+}
+.map-cards a {
+  display: grid;
+  gap: 6px;
+}
+.map-scroll {
+  overflow: auto;
+  max-height: 80vh;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.map-zoom iframe {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 0;
+  display: block;
+}
+.map-zoom img {
+  width: 100%;
+  display: block;
+}

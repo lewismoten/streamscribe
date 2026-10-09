@@ -3,11 +3,12 @@ import { activeOn, bodiesOfRecording, MEMBER_KINDS, STAFF_KINDS, type Body, type
 import { dayKey } from '../format.ts';
 import { useRecords } from '../data/useRecords.ts';
 import type { Attendance } from '../people/usePeople.ts';
+import AudienceList from './AudienceList.tsx';
 
 // Who was at the meeting: the body it's a meeting of (matched by source and title, or chosen here), the people on it
 // that day (members, officers, staff; see ../civic), and anyone who spoke. Each can be marked present or absent, and
-// one as presiding. Saved as the meeting's attendance mark (a layer of the viewer's own, like other marks); person
-// pages use it to say who presided, attended, or was absent.
+// one as presiding; and anyone seen in the audience (AudienceList). Saved as the meeting's attendance mark (a layer of
+// the viewer's own, like other marks); person pages use it to say who presided, attended, or was absent.
 export default function AttendancePanel({
   recordingId,
   recording,
@@ -15,7 +16,11 @@ export default function AttendancePanel({
   spoke,
   nameOf,
   canEdit,
-  onSave
+  onSave,
+  people = [],
+  moment = () => null,
+  onPlay = null,
+  onAddPerson = async () => ''
 }: {
   recordingId: string;
   recording: { sourceKey: string; title: string; startedAt: string };
@@ -24,6 +29,10 @@ export default function AttendancePanel({
   nameOf: (id: string) => string;
   canEdit: boolean;
   onSave: (next: Attendance, message: string) => void;
+  people?: { id: string; name?: string; role?: string }[];
+  moment?: () => { part: string; seconds: number } | null;
+  onPlay?: ((part: string, seconds: number) => void) | null;
+  onAddPerson?: (name: string, role: string) => Promise<string>;
 }) {
   const { records: bodies } = useRecords<Body>('bodies');
   const { records: terms } = useRecords<Term>('terms');
@@ -41,7 +50,7 @@ export default function AttendancePanel({
   const present = new Set(attendance.present || []);
   const absent = new Set(attendance.absent || []);
   const everyone = [...new Set([...expected.keys(), ...spoke, ...present, ...absent])];
-  if (!everyone.length && !canEdit) return null;
+  if (!everyone.length && !(attendance.audience || []).length && !canEdit) return null;
 
   const mark = (id: string, value: string) => {
     const nextPresent = new Set(present);
@@ -155,6 +164,16 @@ export default function AttendancePanel({
           Everyone expected was here
         </button>
       )}
+      <AudienceList
+        audience={attendance.audience || []}
+        people={people}
+        nameOf={nameOf}
+        canEdit={canEdit}
+        moment={moment}
+        onPlay={onPlay}
+        onSave={(audience, message) => onSave({ ...attendance, audience }, message)}
+        onAddPerson={onAddPerson}
+      />
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRecords } from '../data/useRecords.ts';
 import type { MediaData } from '../meeting/MediaPlayer.tsx';
 import { mediaUrlOf } from '../pages/MeetingsPage.tsx';
@@ -15,7 +15,8 @@ export default function PreviewPlayer({
   onTime,
   onPlaying,
   overlaysOf,
-  kinds
+  kinds,
+  renderLayers
 }: {
   items: VideoItem[];
   time: number;
@@ -24,7 +25,10 @@ export default function PreviewPlayer({
   onPlaying: (playing: boolean) => void;
   overlaysOf: (item: VideoItem) => Overlay[];
   kinds: Record<OverlayKind, boolean>;
+  // The layers over the preview (drawn from the video element, for pictures in picture and blurs).
+  renderLayers?: (video: HTMLVideoElement | null) => ReactNode;
 }) {
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   const { records: media } = useRecords<MediaData>('media');
   const video = useRef<HTMLVideoElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
@@ -110,7 +114,16 @@ export default function PreviewPlayer({
         {videoUrl ? (
           // The sound comes from the meeting's audio file (the hub's video is silent).
           // oxlint-disable-next-line jsx-a11y/media-has-caption
-          <video ref={video} src={videoUrl} muted playsInline onLoadedMetadata={() => ready(video.current)} />
+          <video
+            ref={(element) => {
+              video.current = element;
+              setVideoElement(element);
+            }}
+            src={videoUrl}
+            muted
+            playsInline
+            onLoadedMetadata={() => ready(video.current)}
+          />
         ) : (
           <div className="preview-blank">
             {item
@@ -122,6 +135,7 @@ export default function PreviewPlayer({
         )}
         {/* oxlint-disable-next-line jsx-a11y/media-has-caption */}
         {audioUrl && <audio ref={audio} src={audioUrl} onLoadedMetadata={() => ready(audio.current)} />}
+        {renderLayers?.(videoElement)}
         <div className="preview-overlays" aria-live="off">
           {overlaysAt(overlays, local).map((overlay) => (
             <span key={`${overlay.kind}-${overlay.from}`} className={`preview-overlay overlay-${overlay.kind}`}>

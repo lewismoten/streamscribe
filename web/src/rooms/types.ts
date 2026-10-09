@@ -10,6 +10,8 @@ export interface CameraView {
   scene?: string;
   fingerprint?: string;
   regions?: Record<string, unknown>;
+  // The voting members this view shows (roster ids), when they're there.
+  members?: string[];
 }
 export interface Room {
   name: string; // Board Room

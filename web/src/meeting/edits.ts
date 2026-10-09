@@ -70,9 +70,9 @@ export function transcriptEdits({
     );
   };
 
-  // Someone new, with an id made from their name (and a few random letters so two of the same name differ), then
-  // speaking from the word.
-  const addPerson = async (word: Word, name: string, role: string) => {
+  // Someone new on the source's roster, with an id made from their name (and a few random letters so two of the same
+  // name differ); returns their id.
+  const newPerson = async (name: string, role: string) => {
     const current = markData<{ people?: Person[]; groups?: unknown[] }>(peopleId) || {};
     const person = {
       id: `${
@@ -85,8 +85,13 @@ export function transcriptEdits({
       role
     };
     await save(peopleId, { ...current, people: [...(current.people || []), person] }, `Added ${name}`);
-    await saveSpeakers(word, [person.id], { [person.id]: name });
+    return person.id;
+  };
+  // Someone new, speaking from the word.
+  const addPerson = async (word: Word, name: string, role: string) => {
+    const personId = await newPerson(name, role);
+    await saveSpeakers(word, [personId], { [personId]: name });
   };
 
-  return { saveWord, saveSpeakers, addPerson };
+  return { saveWord, saveSpeakers, addPerson, newPerson };
 }

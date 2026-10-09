@@ -18,6 +18,8 @@ export interface Schedule {
   leadMinutes?: number;
   overrun?: { standbyMinutes?: number; idleMinutes?: number; capMinutes?: number };
   preferredRecorder?: string;
+  // Held without a livestream (no live or archived video or audio): listed so it's known, never recorded.
+  notStreamed?: boolean;
 }
 export type Repeat = 'none' | 'weekly' | 'monthly' | 'custom';
 export const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
@@ -55,6 +57,7 @@ export interface Form {
   idleMinutes: string;
   capMinutes: string;
   preferredRecorder: string;
+  notStreamed: boolean;
 }
 
 export function blankForm(): Form {
@@ -82,7 +85,8 @@ export function blankForm(): Form {
     standbyMinutes: '',
     idleMinutes: '',
     capMinutes: '',
-    preferredRecorder: ''
+    preferredRecorder: '',
+    notStreamed: false
   };
 }
 
@@ -115,7 +119,8 @@ export function formOf(id: string, schedule: Schedule): Form {
     standbyMinutes: String(schedule.overrun?.standbyMinutes ?? ''),
     idleMinutes: String(schedule.overrun?.idleMinutes ?? ''),
     capMinutes: String(schedule.overrun?.capMinutes ?? ''),
-    preferredRecorder: schedule.preferredRecorder || ''
+    preferredRecorder: schedule.preferredRecorder || '',
+    notStreamed: Boolean(schedule.notStreamed)
   };
   if (!schedule.rrule) return { ...form, repeat: 'none' };
   try {
@@ -179,9 +184,12 @@ export function scheduleOf(form: Form, previous?: Schedule): Schedule {
     exdates: previous?.exdates || [],
     overrides: previous?.overrides || {},
     ...(Object.keys(overrun).length ? { overrun } : { overrun: undefined }),
-    preferredRecorder: form.preferredRecorder || undefined
+    preferredRecorder: form.preferredRecorder || undefined,
+    notStreamed: form.notStreamed || undefined
   };
 }
+
+export const NOT_STREAMED = 'Not streamed: no live or archived video or audio';
 
 // A meeting's start (with its day) and its end (the time alone), in the schedule's time zone.
 export const when = (ms: number, timeZone: string) =>

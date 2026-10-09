@@ -304,7 +304,7 @@ function parseArgs(argv) {
   return options;
 }
 
-async function findLatestSession(sourceKeys) {
+export async function findLatestSession(sourceKeys) {
   const sessions = [];
   for (const source of selectConfiguredSources(SOURCES, sourceKeys, 'sources')) {
     for (const captureDir of listDirs(source.liveStorageDir)) {

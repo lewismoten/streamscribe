@@ -317,12 +317,29 @@ function updateSpeakerUi() {
   const names = ids.map((id) => (peopleMap.get(id) ? shownName(peopleMap.get(id)) : id));
   $('speakers-now').textContent =
     (names.length ? names.join(', ') : 'nobody marked') + (index >= 0 ? ' (since ' + fmt(turns[index].at) + ')' : '');
+  // Cards of people still speaking stay; new speakers' cards slide in (stacked upward from the first: the cards are a
+  // column from the bottom, so a second speaker appears above and nobody goes off the video), and those who stopped
+  // fade out.
   const cards = $('speaker-cards');
-  cards.textContent = '';
-  ids.forEach((id) => {
+  const kept = new Map(
+    [...cards.querySelectorAll('.speaker-card:not(.leaving)')].map((card) => [card.dataset.id, card])
+  );
+  kept.forEach((card, id) => {
+    if (ids.includes(id)) return;
+    card.classList.add('leaving');
+    setTimeout(() => card.remove(), 300);
+  });
+  ids.forEach((id, order) => {
+    if (kept.has(id)) {
+      kept.get(id).style.order = String(order);
+      return;
+    }
     const person = peopleMap.get(id) || { id, name: id };
     const card = document.createElement('div');
-    card.className = 'speaker-card';
+    card.className = 'speaker-card entering';
+    card.dataset.id = id;
+    card.style.order = String(order);
+    card.addEventListener('animationend', () => card.classList.remove('entering'), { once: true });
     const text = document.createElement('span');
     const name = document.createElement('strong');
     name.textContent = shownName(person);

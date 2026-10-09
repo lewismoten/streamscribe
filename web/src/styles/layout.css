@@ -252,3 +252,45 @@
 .preview-toggle.on {
   outline: 3px solid var(--live);
 }
+/* Groups of pages in the top bar (NavMenu): a name that opens a list under it. */
+.topbar nav {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.nav-menu {
+  position: relative;
+}
+.nav-menu summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.nav-menu summary::-webkit-details-marker {
+  display: none;
+}
+.nav-menu summary::after {
+  content: ' ▾';
+  font-size: 0.75em;
+  opacity: 0.7;
+}
+.nav-menu.active > summary {
+  background: var(--code);
+  font-weight: 600;
+}
+.nav-menu-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  min-width: 11em;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 8px 24px #0006;
+}
+.topbar .nav-menu-list a {
+  padding: 6px 10px;
+}

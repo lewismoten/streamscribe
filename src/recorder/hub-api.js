@@ -40,6 +40,9 @@ export const claim = (occurrenceKey, ttlSeconds) =>
 
 export const reportLive = (status) => call('live', { json: { recorderId: RECORDER.id, status } });
 
+// Reading a hub route (the live view: other agents and their addresses).
+export const hubGet = (route) => call(route, { method: 'GET' });
+
 export const uploadLiveThumbnail = (bytes) =>
   call(`live-thumbnail?recorder=${encodeURIComponent(RECORDER.id)}&type=image/jpeg`, {
     body: bytes,

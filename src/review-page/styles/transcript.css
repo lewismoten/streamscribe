@@ -149,6 +149,11 @@
   width: 36px;
   height: 36px;
 }
+.turn.again .face .avatar {
+  width: 24px;
+  height: 24px;
+  opacity: 0.85;
+}
 .turn .face small {
   max-width: 52px;
   overflow: hidden;

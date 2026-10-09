@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { curved, gpsOf, pointsOf, type Draw, type LatLng, type Place } from './types.ts';
+import { findAddress, findRoadStretches } from './mapSearch.ts';
+import RoadStretches from './RoadStretches.tsx';
 
 // A place on a map (OpenStreetMap). Editing, the map draws the one thing its type is: its GPS spot (a click places the
 // pin, which can be dragged), a road (a click for each point, then Finish or a double-click; it can be curved, have
@@ -462,12 +464,6 @@ export default function MapView({
     keepPaths((at) => !hidden.has(at));
     setHidden(new Set());
   };
-  const toggleHidden = (index: number) => {
-    const next = new Set(hidden);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
-    setHidden(next);
-  };
   const zoomTo = (index: number) => {
     const path = place.paths?.[index];
     if (path?.length) map.current?.fitBounds(L.latLngBounds(path), { maxZoom: 18, padding: [32, 32] });
@@ -477,26 +473,17 @@ export default function MapView({
   const findRoad = async () => {
     const current = map.current;
     const name = place.roadName?.trim();
-    const route = place.routeNumber?.trim().replace(/^(route|rt\.?|sr|state route)\s*/i, '');
+    const route = place.routeNumber?.trim();
     if (!current || !onChange || (!name && !route)) return;
     setMessage('Looking for the road…');
     const bounds = current.getBounds();
-    const area = [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()]
-      .map((value) => value.toFixed(5))
-      .join(',');
-    const escape = (text: string) => text.replace(/[\\"]/g, '\\$&').replace(/[.*+?^${}()|[\]]/g, '\\$&');
-    const overpass = `[out:json][timeout:25];(${name ? `way["highway"]["name"~"^${escape(name)}$",i](${area});` : ''}${
-      route ? `way["highway"]["ref"~"(^|[^0-9])${escape(route)}($|[^0-9])"](${area});` : ''
-    });out geom;`;
     try {
-      const response = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: new URLSearchParams({ data: overpass })
-      });
-      const found = (await response.json()) as { elements?: { geometry?: { lat: number; lon: number }[] }[] };
-      const stretches = (found.elements || [])
-        .map((way) => (way.geometry || []).map((point): LatLng => [round(point.lat), round(point.lon)]))
-        .filter((points) => points.length > 1);
+      const stretches = await findRoadStretches({ name, route }, [
+        bounds.getSouth(),
+        bounds.getWest(),
+        bounds.getNorth(),
+        bounds.getEast()
+      ]);
       if (!stretches.length)
         return setMessage("That road isn't on the map in the area shown (move or zoom out the map, and try again)");
       const paths = place.paths || [];
@@ -519,12 +506,9 @@ export default function MapView({
     if (!query.trim() || !map.current) return;
     setMessage('Looking…');
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query.trim())}`
-      );
-      const [found] = await response.json();
-      if (!found) return setMessage(`Couldn't find “${query.trim()}” on the map`);
-      map.current.setView([Number(found.lat), Number(found.lon)], 17);
+      const spot = await findAddress(query);
+      if (!spot) return setMessage(`Couldn't find “${query.trim()}” on the map`);
+      map.current.setView(spot, 17);
       setMessage('');
     } catch {
       setMessage("The map's search didn't answer");
@@ -618,78 +602,18 @@ export default function MapView({
         </div>
       )}
       {editing && draw === 'path' && (place.paths || []).length > 0 && (
-        <>
-          {(place.paths || []).length > 1 && (
-            <div className="toolbar small map-roads-tools">
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => setHidden(new Set())}
-                disabled={!hidden.size}
-              >
-                Show all
-              </button>
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => setHidden(new Set((place.paths || []).map((_, at) => at)))}
-              >
-                Hide all
-              </button>
-              <button type="button" className="link-button danger" onClick={removeHidden} disabled={!hidden.size}>
-                Remove the hidden ones{hidden.size ? ` (${hidden.size})` : ''}
-              </button>
-            </div>
-          )}
-          <ul className="map-roads small">
-            {(place.paths || []).map((path, index) => (
-              // Hovering (or tabbing into) a row only lights its stretch on the map; its controls do the work.
-              // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-              <li
-                key={index}
-                className={`${highlighted === index || hoveredLine === index ? 'lit' : ''}${hidden.has(index) ? ' hidden-stretch' : ''}`}
-                onMouseEnter={() => setHighlighted(index)}
-                onMouseLeave={() => setHighlighted(null)}
-                onFocus={() => setHighlighted(index)}
-                onBlur={() => setHighlighted(null)}
-              >
-                <label className="inline">
-                  <input
-                    type="checkbox"
-                    checked={!hidden.has(index)}
-                    onChange={() => toggleHidden(index)}
-                    aria-label={`Show stretch ${index + 1} on the map`}
-                  />{' '}
-                  Stretch {index + 1}
-                </label>
-                <span className="muted">({path.length} points)</span>
-                <label className="inline">
-                  curve{' '}
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    value={place.curves?.[index] ?? 0}
-                    onChange={(event) => setCurve(index, Number(event.target.value))}
-                    aria-label={`How curved stretch ${index + 1} is`}
-                  />
-                </label>
-                <button type="button" className="link-button" onClick={() => zoomTo(index)}>
-                  Zoom to it
-                </button>
-                {(place.paths || []).length > 1 && (
-                  <button type="button" className="link-button" onClick={() => keepOnly(index)}>
-                    Keep only this
-                  </button>
-                )}
-                <button type="button" className="link-button" onClick={() => removePath(index)}>
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
+        <RoadStretches
+          place={place}
+          hidden={hidden}
+          lit={highlighted ?? hoveredLine}
+          onLight={setHighlighted}
+          onHidden={setHidden}
+          onCurve={setCurve}
+          onZoom={zoomTo}
+          onKeepOnly={keepOnly}
+          onRemove={removePath}
+          onRemoveHidden={removeHidden}
+        />
       )}
     </div>
   );

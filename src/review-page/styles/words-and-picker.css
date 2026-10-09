@@ -221,3 +221,18 @@
   border-radius: 3px;
   padding: 0 0.2em;
 }
+/* A new chapter's title slides in. */
+.agenda-overlay.changing {
+  animation: chapter-in 0.45s ease-out;
+}
+@keyframes chapter-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.6em);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agenda-overlay.changing {
+    animation-duration: 0.01s;
+  }
+}

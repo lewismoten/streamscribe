@@ -1,12 +1,16 @@
 import { useState } from 'react';
-import { embedCode, officialLinks, parseOfficialUrl, swagitAt } from '../../../src/sync/official.js';
+import { embedCode, isTimed, officialLinks, parseOfficialUrl, videoAt } from '../../../src/sync/official.js';
+import SyncPoints from './SyncPoints.tsx';
 
 // A meeting's official sources (src/sync/official.js): the official video (watch, from the player's moment, embed,
 // download, transcript, agenda), its documents (overview, agenda, packet), and calendar entry. People who may edit
-// chapters can set them by pasting the official addresses.
+// chapters can set them by pasting the official addresses, give another video of the meeting (YouTube, …), and keep
+// the official video lined up with this recording (SyncPoints).
 export interface Official {
   swagit?: { base: string; videoId: string; offset?: number; timeline?: [number, number][]; duration?: number };
   civicclerk?: { base: string; eventId: string; agendaFileId?: string; packetFileId?: string };
+  // Another video of the meeting (used when there's no Swagit video): linked at a time with ?<param>=<seconds>.
+  video?: { url: string; param?: string; offset?: number; timeline?: [number, number][] };
   calendarUrl?: string;
   links?: { label: string; url: string }[];
 }
@@ -31,12 +35,15 @@ export default function OfficialPanel({
     packet: '',
     calendar: '',
     offset: '',
+    otherVideo: '',
+    param: 't',
     other: ''
   });
   const [problem, setProblem] = useState('');
   const links = officialLinks(official) as { group: string; label: string; url: string }[];
   const groups = [...new Set(links.map((link) => link.group))];
-  const timed = Boolean(official?.swagit?.timeline?.length || Number.isFinite(official?.swagit?.offset));
+  const timed = isTimed(official);
+  const clockOf = official?.swagit || official?.video;
 
   const startEditing = () => {
     const clerk = official?.civicclerk;
@@ -46,7 +53,9 @@ export default function OfficialPanel({
       agenda: clerk?.agendaFileId ? `${clerk.base}/event/${clerk.eventId}/files/agenda/${clerk.agendaFileId}` : '',
       packet: clerk?.packetFileId ? `${clerk.base}/event/${clerk.eventId}/files/agenda/${clerk.packetFileId}` : '',
       calendar: official?.calendarUrl || '',
-      offset: Number.isFinite(official?.swagit?.offset) ? String(official?.swagit?.offset) : '',
+      offset: Number.isFinite(clockOf?.offset) ? String(clockOf?.offset) : '',
+      otherVideo: official?.video?.url || '',
+      param: official?.video?.param || 't',
       other: (official?.links || []).map((link) => `${link.label} | ${link.url}`).join('\n')
     });
     setProblem('');
@@ -88,6 +97,19 @@ export default function OfficialPanel({
       };
       if (kind && value.file) clerk[kind] = value.file.id;
       next.civicclerk = clerk;
+    }
+    if (form.otherVideo.trim()) {
+      if (!/^https?:\/\/\S+$/.test(form.otherVideo.trim())) {
+        setProblem('The other video should be a web address (https://…)');
+        return;
+      }
+      const same = official?.video?.url === form.otherVideo.trim() ? official.video : undefined;
+      next.video = {
+        url: form.otherVideo.trim(),
+        param: form.param.trim() || 't',
+        ...(same?.timeline ? { timeline: same.timeline } : {})
+      };
+      if (!next.swagit && form.offset.trim()) next.video.offset = Number(form.offset);
     }
     if (form.calendar.trim()) next.calendarUrl = form.calendar.trim();
     next.links = form.other
@@ -132,14 +154,14 @@ export default function OfficialPanel({
                     </a>
                   </li>
                 ))}
-              {group === 'Official video' && official?.swagit && (
+              {group === 'Official video' && clockOf && (
                 <li>
                   <a
-                    href={swagitAt(official, 0) || '#'}
+                    href={videoAt(official, 0) || '#'}
                     rel="noopener noreferrer"
                     target="_blank"
                     onClick={(event) => {
-                      event.currentTarget.href = swagitAt(official, playerTime()) || event.currentTarget.href;
+                      event.currentTarget.href = videoAt(official, playerTime()) || event.currentTarget.href;
                     }}
                   >
                     From the player's moment ↗
@@ -150,6 +172,9 @@ export default function OfficialPanel({
             </ul>
           </div>
         ))}
+      {!editing && canEdit && official && clockOf && (
+        <SyncPoints official={official} playerTime={playerTime} onSave={onSave} />
+      )}
       {!editing && official?.swagit && (
         <details className="small">
           <summary>Embed the official video</summary>
@@ -188,8 +213,24 @@ export default function OfficialPanel({
             <input
               value={form.offset}
               onChange={(event) => setForm({ ...form, offset: event.target.value })}
-              placeholder={official?.swagit?.timeline?.length ? 'lined up already' : '0'}
-              disabled={Boolean(official?.swagit?.timeline?.length)}
+              placeholder={clockOf?.timeline?.length ? 'lined up by sync points' : '0'}
+              disabled={Boolean(clockOf?.timeline?.length)}
+            />
+          </label>
+          <label>
+            Another video of the meeting (YouTube, …){' '}
+            <input
+              value={form.otherVideo}
+              onChange={(event) => setForm({ ...form, otherVideo: event.target.value })}
+              placeholder="https://www.youtube.com/watch?v=…"
+            />
+          </label>
+          <label>
+            Its time setting in the address (seconds){' '}
+            <input
+              value={form.param}
+              onChange={(event) => setForm({ ...form, param: event.target.value })}
+              placeholder="t"
             />
           </label>
           <label>

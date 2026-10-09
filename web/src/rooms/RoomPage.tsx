@@ -111,6 +111,8 @@ export default function RoomPage() {
                 <span className="muted small">
                   {Object.keys(view.regions || {}).length} zoom area
                   {Object.keys(view.regions || {}).length === 1 ? '' : 's'}
+                  {(view.members || []).length > 0 &&
+                    ` · ${view.members!.length} voting member${view.members!.length === 1 ? '' : 's'} in view`}
                 </span>
                 {editor && (
                   <button
@@ -149,6 +151,7 @@ export default function RoomPage() {
             {next.map((item) => (
               <li key={item.key}>
                 {date(new Date(item.start).toISOString())} · {item.title}
+                {(item.schedule as Schedule).notStreamed && <span className="tag">not streamed</span>}
               </li>
             ))}
           </ul>

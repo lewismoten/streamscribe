@@ -107,6 +107,24 @@ export function hubFiles() {
         );
       return paths;
     },
+    // Downloads a file the records name (private/… through a signed link; media/… as it's served) to a local path.
+    async download(recordPath, local, { signal } = {}) {
+      const base = RECORDER.hubUrl.replace(/api\.php$/, '');
+      let address = `${base}${recordPath}`;
+      if (recordPath.startsWith('private/')) {
+        const response = await fetch(`${RECORDER.hubUrl}/file-key`, {
+          headers: { 'x-streamscribe-key': RECORDER.key },
+          signal
+        });
+        const key = await response.json();
+        if (!response.ok) throw new Error(`hub file-key: ${response.status} ${key.error || ''}`.trim());
+        address = `${RECORDER.hubUrl}/file/${recordPath}?e=${key.e}&s=${encodeURIComponent(key.s)}`;
+      }
+      const response = await fetch(address, { signal });
+      if (!response.ok) throw new Error(`hub ${recordPath}: ${response.status}`);
+      fs.writeFileSync(local, Buffer.from(await response.arrayBuffer()));
+      return local;
+    },
     // Removes a file the records name (private/recordings/… or media/published/…).
     remove: (recordPath) => retrying(() => request('files-remove', { json: { path: recordPath } }))
   };

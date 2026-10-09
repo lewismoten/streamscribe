@@ -1,10 +1,11 @@
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type Capabilities } from './types.ts';
 import { Progress } from './WorkQueue.tsx';
+import AgentSettings from './AgentSettings.tsx';
 
 // A card for each agent that has reported to the hub: online or not (one not heard from for 90 seconds is offline),
 // what it's doing, and what its machine can do.
-export default function AgentCards({ agents }: { agents: Agent[] | null }) {
+export default function AgentCards({ agents, canEdit = false }: { agents: Agent[] | null; canEdit?: boolean }) {
   const now = useNow(10000);
   return (
     <div className="agents">
@@ -40,6 +41,7 @@ export default function AgentCards({ agents }: { agents: Agent[] | null }) {
                 <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
               )}
               {status?.capabilities && <Capability value={status.capabilities} />}
+              <AgentSettings agentId={agent.recorderId} report={status?.settings} canEdit={canEdit} />
             </div>
           );
         })

@@ -63,7 +63,13 @@ function applyOverlayLayout() {
     const element = $(id);
     const layout = overlayLayout[type] || {};
     element.style.setProperty('--s', String(layout.size || 1));
-    if (Number.isFinite(layout.x) && Number.isFinite(layout.y)) {
+    // Speakers keep their bottom edge where they were put, so more speakers stack upward rather than off the video.
+    if (type === 'speakers' && Number.isFinite(layout.x) && Number.isFinite(layout.bottom)) {
+      element.style.left = layout.x * 100 + '%';
+      element.style.bottom = (1 - layout.bottom) * 100 + '%';
+      element.style.top = 'auto';
+      element.style.right = 'auto';
+    } else if (Number.isFinite(layout.x) && Number.isFinite(layout.y)) {
       element.style.left = layout.x * 100 + '%';
       element.style.top = layout.y * 100 + '%';
       element.style.right = 'auto';
@@ -129,7 +135,8 @@ function makeMovable(type) {
       overlayLayout[type] = {
         ...overlayLayout[type],
         x: left / stage.clientWidth,
-        y: top / stage.clientHeight
+        y: top / stage.clientHeight,
+        ...(type === 'speakers' ? { bottom: (top + element.offsetHeight) / stage.clientHeight } : {})
       };
       applyOverlayLayout();
     };

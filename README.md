@@ -41,6 +41,7 @@ The hub is a small PHP and SQLite service for ordinary shared hosting.
 
 ## Documentation
 
+- **[Features](docs/features.md)**: everything it does, area by area, with links to the details.
 - **Using it:**
   - [A meeting, start to finish](docs/guide.md)
   - [All commands](docs/commands.md)
@@ -53,4 +54,5 @@ The hub is a small PHP and SQLite service for ordinary shared hosting.
   - [Deploying](docs/hub/deploy.md)
   - [Recorders and agents](docs/recorder/recorder.md)
   - [Audio, video, and the podcast](docs/media/publish-media.md)
+  - [Maps](docs/maps/maps.md)
 - **Working on it:** [development](docs/development.md) covers the layout, conventions, and `npm run check` (format, lint, types, tests).

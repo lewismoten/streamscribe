@@ -6,6 +6,7 @@ import { binPath } from '../config/paths.js';
 import { chunkId, stillId } from '../sync/collections.js';
 import { sessionsSince } from './activity.js';
 import { uploadMedia } from './hub-api.js';
+import { sendSlides } from './slides.js';
 
 // After a meeting: its final transcript (transcribed now, unless recorder.finalTranscribe is off), stills from its
 // thumbnails (at most recorder.maxStills, evenly spread), and the recording marked done. Safe to run again after a
@@ -119,6 +120,8 @@ export async function publishRecording(recording, source, client, log) {
       });
       recording.final.stills.push(key);
     }
+    // Slides found in the capture (when extract-slides has run on it), with any text read from them.
+    await sendSlides(client, { recordingId: recording.id, part: part.name, dir: sessionDir });
   }
   recording.status = 'done';
   recording.publishedAt = new Date().toISOString();

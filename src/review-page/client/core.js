@@ -35,12 +35,27 @@ const clockFormat = new Intl.DateTimeFormat('en-US', {
 });
 // The overlay shows only the time of day (the date belongs in the meeting name), plus the weekday and date once a
 // meeting runs past midnight.
-const overlayFormat = new Intl.DateTimeFormat('en-US', {
-  timeZone: page.timeZone,
-  hour: 'numeric',
-  minute: '2-digit',
-  second: '2-digit'
-});
+// The clock's look (chosen in 🎛, remembered in this browser): hours and minutes (the default), with seconds, on a
+// 24-hour clock, or with the day.
+const CLOCK_FORMATS = {
+  minutes: { hour: 'numeric', minute: '2-digit' },
+  seconds: { hour: 'numeric', minute: '2-digit', second: '2-digit' },
+  '24h': { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
+  day: { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }
+};
+let clockLook = 'minutes';
+try {
+  if (CLOCK_FORMATS[localStorage.getItem('thumbnails.clockLook')])
+    clockLook = localStorage.getItem('thumbnails.clockLook');
+} catch {}
+let overlayFormat = new Intl.DateTimeFormat('en-US', { timeZone: page.timeZone, ...CLOCK_FORMATS[clockLook] });
+function setClockFormat(format) {
+  clockLook = CLOCK_FORMATS[format] ? format : 'minutes';
+  overlayFormat = new Intl.DateTimeFormat('en-US', { timeZone: page.timeZone, ...CLOCK_FORMATS[clockLook] });
+  try {
+    localStorage.setItem('thumbnails.clockLook', clockLook);
+  } catch {}
+}
 const overlayDayFormat = new Intl.DateTimeFormat('en-US', {
   timeZone: page.timeZone,
   weekday: 'short',
@@ -56,7 +71,10 @@ const dayKeyFormat = new Intl.DateTimeFormat('en-US', {
 function overlayClock(ms) {
   const startMs = clockMs(0);
   const nextDay = startMs !== null && dayKeyFormat.format(new Date(ms)) !== dayKeyFormat.format(new Date(startMs));
-  return (nextDay ? overlayDayFormat.format(new Date(ms)) + ', ' : '') + overlayFormat.format(new Date(ms));
+  return (
+    (nextDay && clockLook !== 'day' ? overlayDayFormat.format(new Date(ms)) + ', ' : '') +
+    overlayFormat.format(new Date(ms))
+  );
 }
 let last = thumbs[thumbs.length - 1];
 let endSeconds = segments.length

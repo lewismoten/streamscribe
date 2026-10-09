@@ -16,6 +16,18 @@ function magnifiedPlace(region, grow) {
   return { x: Math.max(0, Math.min(1 - w, centerX - w / 2)), y: Math.max(0, Math.min(1 - h, centerY - h / 2)), w, h };
 }
 const targetOf = (region) => region.target || magnifiedPlace(region, defaultGrow);
+// How a person's copy shows (set in the zoom area editor): 'copy' grows out of where they sit (the default), 'pip' (a
+// picture in picture) fades in and out at its place, 'none' shows nothing (their square only marks where they sit).
+// A copy's place can move from a moment on (keyframes: region.moves, [{ at, target }] in video seconds), such as out of
+// the way of a document shown during part of the meeting.
+const showOf = (region) => region.show || 'copy';
+function targetAt(region, seconds) {
+  const moved = (region.moves || [])
+    .filter((move) => move.at <= seconds)
+    .sort((a, b) => a.at - b.at)
+    .at(-1);
+  return moved?.target || targetOf(region);
+}
 // What to show at a video position: each area with how far along it is, from 0 (where they sit) to 1 (its larger
 // copy in place). It grows in during the lead-up to speaking, holds while they speak and a few seconds after, then
 // shrinks back into their seat. Every step stays within the shot (camera view) showing at that moment, worked out
@@ -35,6 +47,7 @@ function magnifiedAt(seconds) {
   const sceneEnd = scene + 1 < page.scenes.length ? page.scenes[scene + 1][0] : Infinity;
   const shown = [];
   Object.entries(view.regions || {}).forEach(([id, region]) => {
+    if (showOf(region) === 'none') return;
     const stretches = speakingStretches(id);
     const speaking = stretches.find((item) => seconds >= item.from && seconds < item.to);
     if (speaking) {
@@ -80,12 +93,15 @@ function paintMagnified(context, source, width, height, items) {
   const sourceWidth = source.videoWidth || source.naturalWidth || source.width;
   const sourceHeight = source.videoHeight || source.naturalHeight || source.height;
   if (!sourceWidth || !sourceHeight) return;
+  const seconds = currentSeconds();
   items.forEach(({ region, progress }) => {
     if (progress <= 0) return;
-    // Between where they sit and the larger copy's place, eased; it fades in over the first part of the way.
-    const target = targetOf(region);
-    const along = ease(Math.min(1, progress));
-    const opacity = Math.min(1, progress * 2.5);
+    // Between where they sit and the larger copy's place, eased; it fades in over the first part of the way. A picture
+    // in picture stays at its place and only fades.
+    const target = targetAt(region, seconds);
+    const pip = showOf(region) === 'pip';
+    const along = pip ? 1 : ease(Math.min(1, progress));
+    const opacity = pip ? Math.min(1, progress) : Math.min(1, progress * 2.5);
     const mix = (from, to) => from + (to - from) * along;
     const x = mix(region.x, target.x) * width;
     const y = mix(region.y, target.y) * height;

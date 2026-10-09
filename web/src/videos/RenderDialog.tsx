@@ -19,6 +19,7 @@ const CHOICE_KEY = 'streamscribe.render';
 export default function RenderDialog({
   videoId,
   overlays,
+  layers = () => [],
   beforeRender,
   onDone,
   onClose
@@ -26,6 +27,8 @@ export default function RenderDialog({
   videoId: string;
   // Each clip's overlays, by its key (worked out from the meetings).
   overlays: () => Record<string, unknown[]>;
+  // The video's layers as the agent draws them (official video QR codes with their address each second).
+  layers?: () => unknown[];
   beforeRender: () => Promise<unknown>;
   onDone: (message: string) => void;
   onClose: () => void;
@@ -61,7 +64,8 @@ export default function RenderDialog({
       const reply = await hubCall<{ id: string | null; job: string }>('publish-video', {
         id: videoId,
         ...choice,
-        overlays: overlays()
+        overlays: overlays(),
+        layers: layers()
       });
       await syncNow();
       onDone(

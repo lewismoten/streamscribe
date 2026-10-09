@@ -7,7 +7,10 @@
 // what it is. Times: the official video's clock can differ from this archive's positions (a capture that starts
 // earlier, material the archive lacks), so swagit.timeline holds matching points [position, official seconds] (from
 // how build-meeting lined the capture up with the archive), or swagit.offset a fixed difference (official minus
-// position); with neither, links don't claim a time.
+// position); with neither, links don't claim a time. Another video of the meeting (YouTube, Facebook, a town's own
+// site) can be given as video: { url, param, timeline?, offset? }, linked at a time with ?<param>=<seconds> and lined
+// up the same way (used when there's no Swagit video). The timeline can be corrected by hand (sync points), as where
+// the archive left out a recess.
 
 const clean = (url) => String(url || '').trim();
 
@@ -40,7 +43,7 @@ export function parseOfficialUrl(text) {
 // The official video's time at this archive's position, or null when that isn't known.
 /** @param {any} official @param {number} position @returns {number | null} */
 export function officialTime(official, position) {
-  const swagit = official?.swagit;
+  const swagit = official?.swagit || official?.video;
   if (!swagit || !Number.isFinite(position)) return null;
   const time = rawOfficialTime(swagit, position);
   return time === null ? null : Math.min(Math.max(0, time), swagit.duration || Infinity);
@@ -72,6 +75,28 @@ export const swagitAt = (official, position) => {
   const at = officialTime(official, position);
   return official?.swagit ? `${swagitVideo(official.swagit)}${at === null ? '' : `?ts=${Math.floor(at)}`}` : null;
 };
+// The official video (Swagit, else the other video) at this archive's position; its start when the time isn't known.
+/** @type {(official: any, position: number) => string | null} */
+export const videoAt = (official, position) => {
+  if (official?.swagit?.videoId) return swagitAt(official, position);
+  const video = official?.video;
+  if (!video?.url) return null;
+  const at = officialTime(official, position);
+  if (at === null) return video.url;
+  try {
+    const url = new URL(video.url);
+    url.searchParams.set(video.param || 't', String(Math.floor(at)));
+    return url.toString();
+  } catch {
+    return video.url;
+  }
+};
+// Whether links can claim a time: matching points, or a fixed difference.
+/** @type {(official: any) => boolean} */
+export const isTimed = (official) => {
+  const clock = official?.swagit || official?.video;
+  return Boolean(clock?.timeline?.length || Number.isFinite(clock?.offset));
+};
 /** @type {(swagit: { base: string, videoId: string }, options?: { autoplay?: boolean }) => string} */
 export const embedCode = (swagit, { autoplay = false } = {}) =>
   `<iframe title="Swagit Video Player" width="640" height="360" src="${swagitVideo(swagit)}/embed${autoplay ? '' : '?autoplay=0'}" frameborder="0" allowfullscreen></iframe>`;
@@ -97,6 +122,13 @@ export function officialLinks(official, { at = null } = {}) {
     add('Official video', 'Download the transcript', `${video}/transcript`);
     add('Official video', 'Agenda, with the video', `${video}#full-agenda`);
   }
+  if (!swagit?.videoId && official.video?.url) {
+    add(
+      'Official video',
+      at === null ? 'Watch' : `Watch from here${officialTime(official, at) === null ? ' (start of video)' : ''}`,
+      at === null ? official.video.url : videoAt(official, at)
+    );
+  }
   const clerk = official.civicclerk;
   if (clerk?.eventId) {
     add('Documents', 'Meeting overview', `${clerk.base}/event/${clerk.eventId}/overview`);
@@ -118,6 +150,7 @@ export function mergeOfficial(base, edit) {
     ...base,
     ...edit,
     swagit: edit?.swagit || base?.swagit ? { ...base?.swagit, ...edit?.swagit } : undefined,
+    video: edit?.video || base?.video ? { ...base?.video, ...edit?.video } : undefined,
     civicclerk: edit?.civicclerk || base?.civicclerk ? { ...base?.civicclerk, ...edit?.civicclerk } : undefined
   };
 }

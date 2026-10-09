@@ -238,7 +238,15 @@ export default function ScheduleForm({
           )}
         </p>
       )}
-      <details open={!form.sourceKey}>
+      <label className="inline">
+        <input
+          type="checkbox"
+          checked={form.notStreamed}
+          onChange={(event) => change({ notStreamed: event.target.checked })}
+        />{' '}
+        Not streamed (no live or archived video or audio): listed so it&apos;s known; recorders leave it alone
+      </label>
+      <details open={!form.sourceKey && !form.notStreamed}>
         <summary>Source and recording</summary>
         <div className="form-grid">
           <label>
@@ -248,7 +256,7 @@ export default function ScheduleForm({
               onChange={(event) => change({ sourceKey: event.target.value })}
               list="source-keys"
               placeholder="warren-county-va"
-              required
+              required={!form.notStreamed}
             />
           </label>
           <datalist id="source-keys">

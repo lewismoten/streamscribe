@@ -258,6 +258,12 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
         <option value="position">video time</option>
         <option value="both">clock and video time</option>
       </select> <input type="range" min="50" max="250" step="10" value="100" data-size="clock" aria-label="Clock text size"> <span class="size"></span></label>
+      <label>🕐 Clock shows <select id="clock-format" aria-label="How the clock looks">
+        <option value="minutes">2:19 PM</option>
+        <option value="seconds">2:19:05 PM (seconds)</option>
+        <option value="24h">14:19 (24-hour)</option>
+        <option value="day">Tue, Oct 6, 2:19 PM (the day)</option>
+      </select></label>
       <label><input type="checkbox" id="show-name"> 🏷 Meeting name <input type="range" min="50" max="250" step="10" value="100" data-size="title" aria-label="Meeting name text size"> <span class="size"></span></label>
       <label><input type="checkbox" id="show-agenda"> 📑 Chapter <input type="range" min="50" max="250" step="10" value="100" data-size="chapter" aria-label="Chapter text size"> <span class="size"></span></label>
       <label><input type="checkbox" id="show-speakers"> 🗣️ Speakers <input type="range" min="50" max="250" step="10" value="100" data-size="speakers" aria-label="Speakers text size"> <span class="size"></span></label>
@@ -331,8 +337,9 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
       <label class="label">View <input type="text" id="zoom-view-name" autocomplete="off"></label>
       <button type="button" class="end" id="zoom-view-delete">Delete this view</button>
     </div>
-    <p class="hint">Pick a person and drag a square around where they sit; a larger copy appears. Switch between ▢ Where they sit and ⧉ Larger copy to move (drag inside) or resize (drag a corner or edge) either one. With 🔍 Magnify whoever is speaking turned on (in 🎛), their larger copy fades in while they talk whenever the camera is on this view, and fades out a few seconds after they stop.</p>
+    <p class="hint">Pick a person and drag a square around where they sit, on the video above (it keeps playing, so you can watch how people move); a larger copy appears. Switch between ▢ Where they sit and ⧉ Larger copy to move (drag inside) or resize (drag a corner or edge) either one. With 🔍 Magnify whoever is speaking turned on (in 🎛), their copy fades in while they talk whenever the camera is on this view, and fades out a few seconds after they stop.</p>
     <div class="zoom-people" id="zoom-people"></div>
+    <div class="row zoom-in-view" id="zoom-in-view"></div>
     <div class="row">
       <span class="label">Editing</span>
       <span class="button-group">
@@ -341,10 +348,19 @@ ${playback.fullMeetingUrl ? `<p class="hint">This is one part of the meeting as 
       </span>
       <span class="hint">Drag inside the box to move it; drag a corner or edge to resize it.</span>
     </div>
+    <div class="row zoom-mode" id="zoom-mode">
+      <label class="label">Their copy <select id="zoom-show" aria-label="What their copy shows">
+        <option value="copy">a larger copy, grown from their seat</option>
+        <option value="pip">a picture in picture, fading in at its place</option>
+        <option value="none">nothing (their square only marks where they sit)</option>
+      </select></label>
+      <label class="label" title="Moving the copy now changes its place from this moment of the meeting on (a keyframe), such as out of the way of a document"><input type="checkbox" id="zoom-keyframe"> Moving the copy changes it from this moment on</label>
+      <span class="label" id="zoom-moves"></span>
+    </div>
     <canvas id="zoom-canvas"></canvas>
     <div class="row">
       <button type="button" id="zoom-area-remove">Remove this person's box</button>
-      <button type="button" id="zoom-frame">📷 Use the current video frame</button>
+      <button type="button" id="zoom-frame">▶︎ Play / ⏸ Pause</button>
       <span style="flex: 1"></span>
       <button type="submit" class="start">Save</button>
       <button type="button" id="zoom-cancel">Cancel</button>

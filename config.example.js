@@ -16,6 +16,9 @@ export default {
     whisperCpp: 'whisper-cli'
   },
 
+  // Reading the text on slides (npm run ocr-slides) with a vision model on an Ollama server.
+  // ocr: { ollamaUrl: 'http://127.0.0.1:11434', model: 'deepseek-ocr:3b' },
+
   // Local transcription with whisper.cpp.
   transcription: {
     // whisperCppModel: '~/.cache/whisper-cpp/ggml-large-v3.bin',

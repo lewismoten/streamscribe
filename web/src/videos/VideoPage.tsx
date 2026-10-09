@@ -1,4 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import LayerCanvas from './LayerCanvas.tsx';
+import LayerInspector from './LayerInspector.tsx';
+import LibraryPanel, { type LibraryItem } from './LibraryPanel.tsx';
+import { newLayer, type Layer, type LayerKind } from './layers.ts';
+import { useOfficials } from './useOfficials.ts';
 import { Link, useNavigate, useParams } from 'react-router';
 import { newId } from '../../../src/sync/collections.js';
 import { can, useAccount } from '../data/account.ts';
@@ -17,8 +22,10 @@ import { itemAt, itemOf, layout, type Clip, type Video, type VideoItem } from '.
 // Putting a video together, like a movie editor: the clip library on the left, the preview (sound and picture, with
 // its overlays) in the middle, the selected clip's settings on the right, and the timeline along the bottom (clips
 // dragged into order, their ends dragged to trim, split at the playhead, deleted; the sound track; who is speaking
-// when). Keys: Space plays and pauses, S splits at the playhead, Delete takes out the selected clip. Rendering has an
-// agent make it from the meetings' recordings, for the hub or a folder (RenderDialog).
+// when), with the layers over it (QR codes, pictures, pictures in picture, blurred areas: dragged from the library
+// onto the preview, placed and keyframed there and in their inspector; see layers.ts). Keys: Space plays and pauses,
+// S splits at the playhead, Delete takes out the selected clip. Rendering has an agent make it from the meetings'
+// recordings, for the hub or a folder (RenderDialog).
 const now = () => new Date().toISOString();
 
 export default function VideoPage() {
@@ -32,6 +39,12 @@ export default function VideoPage() {
     'stills'
   );
   const overlaysOf = useOverlays();
+  const { officialOf, officialAt } = useOfficials();
+  const [selectedLayer, setSelectedLayer] = useState<string | null>(null);
+  const [drawingPoints, setDrawingPoints] = useState(false);
+  // Layers as they're being dragged (saved once the dragging pauses).
+  const [layerDraft, setLayerDraft] = useState<Layer[] | null>(null);
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -60,6 +73,43 @@ export default function VideoPage() {
   const { total } = layout(items);
   const changeItems = (change: (current: VideoItem[]) => VideoItem[]) =>
     save((current) => ({ items: change(current.items) }));
+  const layers = layerDraft || video?.layers || [];
+  const setLayers = (next: Layer[]) => {
+    setLayerDraft(next);
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    commitTimer.current = setTimeout(() => {
+      save({ layers: next }).then(() => setLayerDraft((pending) => (pending === next ? null : pending)));
+    }, 350);
+  };
+  const changeLayer = (layer: Layer) => setLayers(layers.map((item) => (item.id === layer.id ? layer : item)));
+  const addLayer = (layer: Layer) => {
+    setLayers([...layers, layer]);
+    setSelectedLayer(layer.id);
+    setSelected(null);
+  };
+  const addFromLibrary = (item: LibraryItem, place?: { x: number; y: number }) =>
+    addLayer(
+      item.kind === 'image'
+        ? newLayer(
+            'image',
+            time,
+            total,
+            { image: item.path, imageWidth: item.width, imageHeight: item.height, name: item.label },
+            place
+          )
+        : newLayer('qr', time, total, { url: item.url, title: item.label, name: item.label }, place)
+    );
+  // For the agent: an official video QR code gets the official video's address for each second it shows.
+  const layersToRender = () =>
+    layers.map((layer) => {
+      if (layer.kind !== 'official-qr') return layer;
+      const urls: { at: number; url: string }[] = [];
+      for (let second = 0; second < Math.ceil(layer.to - layer.from); second += 1) {
+        const url = officialAt(items, layer.from + second);
+        if (url && url !== urls.at(-1)?.url) urls.push({ at: second, url });
+      }
+      return { ...layer, urls };
+    });
   // Splitting the clip under the playhead in two there.
   const split = () => {
     if (!items.length) return;
@@ -74,6 +124,11 @@ export default function VideoPage() {
     setSelected(second.key);
   };
   const removeSelected = () => {
+    if (selectedLayer && !selected) {
+      setLayers(layers.filter((layer) => layer.id !== selectedLayer));
+      setSelectedLayer(null);
+      return;
+    }
     if (!selected) return;
     changeItems((current) => current.filter((item) => item.key !== selected));
     setSelected(null);
@@ -166,7 +221,15 @@ export default function VideoPage() {
       )}
 
       <div className="editor-grid">
-        <ClipLibrary clips={clips} editable={editable} onAdd={add} />
+        <div className="editor-left">
+          <ClipLibrary clips={clips} editable={editable} onAdd={add} />
+          <LibraryPanel
+            editable={editable}
+            officials={[...new Set(items.map((item) => item.recordingId))].map(officialOf)}
+            onAdd={(item) => addFromLibrary(item)}
+            onAddLayer={(kind: LayerKind) => addLayer(newLayer(kind, time, total))}
+          />
+        </div>
         <section className="panel editor-preview">
           <PreviewPlayer
             items={items}
@@ -176,6 +239,24 @@ export default function VideoPage() {
             onPlaying={setPlaying}
             overlaysOf={overlaysOf}
             kinds={kinds}
+            renderLayers={(element) => (
+              <LayerCanvas
+                layers={layers}
+                seconds={time}
+                video={element}
+                playing={playing}
+                selected={selectedLayer}
+                editable={editable}
+                drawingPoints={drawingPoints}
+                officialAt={(seconds) => officialAt(items, seconds)}
+                onSelect={(layerId) => {
+                  setSelectedLayer(layerId);
+                  if (layerId) setSelected(null);
+                }}
+                onChange={changeLayer}
+                onDropItem={addFromLibrary}
+              />
+            )}
           />
           <div className="toolbar transport">
             <button
@@ -225,7 +306,29 @@ export default function VideoPage() {
           </div>
         </section>
         <aside className="editor-side">
-          {selectedIndex >= 0 && editable ? (
+          {selectedLayer && editable && layers.some((layer) => layer.id === selectedLayer) ? (
+            <LayerInspector
+              layer={layers.find((layer) => layer.id === selectedLayer)!}
+              time={time}
+              total={total}
+              drawingPoints={drawingPoints}
+              onDrawingPoints={setDrawingPoints}
+              onChange={changeLayer}
+              onSeek={setTime}
+              onRemove={() => {
+                setLayers(layers.filter((layer) => layer.id !== selectedLayer));
+                setSelectedLayer(null);
+              }}
+              onMove={(direction) => {
+                const at = layers.findIndex((layer) => layer.id === selectedLayer);
+                const to = at + direction;
+                if (to < 0 || to >= layers.length) return;
+                const moved = [...layers];
+                [moved[at], moved[to]] = [moved[to], moved[at]];
+                setLayers(moved);
+              }}
+            />
+          ) : selectedIndex >= 0 && editable ? (
             <Inspector
               item={items[selectedIndex]}
               index={selectedIndex}
@@ -283,14 +386,25 @@ export default function VideoPage() {
         stills={(stills || []).map((still) => still.data)}
         overlaysOf={overlaysOf}
         onSeek={(seconds) => setTime(seconds)}
-        onSelect={setSelected}
+        onSelect={(key) => {
+          setSelected(key);
+          setSelectedLayer(null);
+        }}
         onChange={(next) => changeItems(() => next)}
+        layers={layers}
+        selectedLayer={selectedLayer}
+        onSelectLayer={(layerId) => {
+          setSelectedLayer(layerId);
+          setSelected(null);
+        }}
+        onLayerChange={changeLayer}
       />
 
       {rendering && (
         <RenderDialog
           videoId={id}
           beforeRender={() => queue.current}
+          layers={layersToRender}
           overlays={() =>
             Object.fromEntries(
               items.map((item) => [item.key, overlaysOf(item).filter((overlay) => kinds[overlay.kind])])

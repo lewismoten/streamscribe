@@ -127,7 +127,36 @@ test('videos of clips: private until published; publishing queues the joining', 
           { kind: 'script', from: 0, to: 4, text: '<b>no</b>' },
           { kind: 'clock', from: 3, to: 2, text: 'backwards' }
         ]
-      }
+      },
+      layers: [
+        {
+          kind: 'qr',
+          from: 1,
+          to: 6,
+          size: { w: 0.2, h: 0.35 },
+          keys: [{ at: 0, x: 0.7, y: 0.1 }],
+          url: 'https://example.com/a',
+          title: 'Agenda',
+          color: '#112233',
+          level: 'H'
+        },
+        { kind: 'qr', from: 1, to: 6, keys: [{ at: 0, x: 0, y: 0 }], url: 'javascript:alert(1)' },
+        { kind: 'image', from: 0, to: 5, keys: [{ at: 0, x: 0, y: 0 }], image: '../config.php' },
+        {
+          kind: 'blur',
+          from: 2,
+          to: 999,
+          keys: [{ at: 0, x: 0.1, y: 0.2 }],
+          shape: 'polygon',
+          effect: 'pixelate',
+          points: [
+            [0, 0],
+            [1, 0],
+            [0.5, 2]
+          ]
+        },
+        { kind: 'script', from: 0, to: 4, keys: [{ at: 0, x: 0, y: 0 }] }
+      ]
     },
     bossToken
   );
@@ -139,6 +168,15 @@ test('videos of clips: private until published; publishing queues the joining', 
   assert.equal(folderJob.forAgent, 'office-mac');
   assert.deepEqual(folderJob.items[0].overlays, [{ kind: 'speaker', from: 0, to: 4, text: 'Pat Lee — Mayor' }]);
   assert.equal(folderJob.items[1].volume, 1);
+  // Layers are kept to what they can be: a web address, a picture from the hub's store, times within the video.
+  assert.deepEqual(
+    folderJob.layers.map((layer) => layer.kind),
+    ['qr', 'blur']
+  );
+  assert.equal(folderJob.layers[0].level, 'H');
+  assert.equal(folderJob.layers[0].title, 'Agenda');
+  assert.equal(folderJob.layers[1].to, 45);
+  assert.deepEqual(folderJob.layers[1].points[2], [0.5, 1]);
 
   // Publishing again replaces the same publication; unpublishing cancels the joining.
   assert.equal((await json('publish-video', { id: 'v1' }, bossToken)).id, published.id);

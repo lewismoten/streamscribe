@@ -20,8 +20,14 @@ export const TRANSCRIPTION = normalizeTranscriptionConfig(config.transcription);
 export const HTTP = normalizeHttpConfig(config.http);
 export const LOCALE = normalizeLocaleConfig(config.locale);
 export const RECORDER = normalizeRecorderConfig(config.recorder);
+// Reading the text on slides (ocr-slides) with a vision model on an Ollama server.
+export const OCR = {
+  ollamaUrl: String(config.ocr?.ollamaUrl || 'http://127.0.0.1:11434').replace(/\/+$/, ''),
+  model: String(config.ocr?.model || 'deepseek-ocr:3b'),
+  prompt: String(config.ocr?.prompt || 'Free OCR.')
+};
 
-export default { DATA_ROOT, STATE_ROOT, SOURCES, TOOLS, TRANSCRIPTION, HTTP, LOCALE, RECORDER };
+export default { DATA_ROOT, STATE_ROOT, SOURCES, TOOLS, TRANSCRIPTION, HTTP, LOCALE, RECORDER, OCR };
 
 async function loadLocalConfig() {
   // STREAMSCRIBE_CONFIG points to another settings file (for tests, or several setups side by side).

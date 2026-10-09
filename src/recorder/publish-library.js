@@ -8,6 +8,7 @@ import { SqliteStore } from '../sync/stores/node-sqlite.js';
 import { chunkId, stillId } from '../sync/collections.js';
 import { hubConfigured, uploadMedia } from './hub-api.js';
 import { MARK_KINDS } from './marks.js';
+import { sendSlides } from './slides.js';
 import { parseOfficialUrl, timelineFromAlignment } from '../sync/official.js';
 
 // Sends recordings already in the local library (data/streamscribe.db) to the hub, as a recorder sends the meetings
@@ -121,7 +122,7 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
     throw new Error('Set recorder.hubUrl and recorder.key in config.local.js first (docs/recorder/recorder.md)');
   const store = new SqliteStore(path.join(STATE_ROOT, 'publish-library.sqlite'));
   const client = new SyncClient({ store, hubUrl: RECORDER.hubUrl, key: RECORDER.key });
-  const counts = { recordings: 0, chunks: 0, stills: 0, marks: 0 };
+  const counts = { recordings: 0, chunks: 0, stills: 0, slides: 0, marks: 0 };
   // Puts a record unless the hub already has it just so.
   const put = async (collection, id, data, count) => {
     const current = await client.get(collection, id);
@@ -192,6 +193,9 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
         });
       }
 
+      // Slides (from extract-slides), with their text (from ocr-slides).
+      counts.slides += await sendSlides(client, { recordingId: id, part: part.name, dir, dryRun });
+
       // Marks, as the review page saved them.
       for (const kind of MARK_KINDS) {
         const data = readJson(path.join(dir, `${kind}.json`));
@@ -254,7 +258,7 @@ export async function publishLibrary({ dryRun = false, all = false, only = null,
       for (const item of refused) log(`The hub refused ${item.collection}/${item.id}: ${item.error}`);
     }
     log(
-      `${dryRun ? 'Would send' : 'Sent'}: ${counts.recordings} recordings, ${counts.chunks} transcript chunks, ${counts.stills} stills, ${counts.marks} marks`
+      `${dryRun ? 'Would send' : 'Sent'}: ${counts.recordings} recordings, ${counts.chunks} transcript chunks, ${counts.stills} stills, ${counts.slides} slides, ${counts.marks} marks`
     );
     return counts;
   } finally {

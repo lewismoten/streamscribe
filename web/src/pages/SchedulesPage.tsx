@@ -17,6 +17,7 @@ import {
   dayOfMonth,
   formOf,
   localZone,
+  NOT_STREAMED,
   monthOf,
   scheduleOf,
   type Form,
@@ -85,8 +86,8 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
   };
   const save = async () => {
     if (!form) return;
-    if (!form.title.trim() || !form.sourceKey.trim()) {
-      setMessage('A meeting needs a title and a source');
+    if (!form.title.trim() || (!form.sourceKey.trim() && !form.notStreamed)) {
+      setMessage('A meeting needs a title and a source (unless it isn’t streamed)');
       return;
     }
     await putRecord('schedules', form.id, scheduleOf(form, previousOf(form.id)));
@@ -133,7 +134,7 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
     if (!item.cancelled)
       note(dayKeyOf(item.start, zone(item)), {
         kind: 'meeting',
-        text: `${clockTime(item.start, zone(item))} ${item.title}`
+        text: `${clockTime(item.start, zone(item))} ${item.title}${item.schedule.notStreamed ? ' (not streamed)' : ''}`
       });
   for (const item of holidayList) note(item.day, { kind: 'holiday', text: item.name });
   for (const item of electionList) note(item.data.date, { kind: 'election', text: item.data.name });
@@ -265,6 +266,11 @@ export default function SchedulesPage({ sourceKeys }: { sourceKeys: string[] }) 
                       <span className="grow">
                         {body ? <Link to={`/bodies/${encodeURIComponent(body.id)}`}>{item.title}</Link> : item.title}
                         {item.cancelled && <span className="muted small"> (cancelled)</span>}
+                        {item.schedule.notStreamed && (
+                          <span className="tag not-streamed" title={NOT_STREAMED}>
+                            not streamed
+                          </span>
+                        )}
                         {roomName(item) && <span className="muted small"> · {roomName(item)}</span>}
                       </span>
                       {editor && (

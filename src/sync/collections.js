@@ -33,6 +33,11 @@ export const COLLECTIONS = {
     mode: 'immutable',
     doc: 'Pictures from a recording (by media hash), for viewing without the video.'
   },
+  slides: {
+    writers: ['recorder', 'editor'],
+    mode: 'mutable',
+    doc: 'Slides shown during a meeting (private, like the meetings; id <recording>:<part>:<file>): the picture, when it was shown, and its text (read by ocr-slides).'
+  },
   media: {
     writers: ['recorder', 'editor'],
     mode: 'mutable',
@@ -74,6 +79,21 @@ export const COLLECTIONS = {
     mode: 'mutable',
     doc: 'Places mentioned in meetings: a name, a street address, GPS coordinates, a tax map id, and on a map a marker, an approximate area, outlined areas, or roads; transcripts link words to them.'
   },
+  maps: {
+    writers: ['editor', 'recorder'],
+    mode: 'mutable',
+    doc: 'Maps for the Maps section (public): an SVG (its text) or a picture, with a title, a group (state, county, town), what it shows, and the credits for its data (see src/maps).'
+  },
+  topics: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: 'Subjects meetings discuss (Broadband, the property tax rate): a name and description; transcript words are tagged with them (with a stance, for or against), and each has a page of where it came up.'
+  },
+  laws: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: 'Laws and documents cited in meetings: federal, state, county, or town; a code section, an act, a bill, an ordinance, a resolution; its citation and where to read it. Transcript words are linked to them.'
+  },
   rooms: {
     writers: ['editor'],
     mode: 'mutable',
@@ -98,6 +118,26 @@ export const COLLECTIONS = {
     writers: ['editor', 'recorder'],
     mode: 'mutable',
     doc: 'Videos put together from clips of any meetings, in order (private until published; publishing has an agent join them into one).'
+  },
+  prompts: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: 'Tasks for agents to run on meetings with a language model: a name and a prompt with {{placeholders}}, a model, and whether to run after each meeting (see src/sync/prompts.js).'
+  },
+  prompt_results: {
+    writers: ['editor', 'recorder'],
+    mode: 'mutable',
+    doc: "A task's answer for a meeting (id <recording>:<prompt>; private, like the meetings): the text, the model, and how long it took."
+  },
+  agent_settings: {
+    writers: ['editor'],
+    mode: 'mutable',
+    doc: "What each agent is told (id = the agent's id; private): where its working files go, more storage to watch, an Ollama server on the network, and the port it answers pings on (see src/recorder/agent-settings.js)."
+  },
+  library: {
+    writers: ['editor', 'recorder'],
+    mode: 'mutable',
+    doc: "Links and pictures kept for videos (private, like them): a link's label and address (shown as a QR code), or a picture on the hub (a document being discussed), dragged onto a video as a layer."
   },
   notifications: {
     writers: ['editor', 'recorder'],

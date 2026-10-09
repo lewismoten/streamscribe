@@ -45,6 +45,7 @@ export const dateTime = (iso: string | null) =>
 export default function MeetingsPage() {
   const { records } = useRecords<RecordingData>('recordings');
   const { records: stills } = useRecords<{ recordingId: string; path: string; position: number }>('stills');
+  const checkedShare = useReviewShares();
   // Meetings are private: for groups that may see them (the file signature arriving re-renders the pictures).
   const account = useAccount();
   if (account.checked && !can('view.meetings', account)) {
@@ -102,6 +103,12 @@ export default function MeetingsPage() {
                   <Link to={`/meetings/${record.id}`}>{record.data.title}</Link>
                 </h3>
                 <div className="muted">{dateTime(record.data.startedAt || record.data.scheduledStart)}</div>
+                {checkedShare(record.id, record.data.durationSeconds) !== null && (
+                  <div className="small" title="Minutes whose speakers and words have both been checked">
+                    ✓ {Math.round(checkedShare(record.id, record.data.durationSeconds)! * 100)}% of the transcript
+                    checked
+                  </div>
+                )}
               </div>
             </article>
           );
@@ -112,4 +119,5 @@ export default function MeetingsPage() {
 }
 
 import { mediaUrl } from '../data/hub.ts';
+import { useReviewShares } from '../meeting/useReviewShares.ts';
 export const mediaUrlOf = (path: string) => mediaUrl(path);

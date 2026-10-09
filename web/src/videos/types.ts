@@ -1,5 +1,6 @@
 import { putRecord } from '../data/useRecords.ts';
 import { newId } from '../../../src/sync/collections.js';
+import type { Layer } from './layers.ts';
 
 // Clips and the videos made from them (collections clips and videos; private, like the meetings). A clip is a
 // stretch of a meeting saved to build videos from; a video is clips of any meetings in order, each a copy of the
@@ -39,6 +40,8 @@ export interface Video {
   publishedAt?: string;
   // Which overlays it has (all, unless some are turned off).
   overlays?: Partial<Record<'speaker' | 'body' | 'chapter' | 'clock' | 'vote', boolean>>;
+  // What goes over the clips: QR codes, pictures, pictures in picture, blurred areas (see layers.ts).
+  layers?: Layer[];
 }
 // Where each clip starts in the video, and how long the video is.
 export function layout(items: { from: number; to: number }[]) {

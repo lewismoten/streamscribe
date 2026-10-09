@@ -2,6 +2,7 @@ import type { Passage } from '../religion/bible.ts';
 import { passageName, passageUrl } from '../religion/bible.ts';
 import { placeHref } from '../locations/types.ts';
 import type { ShownLine, Stacks } from './words.ts';
+import type { LawRef, Quote, TopicTag, WordNote } from '../annotations/types.ts';
 
 // Links on the transcript's words (each part's `links` mark): a phrase, from one word to another (words are found by
 // their line's start and their place in it, as corrections are), linking to a web page or naming a Bible passage
@@ -21,7 +22,15 @@ export interface TranscriptLink {
   label?: string; // what a web link is (a meeting document's name), or the place's name when it was linked
   locationId?: string; // a place (see ../locations)
   passage?: Passage;
+  // Not links but things said about the words (see ../annotations): a note, a topic, a quote, a law cited.
+  note?: WordNote;
+  topic?: TopicTag;
+  quote?: Quote;
+  law?: LawRef;
 }
+export type AnnotationKind = 'note' | 'topic' | 'quote' | 'law';
+export const annotationOf = (link: TranscriptLink): AnnotationKind | null =>
+  link.note ? 'note' : link.topic ? 'topic' : link.quote ? 'quote' : link.law ? 'law' : null;
 
 export const linksMarkId = (recordingId: string, part: string) => `${recordingId}:${part}:links`;
 export const linksIn = (stacks: Stacks, recordingId: string, part: string) =>
@@ -34,7 +43,11 @@ export const endsAt = (link: TranscriptLink, place: WordPlace) =>
   link.to.line === place.line && link.to.index === place.index;
 
 export const linkLabel = (link: TranscriptLink) =>
-  link.passage ? passageName(link.passage) : link.label || link.url || '';
+  link.passage
+    ? passageName(link.passage)
+    : link.label ||
+      link.url ||
+      (link.note ? 'Note' : link.quote ? 'Quote' : link.topic ? 'Topic' : link.law ? 'Law' : '');
 export const linkHref = (link: TranscriptLink, scriptureSite: string) =>
   link.passage
     ? passageUrl(link.passage, scriptureSite)
@@ -54,6 +67,8 @@ export function lineLinks(line: ShownLine, links: TranscriptLink[], scriptureSit
     return span;
   });
   for (const link of links) {
+    // Notes, topics, quotes, and laws cited stay with the meeting (they aren't links to publish).
+    if (annotationOf(link)) continue;
     const inLine = spans.filter((span) => span && covers(link, { line: span.word.line, index: span.word.index }));
     if (!inLine.length) continue;
     found.push({

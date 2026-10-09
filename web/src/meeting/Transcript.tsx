@@ -1,22 +1,37 @@
 import { Link } from 'react-router';
-import { Fragment, useEffect, useRef, useState, type Ref } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { clock } from '../format.ts';
 import Avatar, { RING_LABELS, type AvatarPerson } from '../people/Avatar.tsx';
 import Dialog from '../Dialog.tsx';
 import LinkForm from './LinkForm.tsx';
+import DocumentPicker from './DocumentPicker.tsx';
+import MinuteCheckRow from './MinuteCheckRow.tsx';
+import { minuteOf, type MinuteCheck, type ReviewField } from './review.ts';
+import SelectionMenu from './SelectionMenu.tsx';
 import LocationDialog from '../locations/LocationDialog.tsx';
 import { placeName, placePath, type Around } from '../locations/types.ts';
 import TimeLink from './TimeLink.tsx';
 import WordEditor from './WordEditor.tsx';
-import { covers, endsAt, linkHref, linkLabel, type TranscriptLink } from './links.ts';
+import { ANNOTATIONS, AnnotationEditor, AnnotationView, useAnnotationLabel } from '../annotations/Annotations.tsx';
+import {
+  annotationOf,
+  covers,
+  endsAt,
+  linkHref,
+  linkLabel,
+  type AnnotationKind,
+  type TranscriptLink
+} from './links.ts';
 import { lineKey } from './useFollowAlong.ts';
 import type { Person, ShownLine, Word } from './words.ts';
 
 // The meeting's transcript: every line with its time (a click plays from there), its words (a click on one, signed
 // in, opens its editor), and who is speaking named wherever that changes. Signed in, selecting words (with the mouse,
-// or Shift and the arrow keys) opens a menu under them: mark them as a Bible passage, or link them to a web page. A find box narrows it to the lines holding
-// some words; the line being played is followed along (see useFollowAlong).
+// or Shift and the arrow keys) opens a menu under them: link them (a web page, a meeting document, a place, a Bible
+// passage), save them as a clip, or annotate them (a note, a topic, a quote, a law cited; see ../annotations). A find
+// box narrows it to the lines holding some words; the line being played is followed along (see useFollowAlong).
 export default function Transcript({
+  recordingId,
   kind,
   lines,
   status,
@@ -43,8 +58,13 @@ export default function Transcript({
   onUnlink,
   onClip,
   documents = [],
-  around
+  around,
+  officialAt,
+  minuteChecks,
+  onMinuteCheck,
+  progress
 }: {
+  recordingId: string;
   kind: 'quick' | 'final';
   lines: ShownLine[];
   status: string;
@@ -83,6 +103,13 @@ export default function Transcript({
   documents?: { group: string; label: string; url: string }[];
   // Where the meeting is (its room's town, county, and ZIP), for naming places.
   around?: Around;
+  // The official video at a moment of a part, when it's lined up with the recording.
+  officialAt?: (part: string, seconds: number) => string | null;
+  // Each minute's checks (its speakers and words), shown at the minute's start, and toggling one.
+  minuteChecks?: (part: string) => Record<string, MinuteCheck>;
+  onMinuteCheck?: (part: string, minute: number, field: ReviewField) => void;
+  // Shown under the heading (how much of it is checked).
+  progress?: ReactNode;
 }) {
   const [filter, setFilter] = useState('');
   // Words selected in the transcript: the menu under them, and the dialog one of its choices opens.
@@ -95,6 +122,16 @@ export default function Transcript({
     kind: 'passage' | 'web';
     link: TranscriptLink | null;
   } | null>(null);
+  // Annotating words (a note, topic, quote, or law), or one shown (its marker clicked).
+  const [annotating, setAnnotating] = useState<{
+    kind: AnnotationKind;
+    part: string;
+    words: Word[];
+    link: TranscriptLink | null;
+  } | null>(null);
+  const [viewing, setViewing] = useState<{ part: string; link: TranscriptLink } | null>(null);
+  const annotationLabel = useAnnotationLabel();
+  const labelOf = (link: TranscriptLink) => (annotationOf(link) ? annotationLabel(link) : linkLabel(link));
   // The links on some words (any of them), and a link's own words.
   const linksOn = (part: string, words: Word[]) =>
     linksFor(part).filter((link) => words.some((word) => covers(link, { line: word.line, index: word.index })));
@@ -104,7 +141,9 @@ export default function Transcript({
       .flatMap((line) => line.words)
       .filter((word) => covers(link, { line: word.line, index: word.index }));
   const change = (part: string, link: TranscriptLink, words = wordsOf(part, link)) => {
-    setMarking({ part, words, kind: link.passage ? 'passage' : 'web', link });
+    const annotation = annotationOf(link);
+    if (annotation) setAnnotating({ kind: annotation, part, words, link });
+    else setMarking({ part, words, kind: link.passage ? 'passage' : 'web', link });
     setMenu(null);
     window.getSelection()?.removeAllRanges();
   };
@@ -125,11 +164,9 @@ export default function Transcript({
   };
   // Linking selected words to one of the meeting's documents (so it's at hand when that's discussed again).
   const [picking, setPicking] = useState<{ part: string; words: Word[] } | null>(null);
-  const [pickFilter, setPickFilter] = useState('');
   const pickDocument = () => {
     if (!menu) return;
     setPicking({ part: menu.part, words: menu.words });
-    setPickFilter('');
     setMenu(null);
     window.getSelection()?.removeAllRanges();
   };
@@ -212,6 +249,12 @@ export default function Transcript({
       window.removeEventListener('scroll', close, true);
     };
   }, [menu]);
+  const annotate = (choice: AnnotationKind) => {
+    if (!menu) return;
+    setAnnotating({ kind: choice, part: menu.part, words: menu.words, link: null });
+    setMenu(null);
+    window.getSelection()?.removeAllRanges();
+  };
   const mark = (choice: 'passage' | 'web') => {
     if (!menu) return;
     setMarking({ part: menu.part, words: menu.words, kind: choice, link: null });
@@ -302,6 +345,7 @@ export default function Transcript({
           </button>
         )}
       </div>
+      {progress}
       {rings.length > 0 && (
         <p className="ring-key small" aria-hidden="true">
           {rings.map((ring) => (
@@ -325,13 +369,29 @@ export default function Transcript({
             const heads = headings.has(lineIndex);
             let last = opening.join();
             const key = lineKey(line);
+            // A new minute (when not finding): its checks.
+            const minute = minuteOf(line.start);
+            const previous = shown[lineIndex - 1];
+            const newMinute =
+              !needle &&
+              minuteChecks &&
+              (!previous || previous.part !== line.part || minuteOf(previous.start) !== minute);
             return (
               <Fragment key={key}>
+                {newMinute && (
+                  <MinuteCheckRow
+                    minute={minute}
+                    check={minuteChecks(line.part)[minute] || {}}
+                    editable={editable}
+                    onToggle={(field) => onMinuteCheck?.(line.part, minute, field)}
+                  />
+                )}
                 {heads && <li className="speaker-block">{speakerNames(opening, 32)}</li>}
                 <li data-line={key} className={nowLine === key ? 'now' : undefined}>
                   <TimeLink
                     seconds={line.start}
                     onPlay={canPlay(line.part) ? () => playAt(line.part, line.start) : null}
+                    officialHref={officialAt?.(line.part, line.start)}
                   />
                   <span className="words">
                     {line.words.map((word) => {
@@ -389,8 +449,19 @@ export default function Transcript({
                             </span>
                           )}
                           {ending.map((link) =>
-                            // A place goes to its page here; anything else opens elsewhere.
-                            link.locationId ? (
+                            // A note, topic, quote, or law shows what it says; a place goes to its page here; anything
+                            // else opens elsewhere.
+                            annotationOf(link) ? (
+                              <button
+                                key={link.id}
+                                type="button"
+                                className={`transcript-link annotation annotation-${annotationOf(link)}`}
+                                onClick={() => setViewing({ part: line.part, link })}
+                                title={ANNOTATIONS[annotationOf(link)!].title}
+                              >
+                                {ANNOTATIONS[annotationOf(link)!].icon} {annotationLabel(link)}
+                              </button>
+                            ) : link.locationId ? (
                               <Link key={link.id} className="transcript-link" to={placePath(link.locationId)}>
                                 📍 {linkLabel(link)}
                               </Link>
@@ -407,18 +478,20 @@ export default function Transcript({
                             )
                           )}
                           {editable &&
-                            ending.map((link) => (
-                              <button
-                                key={`change-${link.id}`}
-                                type="button"
-                                className="link-button link-change"
-                                onClick={() => change(line.part, link)}
-                                aria-label={`Change or remove the link to ${linkLabel(link)}`}
-                                title="Change or remove"
-                              >
-                                ✎
-                              </button>
-                            ))}{' '}
+                            ending
+                              .filter((link) => !annotationOf(link))
+                              .map((link) => (
+                                <button
+                                  key={`change-${link.id}`}
+                                  type="button"
+                                  className="link-button link-change"
+                                  onClick={() => change(line.part, link)}
+                                  aria-label={`Change or remove the link to ${linkLabel(link)}`}
+                                  title="Change or remove"
+                                >
+                                  ✎
+                                </button>
+                              ))}{' '}
                         </span>
                       );
                     })}
@@ -440,7 +513,9 @@ export default function Transcript({
             onAdd={edits.addPerson}
             following={followingOf(picked)}
             link={
-              linksFor(picked.part).find((link) => covers(link, { line: picked.line, index: picked.index })) || null
+              linksFor(picked.part).find(
+                (link) => !annotationOf(link) && covers(link, { line: picked.line, index: picked.index })
+              ) || null
             }
             onLink={(link) => {
               onLink(picked.part, link);
@@ -455,50 +530,58 @@ export default function Transcript({
         </Dialog>
       )}
       {menu && (
-        // Pressing a choice keeps the selection (it's what the choice is for).
-        <div
-          className="selection-menu"
-          role="menu"
-          tabIndex={-1}
-          aria-label="The selected words"
-          style={{ top: menu.top, left: menu.left }}
-          onMouseDown={(event) => event.preventDefault()}
-        >
-          {linksOn(menu.part, menu.words).map((link) => (
-            <Fragment key={link.id}>
-              <button type="button" role="menuitem" onClick={() => change(menu.part, link, menu.words)}>
-                Change {linkLabel(link)}…
-              </button>
-              <button type="button" role="menuitem" onClick={() => unlink(menu.part, link)}>
-                Remove {linkLabel(link)}
-              </button>
-            </Fragment>
-          ))}
-          {onClip && (
-            <button type="button" role="menuitem" onClick={clip}>
-              Save as a clip…
-            </button>
-          )}
-          {/* Words already linked are changed or unlinked, not linked twice. */}
-          {linksOn(menu.part, menu.words).length === 0 && (
-            <>
-              <button type="button" role="menuitem" onClick={placeWords}>
-                Mark as a place…
-              </button>
-              {documents.length > 0 && (
-                <button type="button" role="menuitem" onClick={pickDocument}>
-                  Link to a meeting document…
-                </button>
-              )}
-              <button type="button" role="menuitem" onClick={() => mark('passage')}>
-                Mark Bible passage…
-              </button>
-              <button type="button" role="menuitem" onClick={() => mark('web')}>
-                Link to a web page…
-              </button>
-            </>
-          )}
-        </div>
+        <SelectionMenu
+          top={menu.top}
+          left={menu.left}
+          links={linksOn(menu.part, menu.words)}
+          labelOf={labelOf}
+          canClip={Boolean(onClip)}
+          hasDocuments={documents.length > 0}
+          onChange={(link) => change(menu.part, link, menu.words)}
+          onRemove={(link) => unlink(menu.part, link)}
+          onChoose={(choice) => {
+            if (choice === 'clip') clip();
+            else if (choice === 'place') placeWords();
+            else if (choice === 'document') pickDocument();
+            else if (choice === 'passage' || choice === 'web') mark(choice);
+            else annotate(choice);
+          }}
+        />
+      )}
+      {annotating && (
+        <AnnotationEditor
+          kind={annotating.kind}
+          words={annotating.words}
+          link={annotating.link}
+          recordingId={recordingId}
+          part={annotating.part}
+          onSave={(link) => {
+            onLink(annotating.part, link);
+            setAnnotating(null);
+          }}
+          onRemove={(link) => {
+            onUnlink(annotating.part, link);
+            setAnnotating(null);
+          }}
+          onClose={() => setAnnotating(null)}
+        />
+      )}
+      {viewing && (
+        <AnnotationView
+          link={viewing.link}
+          recordingId={recordingId}
+          editable={editable}
+          onPlay={(part, seconds) => playAt(part || viewing.part, seconds)}
+          onChange={() => {
+            change(viewing.part, viewing.link);
+            setViewing(null);
+          }}
+          onRemove={() => {
+            onUnlink(viewing.part, viewing.link);
+            setViewing(null);
+          }}
+          onClose={() => setViewing(null)}
+        />
       )}
       {placing && (
         <LocationDialog
@@ -526,43 +609,15 @@ export default function Transcript({
         />
       )}
       {picking && (
-        <Dialog title="Link to a meeting document" onClose={() => setPicking(null)}>
-          <p className="muted small">
-            “
-            {picking.words
-              .map((word) => word.shown)
-              .filter(Boolean)
-              .join(' ')}
-            ”
-          </p>
-          <input
-            type="search"
-            value={pickFilter}
-            onChange={(event) => setPickFilter(event.target.value)}
-            placeholder="Find a document"
-            aria-label="Find a document"
-          />
-          {[...new Set(documents.map((document) => document.group))].map((group) => (
-            <div key={group} className="document-group">
-              <h3>{group}</h3>
-              <ul className="document-pick">
-                {documents
-                  .filter(
-                    (document) =>
-                      document.group === group &&
-                      (!pickFilter.trim() || document.label.toLowerCase().includes(pickFilter.trim().toLowerCase()))
-                  )
-                  .map((document) => (
-                    <li key={document.url}>
-                      <button type="button" className="link-button" onClick={() => linkDocument(document)}>
-                        {document.label}
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          ))}
-        </Dialog>
+        <DocumentPicker
+          words={picking.words
+            .map((word) => word.shown)
+            .filter(Boolean)
+            .join(' ')}
+          documents={documents}
+          onPick={linkDocument}
+          onClose={() => setPicking(null)}
+        />
       )}
       {marking && (
         <Dialog

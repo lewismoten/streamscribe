@@ -7,6 +7,7 @@ const COLLECTIONS = [
   'recordings' => ['writers' => ['recorder', 'editor'], 'mode' => 'mutable'],
   'transcript_chunks' => ['writers' => ['recorder'], 'mode' => 'immutable'],
   'stills' => ['writers' => ['recorder'], 'mode' => 'immutable'],
+  'slides' => ['writers' => ['recorder', 'editor'], 'mode' => 'mutable'],
   'media' => ['writers' => ['recorder', 'editor'], 'mode' => 'mutable'],
   'marks' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'settings' => ['writers' => ['editor'], 'mode' => 'mutable'],
@@ -15,6 +16,10 @@ const COLLECTIONS = [
   'clips' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'videos' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'notifications' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
+  'library' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
+  'agent_settings' => ['writers' => ['editor'], 'mode' => 'mutable'],
+  'prompts' => ['writers' => ['editor'], 'mode' => 'mutable'],
+  'prompt_results' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
   'directory' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'organizations' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'bodies' => ['writers' => ['editor'], 'mode' => 'mutable'],
@@ -22,6 +27,9 @@ const COLLECTIONS = [
   'elections' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'rooms' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'locations' => ['writers' => ['editor'], 'mode' => 'mutable'],
+  'topics' => ['writers' => ['editor'], 'mode' => 'mutable'],
+  'maps' => ['writers' => ['editor', 'recorder'], 'mode' => 'mutable'],
+  'laws' => ['writers' => ['editor'], 'mode' => 'mutable'],
   'profiles' => ['writers' => ['editor'], 'mode' => 'mutable'],
 ];
 const MAX_RECORD_BYTES = 262144;

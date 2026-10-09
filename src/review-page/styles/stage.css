@@ -174,3 +174,36 @@
 .overlay[hidden] {
   display: none;
 }
+.zoom-in-view {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.zoom-in-view label.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Editing a camera view on the player itself: its boxes over the video, the editor's controls just under it. */
+.stage > #zoom-canvas {
+  display: none;
+}
+.stage.editing-view > #zoom-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  touch-action: none;
+}
+#zoom-dialog.docked {
+  position: static;
+  width: auto;
+  max-width: none;
+  margin: 8px 0;
+  border-radius: 8px;
+}
+.zoom-mode {
+  flex-wrap: wrap;
+  gap: 8px;
+}

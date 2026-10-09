@@ -37,6 +37,7 @@ const MARK_PERMISSIONS = [
   'playlist' => 'contribute.other',
   'attendance' => 'contribute.speakers',
   'links' => 'contribute.transcript',
+  'reviewed' => 'contribute.transcript',
   'consent' => 'contribute.chapters',
   'prayers' => 'contribute.speakers',
   'faith' => 'contribute.speakers',
@@ -45,7 +46,7 @@ const MARK_PERMISSIONS = [
 // Collections of meetings (and the clips and videos made from them), which only viewers with view.meetings (and keys)
 // see. Everyone sees schedules, sources,
 // settings, recorders, and publications.
-const PRIVATE_COLLECTIONS = ['recordings', 'transcript_chunks', 'stills', 'media', 'marks', 'jobs', 'clips', 'videos', 'notifications'];
+const PRIVATE_COLLECTIONS = ['recordings', 'transcript_chunks', 'stills', 'slides', 'media', 'marks', 'jobs', 'clips', 'videos', 'notifications', 'library', 'agent_settings', 'prompts', 'prompt_results'];
 
 // Shared collections a person may change directly, and the permission it takes.
 const EDIT_PERMISSIONS = [
@@ -53,6 +54,10 @@ const EDIT_PERMISSIONS = [
   'jobs' => 'publish',
   'clips' => 'contribute.other',
   'videos' => 'contribute.other',
+  'library' => 'contribute.other',
+  'agent_settings' => 'edit.sources',
+  'prompts' => 'publish',
+  'prompt_results' => 'publish',
   'schedules' => 'edit.schedules',
   'sources' => 'edit.sources',
   'settings' => 'edit.sources',
@@ -62,6 +67,9 @@ const EDIT_PERMISSIONS = [
   'elections' => 'edit.bodies',
   'rooms' => 'edit.bodies',
   'locations' => 'contribute.chapters',
+  'topics' => 'contribute.chapters',
+  'maps' => 'edit.bodies',
+  'laws' => 'contribute.chapters',
   'profiles' => 'edit.bodies',
 ];
 
