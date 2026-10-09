@@ -102,7 +102,23 @@ export default function LocationForm({
   };
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    const saved = { ...forType(), createdAt: place.createdAt || new Date().toISOString() };
+    // What's been drawn is kept as it is (points go straight into the place), except a road stretch of one point or
+    // an outline of fewer than three.
+    const drawn = forType();
+    const keepPath = (drawn.paths || []).map((path) => path.length >= 2);
+    const saved: Place = { ...drawn, createdAt: place.createdAt || new Date().toISOString() };
+    if (drawn.paths) {
+      saved.paths = drawn.paths.filter((_, at) => keepPath[at]);
+      saved.curves = drawn.paths.map((_, at) => drawn.curves?.[at] ?? 0).filter((_, at) => keepPath[at]);
+      if (!saved.paths.length) {
+        delete saved.paths;
+        delete saved.curves;
+      }
+    }
+    if (drawn.areas) {
+      saved.areas = drawn.areas.filter((area) => area.length >= 3);
+      if (!saved.areas.length) delete saved.areas;
+    }
     if (!hasAnything(saved)) return setProblem('Give it something: a name, an address, a spot on the map…');
     if ((saved.latitude === undefined) !== (saved.longitude === undefined))
       return setProblem('GPS coordinates need both a latitude and a longitude');

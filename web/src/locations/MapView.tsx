@@ -12,12 +12,13 @@ import { curved, gpsOf, pointsOf, type Draw, type LatLng, type Place } from './t
 const round = (value: number) => Number(value.toFixed(6));
 const pointOf = (latlng: L.LatLng): LatLng => [round(latlng.lat), round(latlng.lng)];
 const handle = L.divIcon({ className: 'map-handle', iconSize: [12, 12] });
+const handleSelected = L.divIcon({ className: 'map-handle selected', iconSize: [16, 16] });
 const pin = L.divIcon({ className: 'map-pin', iconSize: [22, 22], iconAnchor: [11, 22] });
 const DRAW_HINTS: Record<Draw, string> = {
   gps: 'Click to place the pin; drag it to adjust.',
-  path: 'Click each point, then Finish (or double-click the last one). Drag a point to move it; right-click it to remove it.',
-  area: 'Click each corner, then Finish (or double-click the last one). Drag a corner to move it; right-click it to remove it.',
-  circle: 'Click the middle of the area, then its edge.'
+  path: 'Click to add points to the road. Click the road to add a point on it; click a point to select it (Delete removes it); drag a point to move it. Hold Shift (or Space) and drag to move the map.',
+  area: 'Click to add corners to the outline. Click the outline to add a corner on it; click a corner to select it (Delete removes it); drag a corner to move it. Hold Shift (or Space) and drag to move the map.',
+  circle: 'Click the middle of the area, then its edge. Hold Shift (or Space) and drag to move the map.'
 };
 
 export default function MapView({
@@ -41,16 +42,99 @@ export default function MapView({
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const shapes = useRef<L.LayerGroup | null>(null);
-  const [draft, setDraft] = useState<LatLng[]>([]);
+  // The road stretch (or outline) being drawn: each click adds its point to it, in the place itself (so saving keeps
+  // it); none between stretches. An approximate area's middle, while its edge is being chosen.
+  const [active, setActive] = useState<number | null>(null);
+  const [middle, setMiddle] = useState<LatLng | null>(null);
+  // A point of a road or outline that's been clicked (Delete removes it).
+  const [selected, setSelected] = useState<{ shape: number; point: number } | null>(null);
   const [query, setQuery] = useState(search);
   const [message, setMessage] = useState('');
-  const [nextCurve, setNextCurve] = useState(0.5);
+  const [nextCurve, setNextCurve] = useState(0);
   const editing = Boolean(onChange && draw);
+  const key = draw === 'path' ? 'paths' : 'areas';
+  const shapeList = (now: Place) => (draw === 'path' ? now.paths : now.areas) || [];
   // The latest of everything, for the map's handlers (made once).
-  const latest = useRef({ place, draw, draft, onChange, finish: () => {} });
-  useEffect(() => {
-    latest.current = { place, draw, draft, onChange, finish };
+  const latest = useRef({
+    place,
+    draw,
+    active,
+    middle,
+    onChange,
+    addPoint: (_point: LatLng) => {},
+    removeSelected: () => {}
   });
+  useEffect(() => {
+    latest.current = { place, draw, active, middle, onChange, addPoint, removeSelected };
+  });
+
+  // A point added to the stretch (or outline) being drawn, or a new one started with it (a new outline replaces the
+  // old: an area is one outline). The same point twice in a row (a double-click's two clicks) counts once.
+  function addPoint(point: LatLng) {
+    if (!onChange || (draw !== 'path' && draw !== 'area')) return;
+    const list = shapeList(place);
+    if (active !== null && list[active]) {
+      const shape = list[active];
+      const last = shape.at(-1);
+      if (last && last[0] === point[0] && last[1] === point[1]) return;
+      const next = list.map((item, at) => (at === active ? [...item, point] : item));
+      onChange({ ...place, [key]: next });
+      return;
+    }
+    if (draw === 'area') {
+      onChange({ ...place, areas: [[point]] });
+      setActive(0);
+    } else {
+      const paths = place.paths || [];
+      onChange({
+        ...place,
+        paths: [...paths, [point]],
+        curves: [...paths.map((_, at) => place.curves?.[at] ?? 0), nextCurve]
+      });
+      setActive(paths.length);
+    }
+    setSelected(null);
+  }
+  // Points of a shape changed (or the shape gone, with fewer than it needs once it's finished).
+  const changeShape = (shapeIndex: number, points: LatLng[]) => {
+    const now = latest.current.place;
+    const list = [...shapeList(now)];
+    const minimum = draw === 'path' ? 2 : 3;
+    const keep = points.length >= minimum || shapeIndex === active;
+    if (keep) list[shapeIndex] = points;
+    else list.splice(shapeIndex, 1);
+    const curves =
+      draw === 'path'
+        ? (now.paths || []).map((_, at) => now.curves?.[at] ?? 0).filter((_, at) => keep || at !== shapeIndex)
+        : now.curves;
+    onChange?.({ ...now, [key]: list, ...(draw === 'path' ? { curves } : {}) });
+    if (!keep && active !== null && active > shapeIndex) setActive(active - 1);
+    if (!keep && active === shapeIndex) setActive(null);
+  };
+  const removeSelected = () => {
+    if (!selected) return;
+    const shape = shapeList(place)[selected.shape];
+    if (shape)
+      changeShape(
+        selected.shape,
+        shape.filter((_, at) => at !== selected.point)
+      );
+    setSelected(null);
+  };
+  // Delete (or Backspace) removes the selected point, when not typing.
+  useEffect(() => {
+    if (!selected) return;
+    const press = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement).closest('input, textarea, select')) return;
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        latest.current.removeSelected();
+      }
+      if (event.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', press);
+    return () => window.removeEventListener('keydown', press);
+  }, [selected]);
 
   // The map, once: its tiles, where it starts, and what a click and a double-click do.
   useEffect(() => {
@@ -68,22 +152,23 @@ export default function MapView({
     else created.setView([39.5, -98.35], 4);
     created.on('click', (event: L.LeafletMouseEvent) => {
       const now = latest.current;
-      if (!now.onChange || !now.draw) return;
+      // Shift is for moving the map, not adding points.
+      if (!now.onChange || !now.draw || event.originalEvent.shiftKey || holding.current) return;
       const point = pointOf(event.latlng);
+      setSelected(null);
       if (now.draw === 'gps')
         now.onChange({ ...now.place, latitude: point[0], longitude: point[1], marker: undefined });
       else if (now.draw === 'circle') {
-        if (!now.draft.length) setDraft([point]);
+        if (!now.middle) setMiddle(point);
         else {
-          const radius = Math.round(created.distance(now.draft[0], point));
-          now.onChange({ ...now.place, circle: { center: now.draft[0], radius } });
-          setDraft([]);
+          const radius = Math.round(created.distance(now.middle, point));
+          now.onChange({ ...now.place, circle: { center: now.middle, radius } });
+          setMiddle(null);
         }
-      } else setDraft([...now.draft, point]);
+      } else now.addPoint(point);
     });
     created.on('dblclick', () => {
-      const now = latest.current;
-      if (now.onChange && (now.draw === 'area' || now.draw === 'path')) now.finish();
+      if (latest.current.draw === 'area' || latest.current.draw === 'path') setActive(null);
     });
     map.current = created;
     return () => {
@@ -94,25 +179,78 @@ export default function MapView({
     // oxlint-disable-next-line react/exhaustive-deps
   }, []);
 
-  // Drawing a shape: no panning and no zooming on a double-click (it finishes), with a crosshair.
+  // Drawing a shape: no panning and no zooming on a double-click (it finishes), with a crosshair. Holding Shift (or
+  // Space) and dragging moves the map; clicks then add no points. (Leaflet's own dragging ignores Shift, which it keeps
+  // for zooming to a box, so the moving is done here.)
+  const holding = useRef(false);
   useEffect(() => {
     const current = map.current;
     if (!current) return;
     const drawing = editing && draw !== 'gps';
+    const container = current.getContainer();
     if (drawing) {
       current.dragging.disable();
       current.doubleClickZoom.disable();
+      current.boxZoom.disable();
     } else {
       current.dragging.enable();
       current.doubleClickZoom.enable();
+      current.boxZoom.enable();
     }
-    current.getContainer().classList.toggle('drawing', editing);
+    container.classList.toggle('drawing', editing);
+    if (!drawing) return;
+    const hold = (on: boolean) => {
+      holding.current = on;
+      container.classList.toggle('panning', on);
+    };
+    const down = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement).closest('input, textarea, select')) return;
+      if (event.key === 'Shift') hold(true);
+      if (event.key === ' ') {
+        event.preventDefault();
+        hold(true);
+      }
+    };
+    const up = (event: KeyboardEvent) => (event.key === 'Shift' || event.key === ' ') && hold(false);
+    const blur = () => hold(false);
+    // A drag while holding: the map follows the pointer.
+    const press = (event: PointerEvent) => {
+      if (!(holding.current || event.shiftKey) || event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      let [x, y] = [event.clientX, event.clientY];
+      container.setPointerCapture(event.pointerId);
+      const move = (moved: PointerEvent) => {
+        current.panBy([x - moved.clientX, y - moved.clientY], { animate: false });
+        [x, y] = [moved.clientX, moved.clientY];
+      };
+      const release = () => {
+        container.removeEventListener('pointermove', move);
+        container.removeEventListener('pointerup', release);
+        container.removeEventListener('pointercancel', release);
+      };
+      container.addEventListener('pointermove', move);
+      container.addEventListener('pointerup', release);
+      container.addEventListener('pointercancel', release);
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    container.addEventListener('pointerdown', press, true);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', blur);
+      container.removeEventListener('pointerdown', press, true);
+      hold(false);
+    };
   }, [editing, draw]);
 
-  // What it shows: this place (with handles to drag, editing), a draft being drawn, and the others faintly.
+  // What it shows: this place (with handles on its points, editing), and the others faintly.
   useEffect(() => {
     const group = shapes.current;
-    if (!group) return;
+    const current = map.current;
+    if (!group || !current) return;
     group.clearLayers();
     const faint = { color: '#888', weight: 1, fillOpacity: 0.08 };
     for (const other of others) {
@@ -132,72 +270,94 @@ export default function MapView({
       });
     } else if (spot) L.circleMarker(spot, { ...strong, radius: 8, fillOpacity: 0.8 }).addTo(group);
     if (place.circle) L.circle(place.circle.center, { ...strong, radius: place.circle.radius }).addTo(group);
-    for (const area of place.areas || []) L.polygon(area, strong).addTo(group);
-    (place.paths || []).forEach((path, index) =>
-      L.polyline(curved(path, place.curves?.[index]), { ...strong, weight: 5 }).addTo(group)
-    );
-    // Handles on each point of the roads and outlines: drag to move it, right-click to remove it.
-    if (editing && (draw === 'path' || draw === 'area')) {
-      const key = draw === 'path' ? 'paths' : 'areas';
-      (place[key] || []).forEach((shape, shapeIndex) =>
+    if (middle) L.circleMarker(middle, { color: '#c8412f', weight: 3, radius: 5 }).addTo(group);
+    const editable = editing && (draw === 'path' || draw === 'area');
+    // A click on an editable road or outline adds a point there (between the two points it falls between).
+    const insertAt = (shapeIndex: number, shape: LatLng[], closed: boolean) => (event: L.LeafletMouseEvent) => {
+      if (event.originalEvent.shiftKey || holding.current) return;
+      const at = current.latLngToLayerPoint(event.latlng);
+      let best = 0;
+      let bestDistance = Infinity;
+      const segments = closed ? shape.length : shape.length - 1;
+      for (let index = 0; index < segments; index += 1) {
+        const a = current.latLngToLayerPoint(shape[index]);
+        const b = current.latLngToLayerPoint(shape[(index + 1) % shape.length]);
+        const distance = L.LineUtil.pointToSegmentDistance(at, a, b);
+        if (distance < bestDistance) [best, bestDistance] = [index, distance];
+      }
+      const point = pointOf(event.latlng);
+      changeShape(shapeIndex, [...shape.slice(0, best + 1), point, ...shape.slice(best + 1)]);
+      setSelected({ shape: shapeIndex, point: best + 1 });
+    };
+    (place.areas || []).forEach((area, shapeIndex) => {
+      const outline =
+        area.length >= 3 ? L.polygon(area, { ...strong, bubblingMouseEvents: !editable }) : L.polyline(area, strong);
+      outline.addTo(group);
+      if (editable && area.length >= 3) outline.on('click', insertAt(shapeIndex, area, true));
+    });
+    (place.paths || []).forEach((path, shapeIndex) => {
+      const line = L.polyline(curved(path, place.curves?.[shapeIndex]), {
+        ...strong,
+        weight: 5,
+        bubblingMouseEvents: !editable
+      }).addTo(group);
+      if (editable && draw === 'path') line.on('click', insertAt(shapeIndex, path, false));
+    });
+    // Handles on each point: click to select it (Delete removes it), drag to move it, right-click to remove it.
+    if (editable) {
+      shapeList(place).forEach((shape, shapeIndex) =>
         shape.forEach((point, pointIndex) => {
+          const chosen = selected?.shape === shapeIndex && selected.point === pointIndex;
           const dot = L.marker(point, {
             draggable: true,
-            icon: handle,
-            title: 'Drag to move; right-click to remove'
+            icon: chosen ? handleSelected : handle,
+            title: 'Click to select; drag to move; right-click to remove'
           }).addTo(group);
-          const update = (next: LatLng[]) => {
-            const now = latest.current.place;
-            const list = [...(now[key] || [])];
-            const keep = next.length >= (key === 'paths' ? 2 : 3);
-            if (keep) list[shapeIndex] = next;
-            else list.splice(shapeIndex, 1);
-            const curves = (now.paths || [])
-              .map((_, at) => now.curves?.[at] ?? 0)
-              .filter((_, at) => keep || at !== shapeIndex);
-            onChange?.({ ...now, [key]: list, ...(key === 'paths' ? { curves } : {}) });
-          };
+          dot.on('click', () => setSelected({ shape: shapeIndex, point: pointIndex }));
           dot.on('dragend', () =>
-            update(shape.map((item, at) => (at === pointIndex ? pointOf(dot.getLatLng()) : item)))
+            changeShape(
+              shapeIndex,
+              shape.map((item, at) => (at === pointIndex ? pointOf(dot.getLatLng()) : item))
+            )
           );
-          dot.on('contextmenu', () => update(shape.filter((_, at) => at !== pointIndex)));
+          dot.on('contextmenu', () => {
+            changeShape(
+              shapeIndex,
+              shape.filter((_, at) => at !== pointIndex)
+            );
+            setSelected(null);
+          });
         })
       );
     }
-    const dashed = { color: '#c8412f', weight: 3, dashArray: '6 6', fillOpacity: 0.1 };
-    for (const point of draft) L.circleMarker(point, { ...dashed, radius: 4 }).addTo(group);
-    if (draft.length > 1)
-      (draw === 'area' ? L.polygon(draft, dashed) : L.polyline(curved(draft, nextCurve), dashed)).addTo(group);
-  }, [place, others, draft, draw, nextCurve, editing, onChange]);
+    // oxlint-disable-next-line react/exhaustive-deps
+  }, [place, others, draw, middle, selected, active, editing, onChange]);
 
-  // Done drawing an outline or a road (a double-click's two clicks leave the same point twice: one is kept). An area
-  // is one outline (drawing again replaces it); a road can have several stretches.
-  function finish() {
-    if (!onChange) return;
-    const points = draft.filter(
-      (point, index) => index === 0 || point[0] !== draft[index - 1][0] || point[1] !== draft[index - 1][1]
-    );
-    if (draw === 'area' && points.length >= 3) onChange({ ...place, areas: [points] });
-    else if (draw === 'path' && points.length >= 2) {
-      const paths = place.paths || [];
-      const curves = paths.map((_, index) => place.curves?.[index] ?? 0);
-      onChange({ ...place, paths: [...paths, points], curves: [...curves, nextCurve] });
-    } else
-      return setMessage(draw === 'area' ? 'An outline needs three points or more' : 'A road needs two points or more');
-    setDraft([]);
+  // Done with this stretch (or outline): the next click starts another stretch.
+  const finish = () => {
+    setActive(null);
     setMessage('');
-  }
+  };
+  const undoPoint = () => {
+    if (active === null) return;
+    const shape = shapeList(place)[active] || [];
+    changeShape(active, shape.slice(0, -1));
+    if (shape.length <= 1) setActive(null);
+  };
   const setCurve = (index: number, curve: number) =>
     onChange?.({
       ...place,
       curves: (place.paths || []).map((_, at) => (at === index ? curve : (place.curves?.[at] ?? 0)))
     });
-  const removePath = (index: number) =>
+  const removePath = (index: number) => {
     onChange?.({
       ...place,
       paths: (place.paths || []).filter((_, at) => at !== index),
       curves: (place.paths || []).map((_, at) => place.curves?.[at] ?? 0).filter((_, at) => at !== index)
     });
+    if (active === index) setActive(null);
+    setSelected(null);
+  };
   // The road on OpenStreetMap, by its name or route number, in the area shown: each stretch of it becomes a stretch here.
   const findRoad = async () => {
     const current = map.current;
@@ -275,12 +435,12 @@ export default function MapView({
               Find this road
             </button>
           )}
-          {(draw === 'area' || draw === 'path') && draft.length > 0 && (
+          {(draw === 'area' || draw === 'path') && active !== null && (
             <>
               <button type="button" className="button" onClick={finish}>
-                Finish
+                {draw === 'path' ? 'Finish this stretch' : 'Finish the outline'}
               </button>
-              <button type="button" className="link-button" onClick={() => setDraft(draft.slice(0, -1))}>
+              <button type="button" className="link-button" onClick={undoPoint}>
                 Undo point
               </button>
             </>
@@ -305,7 +465,12 @@ export default function MapView({
       <div ref={box} className="map-box" style={{ height }} />
       {editing && draw && (
         <div className="toolbar small map-shapes">
-          <span className="muted">{draw === 'circle' && draft.length ? 'Click its edge.' : DRAW_HINTS[draw]}</span>
+          <span className="muted">{draw === 'circle' && middle ? 'Click its edge.' : DRAW_HINTS[draw]}</span>
+          {selected && (
+            <button type="button" className="link-button" onClick={removeSelected}>
+              Delete the selected point
+            </button>
+          )}
           {draw === 'gps' && gpsOf(place) && (
             <button
               type="button"

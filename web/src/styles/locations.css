@@ -87,3 +87,16 @@
   margin: 16px 0 4px;
   font-size: 1rem;
 }
+.map-handle.selected {
+  width: 16px;
+  height: 16px;
+  background: #c8412f;
+  box-shadow:
+    0 0 0 3px #fff8,
+    0 0 0 1px #0008;
+}
+/* Holding Shift while drawing: the map moves. */
+.map-box.drawing.panning,
+.map-box.drawing.panning .leaflet-interactive {
+  cursor: grab;
+}
