@@ -23,6 +23,8 @@
     "build-maps": "node bin/build-maps.js",
     "fire-areas": "node bin/fire-areas.js",
     "publish-maps": "node bin/publish-maps.js",
+    "build-tiles": "node bin/build-tiles.js",
+    "publish-tiles": "node bin/publish-tiles.js",
     "extract-thumbnails": "node bin/extract-thumbnails.js",
     "extract-clip": "node bin/extract-clip.js",
     "render-playlist": "node bin/render-playlist.js",
@@ -49,7 +51,10 @@
     "node": ">=24"
   },
   "dependencies": {
+    "@protomaps/basemaps": "^5.7.2",
     "leaflet": "^1.9.4",
+    "maplibre-gl": "^5.24.0",
+    "pmtiles": "^4.5.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^8.4.0"

@@ -15,7 +15,9 @@ function hub_upload_target(array $config, string $area, string $folder, string $
   if (!preg_match("#^$segment(/$segment)*$#", $folder) || !preg_match("#^$segment$#", $name) || strpos("/$folder/", '/../') !== false) hub_fail(400, 'Not a valid folder or name');
   if ($area === 'private' && strpos($folder, 'recordings/') === 0) return [hub_private_dir($config) . "/$folder/$name", "private/$folder/$name"];
   if ($area === 'public' && strpos($folder, 'published/') === 0) return [rtrim($config['media_dir'], '/') . "/$folder/$name", "media/$folder/$name"];
-  hub_fail(400, 'Uploads go to private recordings/… or public published/…');
+  // The slippy map's tiles (one PMTiles file; see src/maps/build-tiles.js).
+  if ($area === 'public' && $folder === 'maps' && preg_match('/\.pmtiles$/', $name)) return [rtrim($config['media_dir'], '/') . "/maps/$name", "media/maps/$name"];
+  hub_fail(400, 'Uploads go to private recordings/…, public published/…, or public maps/');
 }
 
 function hub_upload_part(array $config, string $sha256, int $bytes): string {

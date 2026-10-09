@@ -135,6 +135,30 @@ export const MAP_SOURCES = [
     about: 'Lakes, ponds, and wide stretches of the Shenandoah as areas.'
   },
   {
+    id: 'counties-detail',
+    title: 'Counties (full detail)',
+    kind: 'zip',
+    url: 'https://www2.census.gov/geo/tiger/TIGER2024/COUNTY/tl_2024_us_county.zip',
+    credit: CENSUS,
+    about: 'Every county at full detail, for the slippy map when zoomed in (the generalized file is for drawn maps).'
+  },
+  {
+    id: 'districts-detail',
+    title: 'Magisterial districts (full detail)',
+    kind: 'zip',
+    url: 'https://www2.census.gov/geo/tiger/TIGER2024/COUSUB/tl_2024_51_cousub.zip',
+    credit: CENSUS,
+    about: "Virginia's county subdivisions at full detail, for the slippy map."
+  },
+  {
+    id: 'places-detail',
+    title: 'Towns and cities (full detail)',
+    kind: 'zip',
+    url: 'https://www2.census.gov/geo/tiger/TIGER2024/PLACE/tl_2024_51_place.zip',
+    credit: CENSUS,
+    about: "Virginia's places at full detail (Front Royal's limits street by street), for the slippy map."
+  },
+  {
     id: 'state-roads',
     title: 'Major roads (state)',
     kind: 'zip',

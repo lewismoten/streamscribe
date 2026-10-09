@@ -279,6 +279,14 @@ if ($method === 'POST' && ($route === 'media' || $route === 'live-thumbnail')) {
   hub_send(200, ['path' => 'private/' . $relative, 'exists' => false]);
 }
 
+// The slippy map's tiles, for anyone: a PMTiles file read a piece at a time (range requests), through PHP so it works
+// on any host.
+if (($method === 'GET' || $method === 'HEAD') && preg_match('#^tiles/([A-Za-z0-9][A-Za-z0-9._-]*\.pmtiles)$#', $route, $match)) {
+  $file = rtrim($config['media_dir'], '/') . '/maps/' . $match[1];
+  if (!is_file($file)) hub_fail(404, 'No such map tiles');
+  hub_stream_file($file, 'public, max-age=86400');
+}
+
 // Private files (lib/files.php): a signature for viewers who may see meetings, and the files themselves.
 if ($method === 'GET' && $route === 'file-key') {
   if ($viewer['kind'] !== 'key') hub_require_permission($viewer, 'view.meetings');

@@ -175,3 +175,9 @@
   align-items: center;
   margin: 0 0 8px;
 }
+.slippy-map {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}

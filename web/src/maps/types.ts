@@ -14,7 +14,7 @@ export interface MapRecord {
   credits?: string[];
   sources?: string[];
   // An SVG, a picture, a map in layers, or one of its layers (kept in records of their own, each small enough).
-  kind: 'svg' | 'image' | 'layered' | 'layer';
+  kind: 'svg' | 'image' | 'layered' | 'layer' | 'tiles';
   svg?: string;
   image?: string;
   // Layered maps: their size, layers, and the areas that can be shaded (by id).

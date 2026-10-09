@@ -120,7 +120,8 @@ export function MapsPage() {
   const editor = can('edit.bodies', account);
   if (!maps) return <p className="empty">Loading…</p>;
   // (A layered map's layers are records of their own, not maps to list.)
-  const listed = maps.filter((map) => map.data.kind !== 'layer');
+  const listed = maps.filter((map) => map.data.kind !== 'layer' && map.data.kind !== 'tiles');
+  const hasTiles = maps.some((map) => map.data.kind === 'tiles');
   const layerSvg = (record: string) => maps.find((map) => map.id === record)?.data.svg || '';
   const groups = [...new Set([...MAP_GROUPS, ...listed.map((map) => map.data.group)])];
   return (
@@ -134,6 +135,16 @@ export function MapsPage() {
         )}
       </div>
       {adding && <AddMap onDone={() => setAdding(false)} />}
+      {hasTiles && (
+        <p>
+          <Link className="button primary" to="/maps/explore">
+            🗺 Explore the map
+          </Link>{' '}
+          <span className="muted small">
+            zoom from the state to the county&apos;s roads, with its districts and fire areas
+          </span>
+        </p>
+      )}
       {listed.length === 0 && (
         <p className="empty">
           No maps yet. On the recording machine: <code>npm run fetch-maps</code>, <code>npm run build-maps</code>, then{' '}

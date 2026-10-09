@@ -38,6 +38,7 @@ import LawsPage from './annotations/LawsPage.tsx';
 import LawPage from './annotations/LawPage.tsx';
 import TasksPage from './prompts/TasksPage.tsx';
 import { MapPage, MapsPage } from './maps/MapsPage.tsx';
+import ExplorePage from './maps/ExplorePage.tsx';
 import SetupPage from './pages/SetupPage.tsx';
 import { PublishedList, PublicationPage } from './pages/PublishedPage.tsx';
 import { can, refreshAccount, useAccount } from './data/account.ts';
@@ -170,6 +171,7 @@ export default function App() {
             <Route path="/laws/:id" element={<LawPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/maps" element={<MapsPage />} />
+            <Route path="/maps/explore" element={<ExplorePage />} />
             <Route path="/maps/:id" element={<MapPage />} />
             <Route path="/rooms/:id" element={<RoomPage />} />
             <Route path="/videos" element={<VideosPage />} />

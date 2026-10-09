@@ -10,6 +10,31 @@ npm run build-maps      # draw the SVG maps into data/maps/svg, and the maps in 
 npm run publish-maps    # send them to the hub's Maps section (-- --dry-run to see what would go)
 ```
 
+## The slippy map
+
+The Maps page's **🗺 Explore the map** is a slippy map: drag and zoom smoothly from the state to the county's streets,
+with labels that keep out of each other's way. It's one PMTiles file on the hub, read a piece at a time:
+
+```bash
+npm run build-tiles     # data/maps/tiles/warren-county.pmtiles (about 30 MB); needs tippecanoe and pmtiles
+npm run publish-tiles   # send it to the hub (public maps/ folder, served at api.php/tiles/…) and tell the Maps page
+```
+
+- **The base map** (streets, water, land, buildings, places) is OpenStreetMap, from Protomaps' daily build, cut to
+  what's needed: Virginia to zoom 10, the county and its neighbors to zoom 13, and the county itself to zoom 15 (the
+  deepest Protomaps goes; the map draws closer from those). Only those parts are downloaded (about 30 MB of a 139 GB
+  build). `--again` fetches them fresh; `--build <date>` picks a build.
+- **Our layers** go into the same file (tippecanoe): counties (each with its id, to shade), the county's magisterial
+  districts, its fire and rescue service areas, fire and EMS stations, and the town limits, each only as deep as its
+  area goes. Boundaries come from the Census Bureau's full-detail files, so they follow the streets when zoomed in.
+- On the page, each of our layers can be shown or hidden, and areas shaded in a color; the address keeps both
+  (`/maps/explore?layers=counties,fire-areas&shade=county-51171`).
+- The map's fonts and icons come from Protomaps' public assets (protomaps.github.io); they could be copied to the hub
+  later.
+
+Custom layers for research (markers, lines, areas, and polygons with notes and pictures) are the next step: they'll
+draw on this map from the hub's records rather than going into the tiles.
+
 ## Maps in layers
 
 Two maps are built in layers, every layer the same size and place, so any can be shown with any other:
@@ -64,6 +89,8 @@ built from it). `data/maps/sources.json` records what came from where, and when.
 | Place names (villages)                      | U.S. Geological Survey GNIS                    | 5 MB   | by default         |
 | Fire and EMS stations                       | U.S. Geological Survey National Structures     | 0.1 MB | by default         |
 | Fire and rescue service areas (Map 5.3 PDF) | Warren County GIS Department                   | 0.2 MB | by hand (above)    |
+| Counties, districts, towns (full detail)    | U.S. Census Bureau TIGER/Line                  | 100 MB | by default         |
+| Base map for the slippy map                 | OpenStreetMap contributors, via Protomaps      | 28 MB  | build-tiles        |
 
 Census and USGS data are public domain. VGIN's parcel boundaries are for maps and analysis, not legal descriptions or
 surveys. The sources and their credits are in [`src/maps/sources.js`](../../src/maps/sources.js); each map says which
