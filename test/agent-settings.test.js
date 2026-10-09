@@ -33,7 +33,11 @@ test('agent settings: storage, Ollama, pings, and peers', async () => {
       {
         recorderId: 'other',
         name: 'Other',
-        status: { name: 'Other', settings: { tailscale: { ip: '127.0.0.1', port: 47199 } } }
+        status: {
+          name: 'Other',
+          hostname: 'pi5-03',
+          settings: { tailscale: { ip: '127.0.0.1', port: 47199, name: 'pi5-03.tailnet.ts.net' } }
+        }
       }
     ]
   });
@@ -60,6 +64,7 @@ test('agent settings: storage, Ollama, pings, and peers', async () => {
     assert.equal(report.peers[0].agentId, 'other');
     assert.equal(report.peers[0].ok, true, JSON.stringify(report.peers));
     // The same network (by the path tailscale takes), and a transfer timed from it.
+    assert.equal(report.peers[0].host, 'pi5-03', 'the machine it runs on');
     assert.equal(report.peers[0].path, 'local');
     assert.equal(report.peers[0].via, '192.168.54.109');
     assert.equal(report.peers[0].speed.ok, true, JSON.stringify(report.peers[0].speed));

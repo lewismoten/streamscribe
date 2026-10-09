@@ -1,7 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { hubCall } from '../data/hub.ts';
 import { putRecord, useRecords } from '../data/useRecords.ts';
-import type { AgentSettingsData, CopiesReport, Peer, PlaceStatus, SettingsReport } from './types.ts';
+import {
+  WHISPER_MODELS,
+  type AgentSettingsData,
+  type CopiesReport,
+  type Peer,
+  type PlaceStatus,
+  type SettingsReport,
+  type ToolStatus
+} from './types.ts';
 
 // An agent's settings (where its working files go, more storage to watch, an Ollama server, the port it answers pings
 // on) and what it found: each place there and writable, with its free space; the Ollama server's models; its
@@ -30,7 +38,8 @@ function PeerLine({ peer }: { peer: Peer }) {
   if (!peer.ok)
     return (
       <li className="error">
-        Doesn&apos;t reach {peer.name || peer.agentId} ({peer.error})
+        Doesn&apos;t reach {peer.name || peer.agentId}
+        {peer.host ? ` on ${peer.host}` : ''} ({peer.error})
       </li>
     );
   const parts = [
@@ -40,7 +49,26 @@ function PeerLine({ peer }: { peer: Peer }) {
   ];
   return (
     <li className={peer.path === 'relay' ? 'muted' : ''}>
-      Reaches {peer.name || peer.agentId}: {parts.filter(Boolean).join(' · ')}
+      Reaches {peer.name || peer.agentId}
+      {peer.host ? ` (${peer.host})` : ''}: {parts.filter(Boolean).join(' · ')}
+    </li>
+  );
+}
+
+// whisper.cpp on the agent: installing (and how far), installed (which version and model), or failed (why).
+function WhisperStatus({ status }: { status?: ToolStatus }) {
+  if (!status) return null;
+  const model = status.model ? status.model.split('/').at(-1) : '';
+  if (status.state === 'installing')
+    return (
+      <li>
+        Installing whisper.cpp: {status.step} ({Math.round((status.share || 0) * 100)}%)
+      </li>
+    );
+  if (status.state === 'failed') return <li className="error">Installing whisper.cpp failed: {status.error}</li>;
+  return (
+    <li>
+      whisper.cpp {status.version} installed, with {model}
     </li>
   );
 }
@@ -93,6 +121,14 @@ export default function AgentSettings({
       ...saved,
       ollama: { ...saved.ollama, url: saved.ollama?.url || '', testAt: new Date().toISOString() }
     });
+  const [whisperModel, setWhisperModel] = useState('');
+  const chosenModel = whisperModel || saved.tools?.whisper?.model || 'base.en';
+  const installWhisper = () =>
+    putRecord('agent_settings', agentId, {
+      ...saved,
+      tools: { ...saved.tools, whisper: { model: chosenModel, at: new Date().toISOString() } }
+    });
+  const installing = report?.tools?.whisper?.state === 'installing';
   const timeTransfers = () => putRecord('agent_settings', agentId, { ...saved, peerTestAt: new Date().toISOString() });
   const pingFromHub = async () => {
     setPing('Pinging…');
@@ -106,12 +142,13 @@ export default function AgentSettings({
 
   return (
     <details className="agent-settings small">
-      <summary>Storage, copies, Ollama, and network</summary>
+      <summary>Storage, copies, tools, Ollama, and network</summary>
       {report?.checkedAt ? (
         <ul>
           <Place place={report.workDir} label="Working files" />
           <Place place={report.data} label="Recordings" />
           {copies && <Copies copies={copies} />}
+          <WhisperStatus status={report.tools?.whisper} />
           {(report.storage || []).map((place) => (
             <Place
               key={place.path}
@@ -155,6 +192,23 @@ export default function AgentSettings({
           </button>
         )}
       </div>
+      {canEdit && (
+        <div className="toolbar">
+          <label>
+            whisper.cpp model{' '}
+            <select value={chosenModel} onChange={(event) => setWhisperModel(event.target.value)}>
+              {Object.entries(WHISPER_MODELS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="button" onClick={installWhisper} disabled={installing}>
+            {report?.tools?.whisper?.state === 'installed' ? 'Install again, or this model' : 'Install whisper.cpp'}
+          </button>
+        </div>
+      )}
       {canEdit && (
         <form className="schedule-form" onSubmit={save}>
           <label className="block">

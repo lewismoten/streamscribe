@@ -1,5 +1,6 @@
 import fs from 'fs';
 import os from 'os';
+import path from 'path';
 import { DATA_ROOT, RECORDER, SOURCES, TOOLS, TRANSCRIPTION } from '../config/runtime-config.js';
 import { run } from '../media/encode.js';
 import { libraryRecordings, recordersRecordings } from './publish-library.js';
@@ -52,6 +53,7 @@ export async function detectCapabilities() {
     node: process.versions.node,
     ffmpeg: ffmpeg ? ffmpeg.replace(/^ffmpeg version\s+/, '').split(' ')[0] : null,
     whisper: whisper && fs.existsSync(TRANSCRIPTION.whisperCppModel) ? 'ready' : whisper ? 'no model' : null,
+    whisperModel: path.basename(TRANSCRIPTION.whisperCppModel),
     sources: SOURCES.filter((source) => !RECORDER.sources || RECORDER.sources.includes(source.key)).map(
       (source) => source.key
     ),

@@ -20,6 +20,8 @@ import { measureSpeed } from './peers.js';
 //                the hub's live view) and reports who it reached, by which path (peer-net.js: the same network, a
 //                direct connection elsewhere, or a relay), and how fast a transfer from each goes
 //   peerTestAt   asks for the transfers to be timed again now (they are every six hours; relayed agents only when asked)
+//   tools        tools to install on itself (tools.js): { whisper: { model, at } }, a new `at` asking again; its
+//                progress and what's installed are reported as tools
 //   keepsCopies  keeps a copy of every recording (a storage agent; copies.js), in copiesDir (its data folder's copies/
 //                unless set)
 // The report: { workDir, data, storage, ollama, tailscale, peers, checkedAt }.
@@ -82,12 +84,20 @@ async function ping(address, port) {
   }
 }
 
+// The name of the machine an agent runs on: its host name, else its Tailscale name.
+const machineName = (status) =>
+  status.hostname ||
+  status.capabilities?.hostname ||
+  String(status.settings?.tailscale?.name || '').split('.')[0] ||
+  '';
+
 export function agentSettings({
   client,
   hubGet,
   log,
   detectNet = tailscale,
   findRecording = () => null,
+  installer = null,
   findPath = tailscalePath,
   speed = measureSpeed
 }) {
@@ -128,6 +138,7 @@ export function agentSettings({
     const peer = {
       agentId: agent.recorderId,
       name: agent.status.name || agent.name,
+      host: machineName(agent.status),
       ip: address.ip,
       port,
       ...answer,
@@ -192,6 +203,7 @@ export function agentSettings({
     // Checked every minute (and right away when an Ollama or transfer test is asked for).
     async tick(now, context) {
       await read();
+      installer?.consider(settings.tools);
       const asked =
         (settings.ollama?.testAt || null) !== lastOllamaTest || (settings.peerTestAt || null) !== lastPeerTest;
       if (now < timer && !asked) return false;
@@ -199,7 +211,8 @@ export function agentSettings({
       await check(context);
       return true;
     },
-    report: () => report,
+    // (With the installer's progress as it is now.)
+    report: () => (installer ? { ...report, tools: installer.report() } : report),
     // Where working files go now.
     workDir: () => (report.workDir?.ok ? report.workDir.path : os.tmpdir()),
     // The other agents this one reaches, nearest first being the caller's choice (peers.js byNearness).
@@ -207,6 +220,9 @@ export function agentSettings({
     holders: () => holdings,
     // Its settings as last read.
     current: () => settings,
-    stop: () => server.close()
+    stop: () => {
+      installer?.stop();
+      server.close();
+    }
   };
 }

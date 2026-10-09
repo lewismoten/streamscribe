@@ -16,6 +16,7 @@ import { jobRunner } from './jobs.js';
 import { detectCapabilities } from './capabilities.js';
 import { agentSettings } from './agent-settings.js';
 import { copyKeeper } from './copies.js';
+import { applyInstalledTools, toolInstaller } from './tools.js';
 import { remoteRecordings } from './remote-recordings.js';
 import { queueAutoPrompts } from './prompts.js';
 import { recordingControl } from './recordings.js';
@@ -92,8 +93,12 @@ export async function main() {
   // Its requests to websites take turns with the other agents' (the hub keeps the turns), so together they keep to
   // each site's robots.txt and rate.
   shareTurns(hostTurn);
+  // Tools it installed on itself when asked (tools.js), used where the configured ones aren't there; once another is
+  // installed, what it can do is checked again.
+  applyInstalledTools();
+  const installer = toolInstaller({ log, onInstalled: () => checkCapabilities() });
   // (It serves this agent's recordings to the other agents, so it finds them as the jobs do.)
-  const told = agentSettings({ client, hubGet, log, findRecording: (...args) => findRecording(...args) });
+  const told = agentSettings({ client, hubGet, log, installer, findRecording: (...args) => findRecording(...args) });
   context.settings = told;
   const { findRecording, findOwn, heldIds, startRecording, startProcesses, followRecording, publishFinished } =
     recordingControl(context);

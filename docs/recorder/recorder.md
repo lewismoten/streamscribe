@@ -119,6 +119,15 @@ who may edit sources) its settings, kept in the hub's `agent_settings` record fo
   source's `storageDir`), so a meeting's files are never split between drives.
 - **Storage to watch**: more places (each a local drive, USB drive, or network folder), each reported as there and
   writable or not, with its free space; so is the working folder and the recordings' folder.
+- **Tools**: install whisper.cpp (so the agent can transcribe), with a model picked from a list (Base for a
+  Raspberry Pi, Small for a faster machine, Large v3 or Large v3 Turbo for a Mac with Apple Silicon). The agent installs
+  it on itself without sudo: on a Mac with Homebrew (`brew install whisper-cpp`), elsewhere by building the newest
+  release from source (several minutes on a Pi; it needs git, cmake, and a compiler, which the Linux install command
+  adds), then downloads the model into `~/.cache/whisper-cpp`. Its card shows how far along it is, then the version
+  and model. Only the tools and models on those lists can be installed, from where `src/recorder/tools.js` says: the
+  website picks one, never a command. A tool or model path set in `config.local.js` still wins; an installed one is
+  used where that isn't there. Agents installed before this need their Reinstall command run once on Linux, for the
+  build tools.
 - **Ollama server**: its address on the network (such as `http://100.64.0.5:11434`); the agent lists its models every
   15 minutes, and at once with **Test Ollama**.
 - **Pings**: on [Tailscale](https://tailscale.com), the agent answers `GET /ping` on its Tailscale address (port 4874

@@ -10,6 +10,7 @@ export interface Capabilities {
   node: string;
   ffmpeg: string | null;
   whisper: 'ready' | 'no model' | null;
+  whisperModel?: string;
   sources: string[];
   hostname?: string;
   // Its data folder, and the recordings in it (agents with the same folder on one machine share them).
@@ -20,6 +21,8 @@ export interface AgentStatus {
   state: string;
   agentId?: string;
   name: string;
+  // The machine's host name, as of its last report.
+  hostname?: string;
   version: string;
   freeGb: number | null;
   job: { id: string; title: string; progress: number; message: string } | null;
@@ -52,6 +55,8 @@ export interface SettingsReport {
     error?: string;
     checkedAt: string;
   };
+  // Tools it installs on itself when asked (src/recorder/tools.js).
+  tools?: { whisper?: ToolStatus };
   tailscale?: {
     ip: string;
     name: string;
@@ -63,6 +68,24 @@ export interface SettingsReport {
   } | null;
   peers?: Peer[];
 }
+export interface ToolStatus {
+  state: 'installing' | 'installed' | 'failed';
+  step?: string;
+  share?: number;
+  version?: string;
+  model?: string;
+  error?: string;
+  at?: string;
+}
+// The whisper.cpp models an agent can be asked to install (the same as WHISPER_MODELS in src/recorder/tools.js).
+export const WHISPER_MODELS: Record<string, string> = {
+  'tiny.en': 'Tiny (English), 75 MB: fastest, rough',
+  'base.en': 'Base (English), 142 MB: for a Raspberry Pi',
+  'small.en': 'Small (English), 466 MB: a fast Pi or a small PC',
+  'medium.en': 'Medium (English), 1.5 GB',
+  'large-v3-turbo': 'Large v3 Turbo, 1.6 GB: nearly as accurate, much faster',
+  'large-v3': 'Large v3, 3.1 GB: the most accurate (a Mac with Apple Silicon)'
+};
 // A storage agent's copies (src/recorder/copies.js).
 export interface CopiesReport {
   dir: string;
@@ -80,6 +103,7 @@ export interface CopiesReport {
 export interface Peer {
   agentId: string;
   name: string;
+  host?: string;
   ok: boolean;
   ms?: number;
   error?: string;
@@ -99,6 +123,8 @@ export interface AgentSettingsData {
   // A storage agent: keeps a copy of every recording, in copiesDir (its data folder's copies/ unless set).
   keepsCopies?: boolean;
   copiesDir?: string;
+  // Tools to install on itself: a new `at` asks again.
+  tools?: { whisper?: { model: string; at: string } };
 }
 // Agents added here (with an install command), as the hub keeps them.
 // Agents added here (with an install command), as the hub keeps them.

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { RECORDER, SOURCES, STATE_ROOT, TOOLS } from '../config/runtime-config.js';
 import { newestSegmentFile } from './activity.js';
@@ -37,6 +38,8 @@ export function liveReports(context) {
       state: recording ? 'recording' : job ? 'working' : 'idle',
       agentId: RECORDER.id,
       name: RECORDER.name,
+      // The machine's own name now (it can differ from the agent's id and name, and change).
+      hostname: os.hostname(),
       job,
       capabilities: context.capabilities,
       settings: context.settings?.report() || null,

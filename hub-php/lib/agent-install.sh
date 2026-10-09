@@ -98,11 +98,12 @@ if [ "$OS" = mac ]; then
   step "Installing ffmpeg (Homebrew; this can take several minutes)"
   if command -v ffmpeg >/dev/null; then note "Already installed"; else brew install ffmpeg < /dev/null; fi
 else
-  step "Installing ffmpeg and tools (this can take several minutes on a Raspberry Pi)"
+  step "Installing ffmpeg and build tools (this can take several minutes on a Raspberry Pi)"
   apt_get update
   # Without recommended extras: ffmpeg would otherwise bring desktop packages (icons, sound, GTK) a headless machine
-  # doesn't need.
-  apt_get install -y --no-install-recommends ca-certificates curl ffmpeg tar
+  # doesn't need. git, cmake, and a compiler let the agent build tools it's asked to install from the Agents page
+  # (whisper.cpp) without sudo.
+  apt_get install -y --no-install-recommends ca-certificates curl ffmpeg tar git cmake build-essential
 fi
 note "$(ffmpeg -version | head -1)"
 

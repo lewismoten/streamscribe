@@ -26,6 +26,7 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
                 </h2>
                 <code>{agent.recorderId}</code>
               </div>
+              <Machine status={status} />
               <p className="muted">
                 {online
                   ? status?.state === 'recording'
@@ -55,6 +56,24 @@ export default function AgentCards({ agents, canEdit = false }: { agents: Agent[
   );
 }
 
+// The machine it runs on: its host name (as of its last report), and its Tailscale name when that differs.
+function Machine({ status }: { status: Agent['status'] }) {
+  const host = status?.hostname || status?.capabilities?.hostname;
+  const tailnet = String(status?.settings?.tailscale?.name || '').split('.')[0];
+  if (!host && !tailnet) return null;
+  return (
+    <p className="muted small">
+      On <code>{host || tailnet}</code>
+      {host && tailnet && tailnet.toLowerCase() !== host.toLowerCase().replace(/\.local$/, '') && (
+        <>
+          {' '}
+          (Tailscale <code>{tailnet}</code>)
+        </>
+      )}
+    </p>
+  );
+}
+
 // The other agents with the same files: on the same machine, with the same data folder.
 function sharedWith(agents: Agent[], agent: Agent) {
   const mine = agent.status?.capabilities;
@@ -81,7 +100,7 @@ function Capability({ value, sharing }: { value: Capabilities; sharing: string[]
       </li>
       <li className="muted">
         {value.whisper === 'ready'
-          ? 'whisper.cpp: can transcribe'
+          ? `whisper.cpp: can transcribe${value.whisperModel ? ` (${value.whisperModel})` : ''}`
           : value.whisper === 'no model'
             ? 'whisper.cpp without its model'
             : "No whisper.cpp: doesn't transcribe"}
