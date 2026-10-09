@@ -41,7 +41,9 @@ export function useFollowAlong(lines: ShownLine[], playingPart: string | undefin
     const root = list.current;
     if (!root || !nowLine || !following) return;
     const line = root.querySelector<HTMLElement>(`li[data-line="${CSS.escape(nowLine)}"]`);
-    if (line) root.scrollTo({ top: Math.max(0, line.offsetTop - 12), behavior: 'smooth' });
+    // Below the speaker's heading, which stays at the top of the list.
+    const heading = root.querySelector<HTMLElement>('li.speaker-block')?.offsetHeight || 0;
+    if (line) root.scrollTo({ top: Math.max(0, line.offsetTop - heading - 12), behavior: 'smooth' });
   }, [nowLine, following]);
 
   // The transcript list: scrolling it yourself (wheel, touch, or keys) stops the following. Listened for here rather

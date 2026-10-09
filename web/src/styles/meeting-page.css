@@ -230,3 +230,14 @@ button.player-picture {
   margin-left: 2px;
   font-size: 0.8rem;
 }
+/* The heading of the block being read stays at the top of the transcript while its lines scroll by. */
+.lines li.speaker-block {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-left: -4px;
+  margin-right: -4px;
+  padding: 4px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}

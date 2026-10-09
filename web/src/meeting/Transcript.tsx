@@ -168,6 +168,19 @@ export default function Transcript({
           .includes(needle)
       )
     : lines;
+  // Whoever is speaking when a line starts heads a block of lines, with their picture and name (it stays at the top
+  // while their lines scroll by), unless the block above is theirs; someone starting during a line is named there, and
+  // heads a block of their own from the next line.
+  const openings = shown.map((line) => speakersAt(line.part, line.words[0]?.at ?? line.start));
+  const headings = new Set<number>();
+  let block = '';
+  shown.forEach((line, index) => {
+    if (index === 0 || shown[index - 1].part !== line.part) block = '';
+    if (openings[index].length && openings[index].join() !== block) {
+      headings.add(index);
+      block = openings[index].join();
+    }
+  });
   // Speakers' pictures and names (each linking to their page when they have one).
   const speakerNames = (speakers: string[], size: number) =>
     speakers.map((speaker, index) => {
@@ -228,14 +241,8 @@ export default function Transcript({
       ) : (
         <ol className="lines" ref={listRef}>
           {shown.map((line, lineIndex) => {
-            // Whoever is speaking when a line starts heads a block of lines, with their picture and name, when they
-            // weren't speaking already; someone starting during a line is named there.
-            const previous = shown[lineIndex - 1];
-            const before = previous
-              ? speakersAt(previous.part, previous.words.at(-1)?.at ?? previous.end - 0.01).join()
-              : '';
-            const opening = speakersAt(line.part, line.words[0]?.at ?? line.start);
-            const heads = opening.length > 0 && (opening.join() !== before || previous?.part !== line.part);
+            const opening = openings[lineIndex];
+            const heads = headings.has(lineIndex);
             let last = opening.join();
             const key = lineKey(line);
             return (
