@@ -77,7 +77,31 @@ export default function Transcript({
   // Words selected in the transcript: the menu under them, and the dialog one of its choices opens.
   const area = useRef<HTMLElement>(null);
   const [menu, setMenu] = useState<{ part: string; words: Word[]; top: number; left: number } | null>(null);
-  const [marking, setMarking] = useState<{ part: string; words: Word[]; kind: 'passage' | 'web' } | null>(null);
+  // Marking words (or changing a link already on them): the part, the words, and what they link to.
+  const [marking, setMarking] = useState<{
+    part: string;
+    words: Word[];
+    kind: 'passage' | 'web';
+    link: TranscriptLink | null;
+  } | null>(null);
+  // The links on some words (any of them), and a link's own words.
+  const linksOn = (part: string, words: Word[]) =>
+    linksFor(part).filter((link) => words.some((word) => covers(link, { line: word.line, index: word.index })));
+  const wordsOf = (part: string, link: TranscriptLink) =>
+    lines
+      .filter((line) => line.part === part)
+      .flatMap((line) => line.words)
+      .filter((word) => covers(link, { line: word.line, index: word.index }));
+  const change = (part: string, link: TranscriptLink, words = wordsOf(part, link)) => {
+    setMarking({ part, words, kind: link.passage ? 'passage' : 'web', link });
+    setMenu(null);
+    window.getSelection()?.removeAllRanges();
+  };
+  const unlink = (part: string, link: TranscriptLink) => {
+    onUnlink(part, link);
+    setMenu(null);
+    window.getSelection()?.removeAllRanges();
+  };
   const wordKey = (word: Word) => `${word.part}|${word.line}|${word.index}`;
   const readSelection = () => {
     const selection = window.getSelection();
@@ -130,7 +154,7 @@ export default function Transcript({
   }, [menu]);
   const mark = (choice: 'passage' | 'web') => {
     if (!menu) return;
-    setMarking({ part: menu.part, words: menu.words, kind: choice });
+    setMarking({ part: menu.part, words: menu.words, kind: choice, link: null });
     setMenu(null);
     window.getSelection()?.removeAllRanges();
   };
@@ -287,7 +311,20 @@ export default function Transcript({
                             >
                               ↗ {linkLabel(link)}
                             </a>
-                          ))}{' '}
+                          ))}
+                          {editable &&
+                            ending.map((link) => (
+                              <button
+                                key={`change-${link.id}`}
+                                type="button"
+                                className="link-button link-change"
+                                onClick={() => change(line.part, link)}
+                                aria-label={`Change or remove the link to ${linkLabel(link)}`}
+                                title="Change or remove"
+                              >
+                                ✎
+                              </button>
+                            ))}{' '}
                         </span>
                       );
                     })}
@@ -333,30 +370,54 @@ export default function Transcript({
           style={{ top: menu.top, left: menu.left }}
           onMouseDown={(event) => event.preventDefault()}
         >
-          <button type="button" role="menuitem" onClick={() => mark('passage')}>
-            Mark Bible passage…
-          </button>
-          <button type="button" role="menuitem" onClick={() => mark('web')}>
-            Link to a web page…
-          </button>
+          {linksOn(menu.part, menu.words).map((link) => (
+            <Fragment key={link.id}>
+              <button type="button" role="menuitem" onClick={() => change(menu.part, link, menu.words)}>
+                Change {linkLabel(link)}…
+              </button>
+              <button type="button" role="menuitem" onClick={() => unlink(menu.part, link)}>
+                Remove {linkLabel(link)}
+              </button>
+            </Fragment>
+          ))}
+          {/* Words already linked are changed or unlinked, not linked twice. */}
+          {linksOn(menu.part, menu.words).length === 0 && (
+            <>
+              <button type="button" role="menuitem" onClick={() => mark('passage')}>
+                Mark Bible passage…
+              </button>
+              <button type="button" role="menuitem" onClick={() => mark('web')}>
+                Link to a web page…
+              </button>
+            </>
+          )}
         </div>
       )}
       {marking && (
         <Dialog
-          title={marking.kind === 'passage' ? 'Mark a Bible passage' : 'Link to a web page'}
+          title={
+            marking.link
+              ? `Change ${linkLabel(marking.link)}`
+              : marking.kind === 'passage'
+                ? 'Mark a Bible passage'
+                : 'Link to a web page'
+          }
           onClose={() => setMarking(null)}
         >
           <LinkForm
             word={marking.words[0]}
             following={marking.words}
-            link={null}
+            link={marking.link}
             fixed
             startWith={marking.kind}
             onSave={(link) => {
               onLink(marking.part, link);
               setMarking(null);
             }}
-            onRemove={() => setMarking(null)}
+            onRemove={(link) => {
+              onUnlink(marking.part, link);
+              setMarking(null);
+            }}
           />
         </Dialog>
       )}

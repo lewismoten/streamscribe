@@ -226,3 +226,7 @@ button.player-picture {
   vertical-align: -0.3em;
   margin-right: 4px;
 }
+.link-change {
+  margin-left: 2px;
+  font-size: 0.8rem;
+}

@@ -48,9 +48,10 @@ export default function LinkForm({
     event.preventDefault();
     const base = {
       ...(link ? { id: link.id } : {}),
-      from: link && !startsHere ? link.from : { line: word.line, index: word.index },
+      // A fixed phrase (words selected, or a link's own) is exactly those words.
+      from: link && !startsHere && !fixed ? link.from : { line: word.line, index: word.index },
       to: { line: end.line, index: end.index },
-      at: link && !startsHere ? link.at : word.at,
+      at: link && !startsHere && !fixed ? link.at : word.at,
       text: phrase
     };
     if (kind === 'web') {
@@ -65,7 +66,7 @@ export default function LinkForm({
 
   return (
     <form className="link-form" onSubmit={submit}>
-      <strong>{link ? 'This link' : 'Link from here'}</strong>
+      {!fixed && <strong>{link ? 'This link' : 'Link from here'}</strong>}
       {startsHere && !fixed && (
         <label>
           Through{' '}
