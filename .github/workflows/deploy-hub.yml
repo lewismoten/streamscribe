@@ -1,23 +1,25 @@
-# Deploys the hub (PHP) and the web app to your server over SSH whenever main changes (or when run by hand), with
-# bin/deploy-hub.sh. The settings live in the repository's "production" environment (Settings → Environments), or at
-# the repository level; nothing is deployed until DEPLOY_HOST is set. What to set up: docs/hub/deploy.md.
+# Deploys the hub (PHP), the web app, and the agent package to your server over SSH whenever main changes (or when
+# run by hand), with bin/deploy-hub.sh. The settings live in the repository's "production" environment (Settings →
+# Environments), or at the repository level; nothing is deployed until DEPLOY_HOST is set. What to set up:
+# docs/hub/deploy.md.
 #   Variables: DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH, and optionally DEPLOY_PORT, SITE_BASE, SITE_URL, REMOTE_PHP
 #   Secrets:   DEPLOY_SSH_KEY (a private key the server accepts), DEPLOY_KNOWN_HOSTS (ssh-keyscan of the server)
 name: Deploy hub
 on:
   push:
     branches: [main]
+    # What's deployed: the hub, the web app, and the agent package (bin/deploy-hub.sh makes it from bin/, src/, and
+    # config.example.js), so a change to the agent alone is deployed too and agents can update to it.
     paths:
-      [
-        'hub-php/**',
-        'web/**',
-        'src/sync/**',
-        'package.json',
-        'package-lock.json',
-        'vite.config.ts',
-        'bin/deploy-hub.sh',
-        '.github/workflows/deploy-hub.yml'
-      ]
+      - 'hub-php/**'
+      - 'web/**'
+      - 'src/**'
+      - 'bin/**'
+      - 'config.example.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - '.github/workflows/deploy-hub.yml'
   workflow_dispatch:
 concurrency:
   group: deploy-hub
