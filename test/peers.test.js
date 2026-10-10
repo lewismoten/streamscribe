@@ -126,6 +126,17 @@ test('fetching a recording from another agent: a stretch of it, all of it (resum
     // Again: nothing to fetch.
     assert.equal((await mirrorRecording(peers, 'rec1', { destDir: whole })).bytes, 0);
 
+    // Not enough room here: stopped before fetching anything.
+    const tiny = path.join(folder, 'tiny');
+    const realStatfs = fs.statfsSync;
+    fs.statfsSync = () => ({ bavail: 1, bsize: 1024 });
+    try {
+      await assert.rejects(mirrorRecording(peers, 'rec1', { destDir: tiny }), /Not enough room here: it needs/);
+    } finally {
+      fs.statfsSync = realStatfs;
+    }
+    assert.equal(fs.existsSync(path.join(tiny, 'segments')), false, 'no segments fetched');
+
     const timed = await measureSpeed(peers[1], 4 * 1024 * 1024);
     assert.equal(timed.ok, true);
     assert.ok(timed.mbps > 0);

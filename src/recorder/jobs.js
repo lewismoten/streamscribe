@@ -1,10 +1,12 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { RECORDER } from '../config/runtime-config.js';
+import { RECORDER, TOOLS } from '../config/runtime-config.js';
+import { commandsSince } from '../util/command-log.js';
+import { failureLog } from './failure-log.js';
 import { loadSessionSegments } from '../sessions/session.js';
 import { joinClips } from '../media/compose.js';
-import { makeClip } from '../media/encode.js';
+import { makeClip, run } from '../media/encode.js';
 import { publishMedia } from '../media/publish-media.js';
 import { claim } from './hub-api.js';
 import { hubFiles, sha256 } from './hub-files.js';
@@ -14,10 +16,11 @@ import { discover, firstPicture, officialTranscript } from './discovery.js';
 
 // Work for agents: the hub only keeps the queue (`jobs` records, written by the web app or by agents); agents (the
 // recorder service, on machines with the video) do the work. Each tick an idle agent takes the oldest queued job it
-// can do (it has that recording here, or an agent nearby does, which it then fetches what the work needs from: a
-// stretch of a part for a clip, all of it for encoding; a job for a named agent waits for it), claims it on the hub so no other agent
+// can do (it has that recording here, or, for a clip or video, an agent nearby does, which it fetches the stretches
+// the work needs from; encoding takes the recording here; a job for a named agent waits for it), claims it on the hub so no other agent
 // takes it too (renewed while it works), and reports its progress in the job record. Cancelling a job in the web app
-// stops it. Job types:
+// stops it. A job that fails leaves a log on the hub (private, linked from the job, and removable: failure-log.js).
+// Job types:
 //   clip    { publicationId, recordingId, part, from, to }  cut a published clip (MP4 with sound, and M4A), upload
 //           it (through the hub's API, in pieces) to its public media/published/<id>/, and mark the clip ready
 //   encode  { recordingId }  make and upload the recording's private audio and silent video (publish-media.js)
@@ -38,13 +41,53 @@ export function jobRunner({
   client,
   findRecording,
   remote = { canFetch: () => false },
-  log,
+  log: baseLog,
+  version = '',
   workDir = () => os.tmpdir(),
   settings = () => ({}),
   taskModel = () => null,
   more = {}
 }) {
   let current = null;
+  // What it logs, also kept with the job under way (for its log if it fails: failure-log.js).
+  const log = (message) => {
+    baseLog(message);
+    if (current) {
+      current.lines.push(`${new Date().toISOString()}  ${message}`);
+      if (current.lines.length > 2000) current.lines.splice(0, 500);
+    }
+  };
+  // A failed job's log, on the hub as a private file (private/logs/<job>/…txt, removable from the website): its path.
+  async function attachLog(job, error, lines, since) {
+    const ffmpeg = (await run(TOOLS.ffmpeg, ['-version']).catch(() => ({ stdout: '' }))).stdout
+      .split('\n')[0]
+      .replace('ffmpeg version ', '');
+    const text = failureLog({
+      job,
+      error,
+      lines,
+      commands: commandsSince(since),
+      agent: { id: RECORDER.id, name: RECORDER.name, version },
+      ffmpeg
+    });
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'streamscribe-log-'));
+    try {
+      const file = path.join(folder, 'log.txt');
+      fs.writeFileSync(file, text);
+      const name = `failure-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+      const [logPath] = await hubFiles().sendFolder(
+        'private',
+        `logs/${job.id.replace(/[^\w.-]+/g, '-')}`,
+        [{ local: file, name }],
+        {
+          keepOthers: true
+        }
+      );
+      return { path: logPath, bytes: Buffer.byteLength(text), at: new Date().toISOString() };
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+  }
   // Here, or with an agent nearby.
   const reachable = (recordingId, part) => Boolean(findRecording(recordingId, part)) || remote.canFetch(recordingId);
   // The recording here, or the stretch the work needs fetched into a folder of tempDir from an agent nearby.
@@ -274,28 +317,16 @@ export function jobRunner({
       }
     },
     encode: {
-      canDo: (job) => reachable(job.recordingId),
+      // Only an agent with the recording here: encoding needs all of it, too much to copy to another agent for this.
+      canDo: (job) => Boolean(findRecording(job.recordingId)),
       async run(job, { signal, progress }) {
-        // (All of it, fetched from an agent nearby if it isn't here.)
-        const tempDir = fs.mkdtempSync(path.join(workDir(), 'streamscribe-encode-'));
-        // (Fetching, when it must, is the first 40% of the work.)
-        const fetching = findRecording(job.recordingId) ? 0 : 0.4;
-        try {
-          const found = await obtain(job.recordingId, undefined, {
-            tempDir,
-            signal,
-            onProgress: (share, message) => progress(share * fetching, message)
-          });
-          await publishMedia({
-            items: found.items,
-            signal,
-            onProgress: (share, message) => progress(fetching + share * (1 - fetching), message),
-            log: () => {}
-          });
-          return {};
-        } finally {
-          fs.rmSync(tempDir, { recursive: true, force: true });
-        }
+        await publishMedia({
+          items: findRecording(job.recordingId).items,
+          signal,
+          onProgress: progress,
+          log: () => {}
+        });
+        return {};
       }
     },
     // Job types the service adds (updating itself, installing tools: only ever for one named agent).
@@ -331,7 +362,9 @@ export function jobRunner({
       progress: 0,
       message: 'Starting',
       controller,
-      renewedAt: Date.now()
+      renewedAt: Date.now(),
+      startedAt: Date.now(),
+      lines: []
     };
     log(`Job ${record.id}: ${current.title}`);
     const progress = (share, message = current.message) => {
@@ -378,10 +411,18 @@ export function jobRunner({
           log(`Job ${record.id} put back in the queue`);
           return;
         }
+        // A failure leaves its log on the hub (not one that was cancelled).
+        const attached = cancelled
+          ? null
+          : await attachLog(job, error, current?.lines || [], current?.startedAt || 0).catch((reason) => {
+              baseLog(`Job ${record.id}: its log couldn't be sent (${reason.message})`);
+              return null;
+            });
         await update(record.id, {
           status: cancelled ? 'cancelled' : 'failed',
           message: cancelled ? 'Cancelled' : error.message,
           error: cancelled ? null : error.message,
+          ...(attached ? { log: attached } : {}),
           finishedAt: new Date().toISOString()
         });
         if (!cancelled) await handlers[job.type].failed?.(job, error).catch(() => {});

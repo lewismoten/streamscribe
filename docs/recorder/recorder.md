@@ -120,6 +120,12 @@ The recorder is also an agent: it takes work from the hub's queue, cutting publi
 - **Uploads.** Results go up through the hub's API in pieces, with the agent's own key, so no SSH access to the server is needed.
 - **Keep it running.** It only works while `npm run recorder` is running; see below.
 
+**When work fails.** A job that fails leaves a log on the hub: the job, the agent (its version, machine, ffmpeg, and
+Node), the error, what the agent logged during the job, and its last commands (ffmpeg, git, cmake, …) with the end of
+what each said; at most 256 KB, kept private (people who may see meetings can read it), and never settings or keys.
+The failed job links it (**Log**, in the work queue and Maintenance), and people who may publish can **Delete log** once
+it's been looked into. **Retry on any agent** sends a failed job that was for one agent to whichever can do it.
+
 ## Settings from the hub
 
 The hub's Agents page is the overview: a short card for each agent, Maintenance, who reaches whom, the work queue,

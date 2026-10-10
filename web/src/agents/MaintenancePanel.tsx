@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import { mediaUrl } from '../data/hub.ts';
 import type { HubRecord } from '../data/useRecords.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type AgentSettingsData, type Job } from './types.ts';
@@ -28,7 +29,20 @@ function latestJob(jobs: HubRecord<Job>[], agentId: string, type: string, now: n
 function JobState({ job, now }: { job: Job; now: number }) {
   if (job.status === 'working') return <Progress value={job.progress} label={job.message} />;
   if (job.status === 'queued') return <span>Queued {ago(job.createdAt, now)} (when it&apos;s idle)</span>;
-  if (job.status === 'failed') return <span className="error">Failed: {job.error}</span>;
+  if (job.status === 'failed')
+    return (
+      <span className="error">
+        Failed: {job.error}
+        {job.log && (
+          <>
+            {' · '}
+            <a href={mediaUrl(job.log.path)} target="_blank" rel="noreferrer">
+              Log
+            </a>
+          </>
+        )}
+      </span>
+    );
   if (job.status === 'cancelled') return <span className="muted">Cancelled</span>;
   return null;
 }

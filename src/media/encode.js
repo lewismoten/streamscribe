@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 import { writeFile } from 'fs/promises';
 import { TOOLS } from '../config/runtime-config.js';
 import { extractRangeAudio } from './segment-audio.js';
+import { noteCommand } from '../util/command-log.js';
 
 // Encoding a session (or a stretch of it) for the hub: audio with even loudness, and video placed segment by segment
 // on the session's timeline, so a second into a file is a second of position (moments not captured are silence and
@@ -23,9 +24,15 @@ export function run(command, args, { signal } = {}) {
     child.stderr.on('data', (chunk) => {
       stderr += chunk;
     });
-    child.on('error', reject);
+    const startedAt = Date.now();
+    child.on('error', (error) => {
+      noteCommand(command, args, { code: error.code || 'error', output: error.message, startedAt });
+      reject(error);
+    });
     child.on('close', (code) => {
       signal?.removeEventListener('abort', stop);
+      // (Kept for a failed job's log: src/util/command-log.js.)
+      noteCommand(command, args, { code, output: stderr || stdout, startedAt });
       if (signal?.aborted) reject(new Error('Cancelled'));
       else if (code === 0) resolve({ stdout, stderr });
       else reject(new Error(`${path.basename(command)}: ${(stderr || stdout).trim().split('\n').slice(-3).join(' ')}`));
@@ -144,6 +151,31 @@ export async function encodeVideo(
       ],
       { signal }
     );
+  // A piece is only kept if it holds video: ffmpeg can finish "successfully" having written nothing (an older ffmpeg,
+  // a segment it can't seek in), and one empty piece makes the whole join fail.
+  const hasVideo = async (file) => {
+    try {
+      if (!fs.existsSync(file) || fs.statSync(file).size < 1000) return false;
+      const probe = await run(TOOLS.ffprobe, [
+        '-v',
+        'error',
+        '-select_streams',
+        'v:0',
+        '-show_entries',
+        'stream=codec_type',
+        '-of',
+        'csv=p=0',
+        file
+      ]);
+      return probe.stdout.includes('video');
+    } catch {
+      return false;
+    }
+  };
+  const ffmpegVersion = async () =>
+    (await run(TOOLS.ffmpeg, ['-version']).catch(() => ({ stdout: '' }))).stdout
+      .split('\n')[0]
+      .replace('ffmpeg version ', '');
   const files = [];
   let next = 0;
   let done = 0;
@@ -155,33 +187,43 @@ export async function encodeVideo(
         const piece = pieces[index];
         const file = path.join(tempDir, `piece-${String(index).padStart(5, '0')}.ts`);
         files[index] = file;
-        if (piece.black) {
-          await black(piece.frames, file);
-        } else {
-          try {
-            await run(
-              TOOLS.ffmpeg,
-              [
-                '-hide_banner',
-                '-loglevel',
-                'error',
-                '-y',
-                ...(piece.offset > 0.01 ? ['-ss', piece.offset.toFixed(3)] : []),
-                '-i',
-                piece.file,
-                '-vf',
-                shape,
-                '-frames:v',
-                String(piece.frames),
-                ...encoder,
-                file
-              ],
-              { signal }
-            );
-          } catch (error) {
-            if (signal?.aborted) throw error;
-            await black(piece.frames, file); // a segment that won't decode: black, so the rest stays in place
+        let warning = '';
+        if (!piece.black) {
+          // Twice if it comes out empty; then black, so the rest stays in place.
+          for (let attempt = 0; attempt < 2 && !(await hasVideo(file)); attempt += 1) {
+            try {
+              const made = await run(
+                TOOLS.ffmpeg,
+                [
+                  '-hide_banner',
+                  '-loglevel',
+                  'warning',
+                  '-y',
+                  ...(piece.offset > 0.01 ? ['-ss', piece.offset.toFixed(3)] : []),
+                  '-i',
+                  piece.file,
+                  '-vf',
+                  shape,
+                  '-frames:v',
+                  String(piece.frames),
+                  ...encoder,
+                  file
+                ],
+                { signal }
+              );
+              warning = made.stderr.trim().split('\n').at(-1) || warning;
+            } catch (error) {
+              if (signal?.aborted) throw error;
+              warning = error.message;
+            }
           }
+        }
+        if (!(await hasVideo(file))) {
+          await black(piece.frames, file);
+          if (!(await hasVideo(file)))
+            throw new Error(
+              `ffmpeg on this agent (${await ffmpegVersion()}) made an empty piece of video, even a black one${warning ? `: ${warning}` : ''}`
+            );
         }
         done += 1;
         onProgress(done / pieces.length);

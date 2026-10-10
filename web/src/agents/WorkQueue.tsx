@@ -1,11 +1,13 @@
 import { Link } from 'react-router';
+import { hubCall, mediaUrl } from '../data/hub.ts';
 import { putRecord, type HubRecord } from '../data/useRecords.ts';
 import { duration } from '../format.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Job } from './types.ts';
 
 // The work the hub has queued for the agents (clips to cut, recordings to encode): what's in progress, waiting, and
-// recently finished. Those who may publish can cancel waiting or running work and retry what failed.
+// recently finished. Those who may publish can cancel waiting or running work and retry what failed (where it was, or
+// on any agent). A failed job links its log, which they can delete once it's been looked into.
 const STATUS = { queued: 'Waiting', working: 'Working', done: 'Done', failed: 'Failed', cancelled: 'Cancelled' };
 
 // Changes a job (cancelled, or queued again), marking when.
@@ -76,6 +78,7 @@ export default function WorkQueue({
                         <>
                           {STATUS[job.status]}
                           {job.error ? <span className="error">: {job.error}</span> : ''}
+                          {job.log && <JobLog id={id} job={job} manage={manage} />}
                         </>
                       )}
                     </td>
@@ -122,6 +125,28 @@ export default function WorkQueue({
                             Retry
                           </button>
                         )}
+                        {['failed', 'cancelled'].includes(job.status) &&
+                          job.forAgent &&
+                          !['update', 'install'].includes(job.type) && (
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() =>
+                                change(id, job, {
+                                  status: 'queued',
+                                  forAgent: undefined,
+                                  agent: null,
+                                  progress: 0,
+                                  message: '',
+                                  error: null,
+                                  finishedAt: undefined,
+                                  createdAt: new Date().toISOString()
+                                })
+                              }
+                            >
+                              Retry on any agent
+                            </button>
+                          )}
                       </td>
                     )}
                   </tr>
@@ -132,6 +157,37 @@ export default function WorkQueue({
         </section>
       ))}
     </>
+  );
+}
+
+// A failed job's log: opened in a new tab, and (for those who may manage the work) deleted from the hub once it's been
+// looked into.
+export function JobLog({ id, job, manage }: { id: string; job: Job; manage: boolean }) {
+  const url = mediaUrl(job.log!.path);
+  const remove = async () => {
+    if (!window.confirm('Delete this log from the hub?')) return;
+    await hubCall('logs/delete', { path: job.log!.path });
+    await putRecord('jobs', id, { ...job, log: null, updatedAt: new Date().toISOString() });
+  };
+  return (
+    <span className="job-log">
+      {' · '}
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer">
+          Log ({Math.max(1, Math.round(job.log!.bytes / 1024))} KB)
+        </a>
+      ) : (
+        'Log (sign in to see it)'
+      )}
+      {manage && (
+        <>
+          {' · '}
+          <button type="button" className="link-button danger" onClick={remove}>
+            Delete log
+          </button>
+        </>
+      )}
+    </span>
   );
 }
 

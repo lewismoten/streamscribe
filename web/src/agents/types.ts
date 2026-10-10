@@ -212,6 +212,8 @@ export interface Job {
   finishedAt?: string;
   tool?: string;
   model?: string;
+  // A failed job's log, on the hub as a private file (src/recorder/failure-log.js).
+  log?: { path: string; bytes: number; at: string } | null;
   updatedAt?: string;
 }
 

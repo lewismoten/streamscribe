@@ -3,6 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { STATE_ROOT, TOOLS, TRANSCRIPTION } from '../config/runtime-config.js';
+import { noteCommand } from '../util/command-log.js';
 
 // Tools an agent installs on itself when asked on the hub's Agents page (agent_settings tools.whisper: { model, at }; a
 // new `at` asks again). Only what's written here can be installed, from where it says: the website picks a tool and a
@@ -59,9 +60,14 @@ export function runStreaming(command, args, { cwd, env, onLine = () => {}, signa
     };
     child.stdout.on('data', take);
     child.stderr.on('data', take);
-    child.on('error', reject);
+    const startedAt = Date.now();
+    child.on('error', (error) => {
+      noteCommand(command, args, { code: error.code || 'error', output: error.message, startedAt });
+      reject(error);
+    });
     child.on('close', (code) => {
       signal?.removeEventListener('abort', stop);
+      noteCommand(command, args, { code, output, startedAt });
       if (signal?.aborted) reject(new Error('Cancelled'));
       else if (code === 0) resolve(output);
       else reject(new Error(`${path.basename(command)}: ${output.trim().split('\n').slice(-3).join(' ')}`));

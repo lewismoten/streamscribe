@@ -8,16 +8,21 @@
 //   POST upload-finish { area, folder, name, bytes, sha256 } → { path }
 //   POST files-prune   { area, folder, keep: [names] }   removes the folder's other files (older encodings)
 //   POST files-remove  { path }    a file the records name (private/recordings/… or media/published/…)
+//   POST logs/delete   { path }    a failed job's log (private/logs/<job>/…txt; people who may publish, or agents)
+
+const HUB_LOG_MOST_BYTES = 262144;
 
 // Where an upload goes: [absolute file, path as records name it], or a failure.
 function hub_upload_target(array $config, string $area, string $folder, string $name): array {
   $segment = '[A-Za-z0-9][A-Za-z0-9._-]*';
   if (!preg_match("#^$segment(/$segment)*$#", $folder) || !preg_match("#^$segment$#", $name) || strpos("/$folder/", '/../') !== false) hub_fail(400, 'Not a valid folder or name');
   if ($area === 'private' && strpos($folder, 'recordings/') === 0) return [hub_private_dir($config) . "/$folder/$name", "private/$folder/$name"];
+  // A failed job's log (src/recorder/failure-log.js): a small text file, removable from the website.
+  if ($area === 'private' && preg_match('#^logs/[A-Za-z0-9._-]+$#', $folder) && preg_match('/\.txt$/', $name)) return [hub_private_dir($config) . "/$folder/$name", "private/$folder/$name"];
   if ($area === 'public' && strpos($folder, 'published/') === 0) return [rtrim($config['media_dir'], '/') . "/$folder/$name", "media/$folder/$name"];
   // The slippy map's tiles (one PMTiles file; see src/maps/build-tiles.js).
   if ($area === 'public' && $folder === 'maps' && preg_match('/\.pmtiles$/', $name)) return [rtrim($config['media_dir'], '/') . "/maps/$name", "media/maps/$name"];
-  hub_fail(400, 'Uploads go to private recordings/…, public published/…, or public maps/');
+  hub_fail(400, 'Uploads go to private recordings/… or logs/…, public published/…, or public maps/');
 }
 
 function hub_upload_part(array $config, string $sha256, int $bytes): string {
@@ -36,6 +41,7 @@ if ($method === 'POST' && $route === 'upload-begin') {
   [$target, $path] = hub_upload_target($config, (string)($input['area'] ?? ''), (string)($input['folder'] ?? ''), (string)($input['name'] ?? ''));
   $sha256 = strtolower((string)($input['sha256'] ?? ''));
   $bytes = (int)($input['bytes'] ?? 0);
+  if (strpos($path, 'private/logs/') === 0 && $bytes > HUB_LOG_MOST_BYTES) hub_fail(413, 'A log can be at most 256 KB');
   $part = hub_upload_part($config, $sha256, $bytes);
   if (is_file($target) && filesize($target) === $bytes && hash_file('sha256', $target) === $sha256) hub_send(200, ['done' => true, 'path' => $path]);
   // Old unfinished uploads (a day untouched) go.
@@ -72,6 +78,7 @@ if ($method === 'POST' && $route === 'upload-finish') {
   [$target, $path] = hub_upload_target($config, (string)($input['area'] ?? ''), (string)($input['folder'] ?? ''), (string)($input['name'] ?? ''));
   $sha256 = strtolower((string)($input['sha256'] ?? ''));
   $bytes = (int)($input['bytes'] ?? 0);
+  if (strpos($path, 'private/logs/') === 0 && $bytes > HUB_LOG_MOST_BYTES) hub_fail(413, 'A log can be at most 256 KB');
   $part = hub_upload_part($config, $sha256, $bytes);
   if (!is_file($target) || hash_file('sha256', $target) !== $sha256) {
     if (!is_file($part) || filesize($part) !== $bytes) hub_fail(409, 'The upload isn\'t complete');
@@ -91,6 +98,19 @@ if ($method === 'POST' && $route === 'files-prune') {
     if (is_file($other) && !in_array(basename($other), $keep, true)) { unlink($other); $removed++; }
   }
   hub_send(200, ['removed' => $removed]);
+}
+
+// A failed job's log, removed once it's been looked into (people who manage the work, or an agent's key).
+if ($method === 'POST' && $route === 'logs/delete') {
+  if ($viewer['kind'] !== 'key') hub_require_permission($viewer, 'publish');
+  else hub_require($config, ['recorder']);
+  $input = hub_json_body(4096);
+  $path = (string)($input['path'] ?? '');
+  if (!preg_match('#^private/(logs/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.txt)$#', $path, $match)) hub_fail(400, 'Not a log the hub keeps');
+  $file = hub_private_dir($config) . '/' . $match[1];
+  if (is_file($file)) unlink($file);
+  @rmdir(dirname($file));
+  hub_send(200, ['ok' => true]);
 }
 
 if ($method === 'POST' && $route === 'files-remove') {

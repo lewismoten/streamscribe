@@ -5,9 +5,19 @@ import { PATH_RANK } from './peer-net.js';
 
 // Fetching from the other agents (see peer-server.js): which of them has a recording, and a copy of its files (all, or
 // only the segments a stretch of it needs) in a folder here laid out as the original is, so the usual tools
-// (makeClip, encodePart) work on it. Peers come from agent-settings.js's report: [{ agentId, name, ip, port, ok,
+// (makeClip, encodePart) work on it. It checks there's room first (what it needs, and a gigabyte to spare). Peers come from agent-settings.js's report: [{ agentId, name, ip, port, ok,
 // path: local | direct | relay, ms }]. Local agents are asked first, then direct ones, then relayed ones.
 const TIMEOUT_MS = 5000;
+const SPARE_BYTES = 1e9;
+const gb = (bytes) => Math.round((bytes / 1e9) * 10) / 10;
+const freeBytes = (folder) => {
+  try {
+    const stats = fs.statfsSync(folder);
+    return stats.bavail * stats.bsize;
+  } catch {
+    return null;
+  }
+};
 
 export function byNearness(peers) {
   return [...peers]
@@ -89,6 +99,18 @@ export async function mirrorRecording(
     );
     wanted = wanted.filter((file) => names.has(file.path));
   }
+  // Room for it first (what isn't here yet, and a gigabyte to spare), rather than filling the disk partway.
+  const missing = wanted
+    .filter((file) => {
+      const target = path.join(destDir, file.path);
+      return !(fs.existsSync(target) && fs.statSync(target).size === file.bytes);
+    })
+    .reduce((sum, file) => sum + file.bytes, 0);
+  const free = freeBytes(destDir);
+  if (free !== null && free < missing + SPARE_BYTES)
+    throw new Error(
+      `Not enough room here: it needs ${gb(missing)} GB (and ${gb(SPARE_BYTES)} GB to spare), and ${destDir} has ${gb(free)} GB free`
+    );
   const total = wanted.reduce((sum, file) => sum + file.bytes, 0) || 1;
   // (By the files done, and the bytes of the one under way: files already here, or partly, count as done.)
   let done = 0;

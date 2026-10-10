@@ -119,6 +119,7 @@ export async function main() {
     client,
     findRecording,
     remote,
+    version,
     log,
     workDir: () => told.workDir(),
     settings: () => told.report(),
