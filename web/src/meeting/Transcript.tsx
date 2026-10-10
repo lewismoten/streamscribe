@@ -29,7 +29,8 @@ import type { Person, ShownLine, Word } from './words.ts';
 // in, opens its editor), and who is speaking named wherever that changes. Signed in, selecting words (with the mouse,
 // or Shift and the arrow keys) opens a menu under them: link them (a web page, a meeting document, a place, a Bible
 // passage), save them as a clip, or annotate them (a note, a topic, a quote, a law cited; see ../annotations). A find
-// box narrows it to the lines holding some words; the line being played is followed along (see useFollowAlong).
+// box narrows it to the lines holding some words; the line being played is followed along (see useFollowAlong). Each
+// chapter's heading comes where it starts.
 export default function Transcript({
   recordingId,
   kind,
@@ -62,7 +63,9 @@ export default function Transcript({
   officialAt,
   minuteChecks,
   onMinuteCheck,
-  progress
+  progress,
+  chapters = [],
+  tools
 }: {
   recordingId: string;
   kind: 'quick' | 'final' | 'official';
@@ -110,6 +113,10 @@ export default function Transcript({
   onMinuteCheck?: (part: string, minute: number, field: ReviewField) => void;
   // Shown under the heading (how much of it is checked).
   progress?: ReactNode;
+  // Chapters, each shown as a heading where it starts.
+  chapters?: { part: string; at: number; title: string }[];
+  // Beside the find box (downloading, whole meeting or chapter).
+  tools?: ReactNode;
 }) {
   const [filter, setFilter] = useState('');
   // Words selected in the transcript: the menu under them, and the dialog one of its choices opens.
@@ -351,6 +358,7 @@ export default function Transcript({
             ↓ Follow along
           </button>
         )}
+        {tools}
       </div>
       {progress}
       {rings.length > 0 && (
@@ -383,8 +391,22 @@ export default function Transcript({
               !needle &&
               minuteChecks &&
               (!previous || previous.part !== line.part || minuteOf(previous.start) !== minute);
+            // The chapters starting by this line (since the line before it in its part), as headings.
+            const startingHere = needle
+              ? []
+              : chapters.filter(
+                  (chapter) =>
+                    chapter.part === line.part &&
+                    chapter.at <= line.start + 0.01 &&
+                    (!previous || previous.part !== line.part || chapter.at > previous.start + 0.01)
+                );
             return (
               <Fragment key={key}>
+                {startingHere.map((chapter) => (
+                  <li key={`chapter-${chapter.at}`} className="chapter-heading">
+                    <h3>{chapter.title}</h3>
+                  </li>
+                ))}
                 {newMinute && (
                   <MinuteCheckRow
                     minute={minute}

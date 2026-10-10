@@ -7,7 +7,7 @@ import type { Slide } from './slides.ts';
 // A meeting's chapters (agenda items) and votes beside its transcript, each at its time (a click plays from there when
 // there's published audio). A chapter links to the same moment on the official video when its times line up, and to
 // any official files of its own (draft minutes, attachments), which people allowed to may add to; and shows small
-// pictures of up to five slides shown during it (a click plays from when it was shown).
+// pictures of up to five slides shown during it (a click plays from when it was shown), and ⬇ downloads its transcript.
 export interface Chapter {
   id: string;
   at: number;
@@ -26,6 +26,7 @@ export function Chapters({
   official,
   playAt,
   onAddFile,
+  onDownload,
   slidesOf = () => []
 }: {
   chapters: Chapter[];
@@ -33,6 +34,8 @@ export function Chapters({
   playAt: ((seconds: number) => void) | null;
   // Adding an official file to a chapter, for those allowed to.
   onAddFile: ((chapter: Chapter) => void) | null;
+  // Downloading a chapter's transcript (in the format chosen at the transcript's ⬇).
+  onDownload?: (chapter: Chapter) => void;
   // The slides first shown from a chapter's start to the next one's.
   slidesOf?: (from: number, to: number) => (Slide & { id: string })[];
 }) {
@@ -46,6 +49,17 @@ export function Chapters({
           .map((chapter, index, ordered) => (
             <li key={chapter.id}>
               <TimeLink seconds={chapter.at} onPlay={playAt ? () => playAt(chapter.at) : null} /> {chapter.title}
+              {onDownload && (
+                <button
+                  type="button"
+                  className="link-button chapter-download"
+                  aria-label={`Download the transcript of ${chapter.title}`}
+                  title="Download this chapter’s transcript"
+                  onClick={() => onDownload(chapter)}
+                >
+                  ⬇
+                </button>
+              )}
               {slidesOf(chapter.at, ordered[index + 1]?.at ?? Infinity).length > 0 && (
                 <span className="chapter-slides">
                   {slidesOf(chapter.at, ordered[index + 1]?.at ?? Infinity).map((slide) => {

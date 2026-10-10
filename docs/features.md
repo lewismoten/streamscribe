@@ -46,8 +46,13 @@ need [a hub](hub/hub.md) (accounts, private meetings, publishing); capture and t
   [ocr-slides](media/ocr-slides.md)).
 - **Camera views**: zoom areas for each seat, which voting members each view shows, shared with every meeting in the
   same room.
-- **The meeting page** (web app): the transcript, chapters, consent agenda, attendance, prayer, official sources,
-  clips, and publishing.
+- **The meeting page** (web app): the transcript (with each chapter's heading where it starts), chapters, consent
+  agenda, attendance, prayer, official sources, clips, and publishing. **Whole meeting / This chapter** narrows the
+  transcript and the scrubber to the chapter being played. The scrubber shows a picture from wherever it's pointed at,
+  and markers where chapters start, the speaker changes, and motions and votes happen. **⬇** downloads the transcript
+  of the whole meeting or a chapter (also from each chapter in the list): a simple transcript (with chapter headings,
+  motions, and votes in place; times as the recording's, the time of day, or both), word for word, or closed captions
+  (.srt), the format remembered in the browser.
 
 ## Public bodies and people
 

@@ -34,6 +34,15 @@ import { transcriptEdits } from '../meeting/edits.ts';
 import { useFollowAlong } from '../meeting/useFollowAlong.ts';
 import { correctedBy, markList, useMeetingMarks } from '../meeting/useMeetingMarks.ts';
 import ReviewProgress from '../meeting/ReviewProgress.tsx';
+import TranscriptDownload from '../meeting/TranscriptDownload.tsx';
+import {
+  chapterRange,
+  downloadTranscript,
+  useDownloadSettings,
+  type ExportChapter,
+  type ExportVote
+} from '../meeting/transcriptDownloads.ts';
+import type { ScrubMarker } from '../meeting/Scrubber.tsx';
 import MeetingTasks from '../prompts/MeetingTasks.tsx';
 import SlidesPanel from '../meeting/SlidesPanel.tsx';
 import { slidesIn, useSlides } from '../meeting/slides.ts';
@@ -181,6 +190,37 @@ export default function MeetingPage() {
   const playing = media.find((item) => item.part === partShown) || media[0];
   const canPlay = (part: string) => media.some((item) => item.part === part);
   const follow = useFollowAlong(lines, playing?.part);
+  // Chapters and votes with their parts (from their marks' ids: <recording>:<part>:agenda), for headings, downloads,
+  // the scrubber's markers, and chapter view.
+  const partOf = (markId: string) => markId.slice(id.length + 1, markId.lastIndexOf(':'));
+  const chapterItems: ExportChapter[] = chapters
+    .map((chapter) => ({ part: partOf(chapter.markId), at: chapter.at, title: chapter.title }))
+    .sort((a, b) => a.at - b.at);
+  const voteItems = votes.map((vote) => ({
+    ...(vote as unknown as ExportVote),
+    part: partOf((vote as { markId: string }).markId)
+  }));
+  const downloads = useDownloadSettings();
+  // The whole meeting, or only the chapter being played (its transcript, and the scrubber).
+  const [scope, setScope] = useState<'meeting' | 'chapter'>('meeting');
+  // The chapter being played, followed as it plays (set only when it changes, so the page isn't redrawn each moment).
+  const [chapterNow, setChapterNow] = useState<ExportChapter | null>(null);
+  const chapterSource = useRef({ chapters: chapterItems, part: playing?.part || '' });
+  useEffect(() => {
+    chapterSource.current = { chapters: chapterItems, part: playing?.part || '' };
+  });
+  const followTime = follow.onTime;
+  // (The React Compiler keeps this the same function while followTime is, so the player isn't set up again.)
+  const onPlayerTime = (seconds: number) => {
+    followTime(seconds);
+    const { chapters: list, part } = chapterSource.current;
+    const found = list.filter((chapter) => chapter.part === part && chapter.at <= seconds + 0.01).at(-1) || null;
+    setChapterNow((previous) =>
+      previous?.part === found?.part && previous?.at === found?.at && previous?.title === found?.title
+        ? previous
+        : found
+    );
+  };
   // Plays from a time: right away in the player showing that part (inside the click, as Safari needs), or by switching
   // to the part's player first (each seek is a new one, even to the same time).
   const playAt = (part: string, seconds: number) => {
@@ -285,6 +325,55 @@ export default function MeetingPage() {
       }));
   const firstPart = data.parts?.[0]?.name || lines[0]?.part || '';
   const playChapterAt = playing ? (seconds: number) => playAt(playing.part, seconds) : null;
+  // The end of a part: its published length, else its last line.
+  const partEnd = (part: string) =>
+    media.find((item) => item.part === part)?.seconds ||
+    Math.max(0, ...lines.filter((line) => line.part === part).map((line) => line.end));
+  const chapterNowRange = chapterNow ? chapterRange(chapterItems, chapterNow, partEnd(chapterNow.part)) : null;
+  const inChapter = scope === 'chapter' && chapterNowRange;
+  const shownLines = inChapter
+    ? lines.filter(
+        (line) =>
+          line.part === chapterNowRange.part && line.end > chapterNowRange.from && line.start < chapterNowRange.to
+      )
+    : lines;
+  const downloadInput = {
+    title: data.title,
+    lines,
+    speakersAt,
+    nameOf,
+    chapters: chapterItems,
+    votes: voteItems
+  };
+  const download = (range: { part: string; from: number; to: number; title: string } | null) =>
+    downloadTranscript(downloadInput, { format: downloads.format, stamps: downloads.stamps, range });
+  // Markers above the scrubber for a part: chapters, speaker changes, motions and seconds, and votes.
+  const markersFor = (part: string): ScrubMarker[] => {
+    const turns = (markData<{ turns?: Turn[] }>(`${id}:${part}:speakers`)?.turns || [])
+      .slice()
+      .sort((a, b) => a.at - b.at);
+    return [
+      ...chapterItems
+        .filter((chapter) => chapter.part === part)
+        .map((chapter) => ({ at: chapter.at, kind: 'chapter' as const, label: chapter.title })),
+      ...turns.map((turn) => ({
+        at: turn.at,
+        kind: 'speaker' as const,
+        label: (turn.speakers || []).map(nameOf).join(' & ') || 'Unknown speaker'
+      })),
+      ...voteItems
+        .filter((vote) => vote.part === part)
+        .flatMap((vote) => [
+          ...(vote.movedBy?.id && vote.movedBy.at != null
+            ? [{ at: vote.movedBy.at, kind: 'motion' as const, label: `Motion by ${nameOf(vote.movedBy.id)}` }]
+            : []),
+          ...(vote.secondedBy?.id && vote.secondedBy.at != null
+            ? [{ at: vote.secondedBy.at, kind: 'motion' as const, label: `Seconded by ${nameOf(vote.secondedBy.id)}` }]
+            : []),
+          { at: vote.at, kind: 'vote' as const, label: `Vote: ${vote.motion || 'Motion'}` }
+        ])
+    ];
+  };
   const encodeQueued = async () => {
     await putRecord('jobs', `encode-${id}`, {
       type: 'encode',
@@ -399,8 +488,10 @@ export default function MeetingPage() {
                 stills={pictures
                   .filter((still) => still.data.part === playing.part)
                   .map((still) => ({ position: still.data.position, path: still.data.path }))}
-                onTime={follow.onTime}
+                onTime={onPlayerTime}
                 captions={captionsVtt(linesFor(playing.part))}
+                range={inChapter && chapterNowRange.part === playing.part ? chapterNowRange : null}
+                markers={markersFor(playing.part)}
               />
             </div>
           )}
@@ -434,6 +525,10 @@ export default function MeetingPage() {
             chapters={chapters}
             official={official}
             playAt={playChapterAt}
+            onDownload={(chapter) => {
+              const item = chapterItems.find((each) => each.at === chapter.at && each.title === chapter.title);
+              if (item) download(chapterRange(chapterItems, item, partEnd(item.part)));
+            }}
             onAddFile={
               editChapters ? (chapter) => setAddingDocuments({ kind: 'chapter', chapterId: chapter.id }) : null
             }
@@ -513,7 +608,36 @@ export default function MeetingPage() {
             )
           }
           kind={kind}
-          lines={lines}
+          lines={shownLines}
+          chapters={chapterItems}
+          tools={
+            <>
+              {chapterItems.length > 0 && (
+                <fieldset className="segmented" aria-label="Show">
+                  <button type="button" className={scope === 'meeting' ? 'on' : ''} onClick={() => setScope('meeting')}>
+                    Whole meeting
+                  </button>
+                  <button
+                    type="button"
+                    className={scope === 'chapter' ? 'on' : ''}
+                    onClick={() => setScope('chapter')}
+                    disabled={!chapterNow}
+                    title={chapterNow ? chapterNow.title : 'Play the meeting to choose its chapter'}
+                  >
+                    This chapter
+                  </button>
+                </fieldset>
+              )}
+              <TranscriptDownload
+                format={downloads.format}
+                stamps={downloads.stamps}
+                onFormat={downloads.chooseFormat}
+                onStamps={downloads.chooseStamps}
+                chapterTitle={chapterNow?.title || null}
+                onDownload={(chapter) => download(chapter && chapterNowRange ? chapterNowRange : null)}
+              />
+            </>
+          }
           status={status}
           editable={editable}
           people={people}

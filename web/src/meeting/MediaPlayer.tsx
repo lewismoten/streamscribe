@@ -1,11 +1,13 @@
 import { useEffect, useEffectEvent, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { mediaUrl } from '../data/hub.ts';
 import { clock } from '../format.ts';
+import Scrubber, { type ScrubMarker } from './Scrubber.tsx';
 
 // A recording part's published audio with its silent video kept in step (npm run publish-media makes both), or with
 // the stills changing as it plays ("pictures": lighter, and all there is once the video is past its keep time).
 // The audio leads: the video follows its play, pause, seeks, and speed, and is put back when it drifts. Both carry
-// the page's captions (the transcript as WebVTT, see captions.ts).
+// the page's captions (the transcript as WebVTT, see captions.ts). Its scrubber (Scrubber.tsx) shows the part, or a
+// chapter (range), with markers where something happens and a picture from wherever it's pointed at.
 export interface MediaFile {
   path: string;
   bytes: number;
@@ -47,9 +49,14 @@ export default function MediaPlayer({
   seek,
   onTime,
   control,
-  captions
+  captions,
+  range = null,
+  markers = []
 }: {
   media: MediaData;
+  // The stretch the scrubber shows (a chapter), or all of the part.
+  range?: { from: number; to: number } | null;
+  markers?: ScrubMarker[];
   stills: { position: number; path: string }[];
   seek: { time: number; n: number } | null;
   onTime: (seconds: number) => void;
@@ -127,6 +134,15 @@ export default function MediaPlayer({
     });
   };
   useImperativeHandle(control, () => ({ playFrom }));
+  // Jumps there, playing or not (the scrubber).
+  const seekTo = (seconds: number) => {
+    const sound = audio.current;
+    if (!sound) return;
+    sound.currentTime = seconds;
+    if (video.current) video.current.currentTime = seconds;
+    setTime(seconds);
+    onTime(seconds);
+  };
   // A jump asked for before this player existed (a time in another part, which switches to it). Only a new seek
   // plays; the player's own changes don't repeat it.
   const playFromSeek = useEffectEvent(playFrom);
@@ -169,6 +185,14 @@ export default function MediaPlayer({
           <span className="player-blank">Audio only</span>
         )}
       </button>
+      <Scrubber
+        from={range ? range.from : 0}
+        to={range ? range.to : media.seconds}
+        time={time}
+        stills={stills}
+        markers={markers}
+        onSeek={seekTo}
+      />
       <audio ref={audio} src={mediaUrl(media.audio.path)} controls preload="metadata">
         <track ref={audioTrack} kind="captions" srcLang="en" label="Transcript" default />
       </audio>
