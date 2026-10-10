@@ -151,14 +151,14 @@ export async function main() {
       control.stopping = true;
     },
     // (By itself, autoUpdate: an update job for itself, so it shows in the work queue.)
-    queueUpdate: async (commit) => {
+    queueUpdate: async (commit, newVersion) => {
       const id = `update-${RECORDER.id}-${commit}`;
       if (await client.get('jobs', id)) return;
       await client.put('jobs', id, {
         type: 'update',
         forAgent: RECORDER.id,
         status: 'queued',
-        title: `Update ${RECORDER.name || RECORDER.id} to ${commit}`,
+        title: `Update ${RECORDER.name || RECORDER.id} to ${newVersion || commit}`,
         progress: 0,
         message: '',
         agent: null,

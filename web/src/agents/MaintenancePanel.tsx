@@ -4,7 +4,7 @@ import type { HubRecord } from '../data/useRecords.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type AgentSettingsData, type Job } from './types.ts';
 import { Progress } from './WorkQueue.tsx';
-import { useAgentBuild, type AgentBuild } from './useAgentBuild.ts';
+import { useAgentBuild, versionOf, type AgentBuild } from './useAgentBuild.ts';
 
 // The big picture of keeping the agents up to date: for each, its build against the hub's agent package and where its
 // update stands (queued, under way, restarting, failed, or up to date), its whisper.cpp (installing, or which model),
@@ -71,7 +71,10 @@ function UpdateCell({
   if (update?.state === 'failed') return <span className="error">Failed: {update.error}</span>;
   if (!update) return <span className="muted">Not reported (an older agent: reinstall it once)</span>;
   if (!update.canUpdate) return <span className="muted">Runs from git</span>;
-  if (behind) return <span className="error">Behind (the hub has {build?.commit || update.latest})</span>;
+  if (behind)
+    return (
+      <span className="error">Behind (the hub has {versionOf(build) || update.latestVersion || update.latest})</span>
+    );
   return <span>Up to date{job?.status === 'done' ? `, updated ${ago(job.finishedAt, now)}` : ''}</span>;
 }
 
@@ -108,7 +111,7 @@ export default function MaintenancePanel({
       <h2>Maintenance</h2>
       <p className="muted small">
         {build?.commit
-          ? `The hub's agent package is build ${build.commit}${build.builtAt ? `, made ${ago(build.builtAt, now)}` : ''}.`
+          ? `The hub's agent package is version ${versionOf(build)}${build.builtAt ? `, made ${ago(build.builtAt, now)}` : ''}.`
           : 'The hub has no agent package yet (a deploy makes it).'}{' '}
         Agents take their update and install jobs before other work, once idle.
       </p>
@@ -136,7 +139,9 @@ export default function MaintenancePanel({
                     {!online && ` (offline ${ago(agent.updatedAt, now)})`}
                   </td>
                   <td>
-                    <code>{agent.status?.version || '?'}</code>
+                    <code title={agent.status?.update?.current ? `commit ${agent.status.update.current}` : undefined}>
+                      {agent.status?.version || '?'}
+                    </code>
                   </td>
                   <td>
                     <UpdateCell

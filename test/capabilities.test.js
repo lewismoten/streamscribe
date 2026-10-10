@@ -1,5 +1,5 @@
 // What an agent reports of its machine (src/recorder/capabilities.js, src/config/build.js): its accelerators, read
-// from nvidia-smi and hailortcli, and its version with the commit it was built from.
+// from nvidia-smi and hailortcli, and its version (major.minor and the build number, which only goes up).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,14 +22,16 @@ test('accelerators: NVIDIA GPUs and a Hailo accelerator', () => {
   assert.equal(parseHailo(null).name, 'Hailo AI accelerator', "found, though hailortcli couldn't say which");
 });
 
-test('the version, with the commit it was built from', () => {
+test('the version: major.minor and the build number', () => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-build-'));
   try {
     fs.writeFileSync(path.join(folder, 'package.json'), '{"version":"2.3.4"}');
     assert.equal(buildVersion(folder), '2.3.4', 'neither a package nor a repository');
     fs.writeFileSync(path.join(folder, 'build.json'), '{"commit":"abc1234","builtAt":"2026-10-09T22:00:00Z"}');
-    assert.equal(buildVersion(folder), '2.3.4+abc1234');
-    assert.match(buildVersion(), /^\d+\.\d+\.\d+\+[0-9a-f]{7,}(\.dirty)?$/, 'this repository: from git');
+    assert.equal(buildVersion(folder), '2.3.4+abc1234', 'an older package, with only its commit');
+    fs.writeFileSync(path.join(folder, 'build.json'), '{"version":"2.3.81","build":81,"commit":"abc1234"}');
+    assert.equal(buildVersion(folder), '2.3.81', 'major.minor and the build number');
+    assert.match(buildVersion(), /^\d+\.\d+\.\d+(-dev)?$/, 'this repository: counted with git');
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }

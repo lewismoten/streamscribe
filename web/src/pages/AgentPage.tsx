@@ -8,7 +8,7 @@ import { useNow } from '../useNow.ts';
 import { Capability, Machine, ONLINE_MS, sharedWith, StatusLine } from '../agents/AgentCards.tsx';
 import AgentSettings from '../agents/AgentSettings.tsx';
 import WorkQueue, { Progress } from '../agents/WorkQueue.tsx';
-import { isBehind, useAgentBuild } from '../agents/useAgentBuild.ts';
+import { isBehind, useAgentBuild, versionOf } from '../agents/useAgentBuild.ts';
 import type { Agent, Job } from '../agents/types.ts';
 
 // One agent, all of it (/agents/<id>): its machine and what it can do, what it found of its storage, copies, language
@@ -68,7 +68,7 @@ export default function AgentPage() {
       </div>
       <section className="panel">
         <Machine status={status} />
-        <StatusLine agent={agent} now={now} behind={behind} latest={build?.commit} />
+        <StatusLine agent={agent} now={now} behind={behind} latest={versionOf(build)} />
         {online && status?.job && (
           <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
         )}
@@ -80,7 +80,7 @@ export default function AgentPage() {
         copies={status?.copies}
         update={status?.update}
         behind={behind}
-        latest={build?.commit || status?.update?.latest || null}
+        latest={versionOf(build) || status?.update?.latestVersion || status?.update?.latest || null}
         agent={agent}
         canEdit={can('edit.sources', account)}
       />

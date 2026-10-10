@@ -156,8 +156,10 @@ it and picked up within a minute: `src/recorder/agent-settings.js`), and its own
 - **Accelerators**: each card lists the machine's NVIDIA GPUs (with their memory), an Apple Silicon GPU, and a Hailo AI
   accelerator (a Raspberry Pi's AI Kit or HAT). On Linux with NVIDIA's CUDA toolkit (`nvcc`), the whisper.cpp it
   installs is built for the GPUs.
-- **Version**: each agent reports its version with the commit it was built from (such as `1.0.0+084f65d`; a deploy
-  writes it into the agent package), so the page shows which agents run the newest code.
+- **Version**: each agent reports a version people can compare, major.minor.build (such as `1.0.78`): major and
+  minor from `package.json`, and the build number, which is how many commits the code has, so a newer build always has
+  a bigger number. A deploy writes it into the agent package (with the commit, shown when you point at a version, and
+  used to check a download); a copy run from the repository counts it with git (`-dev` with uncommitted changes).
 - **Pings**: on [Tailscale](https://tailscale.com), the agent answers `GET /ping` on its Tailscale address (port 4874
   unless set, or the next free one when another agent on the machine has it; on no other address). Each minute it reads
   the list of agents from the hub, pings the ones heard from in the last five minutes, and reports what it found (see

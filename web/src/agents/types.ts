@@ -116,8 +116,11 @@ export const WHISPER_MODELS: Record<string, { label: string; note: string }> = {
   }
 };
 export interface UpdateStatus {
+  // Commits (compared), and the versions people read (1.0.78).
   current: string | null;
   latest?: string | null;
+  currentVersion?: string | null;
+  latestVersion?: string | null;
   behind?: boolean;
   canUpdate: boolean;
   note?: string;

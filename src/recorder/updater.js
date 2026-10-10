@@ -25,6 +25,8 @@ export const readBuild = (root = REPO_ROOT) => {
     return null;
   }
 };
+// A build as people read it: its version (1.0.78), or its commit for an older package.
+const named = (build) => build?.version || build?.commit || null;
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 export function updater({
@@ -48,6 +50,7 @@ export function updater({
   let queuedCommit = null;
   let report = {
     current: current?.commit || null,
+    currentVersion: named(current),
     canUpdate: managed,
     ...(managed ? {} : { note: 'Runs from a git repository: updated with git, not from the hub' })
   };
@@ -75,7 +78,7 @@ export function updater({
     const previous = path.join(work, 'previous');
     fs.rmSync(work, { recursive: true, force: true });
     fs.mkdirSync(fresh, { recursive: true });
-    step(`Downloading ${latest.commit}`, 0.1);
+    step(`Downloading ${named(latest)}`, 0.1);
     const archive = path.join(work, 'agent.tgz');
     await download(archive);
     if (latest.sha256 && sha256(archive) !== latest.sha256)
@@ -106,9 +109,9 @@ export function updater({
       throw error;
     }
     fs.rmSync(archive, { force: true });
-    report = { ...report, state: 'restarting', step: `Updated to ${latest.commit}; restarting` };
-    log(`Updated from ${current?.commit} to ${latest.commit}: restarting`);
-    return { from: current?.commit || null, to: latest.commit };
+    report = { ...report, state: 'restarting', step: `Updated to ${named(latest)}; restarting` };
+    log(`Updated from ${named(current)} to ${named(latest)}: restarting`);
+    return { from: named(current), to: named(latest) };
   }
 
   // Asked through its settings (by an older website): swapped in and restarted.
@@ -128,7 +131,12 @@ export function updater({
         checkedAt = now + EVERY_MS;
         try {
           latest = await hubBuild();
-          report = { ...report, latest: latest?.commit || null, checkedAt: new Date(now).toISOString() };
+          report = {
+            ...report,
+            latest: latest?.commit || null,
+            latestVersion: named(latest),
+            checkedAt: new Date(now).toISOString()
+          };
         } catch (error) {
           report = { ...report, error: `Couldn't ask the hub: ${error.message}` };
           return;
@@ -141,7 +149,7 @@ export function updater({
       if (!asked && auto && queueUpdate && managed) {
         if (queuedCommit !== latest.commit) {
           queuedCommit = latest.commit;
-          await queueUpdate(latest.commit).catch(() => {
+          await queueUpdate(latest.commit, named(latest)).catch(() => {
             queuedCommit = null;
           });
         }
@@ -177,9 +185,14 @@ export function updater({
       async run(job, { progress }) {
         if (!managed) throw new Error('This agent runs from a git repository: update it with git');
         latest = await hubBuild();
-        report = { ...report, latest: latest?.commit || null, checkedAt: new Date().toISOString() };
+        report = {
+          ...report,
+          latest: latest?.commit || null,
+          latestVersion: named(latest),
+          checkedAt: new Date().toISOString()
+        };
         if (!latest?.commit) throw new Error('The hub has no agent package');
-        if (latest.commit === current?.commit) return { current: current.commit, note: 'Already up to date' };
+        if (latest.commit === current?.commit) return { current: named(current), note: 'Already up to date' };
         running = swapIn(progress);
         try {
           return await running;
@@ -195,7 +208,8 @@ export function updater({
         if (result?.to) restart();
       }
     }),
-    // { current, latest, behind, canUpdate, state, step, error, checkedAt }
+    // { current, latest (commits, compared), currentVersion, latestVersion (as people read them), behind, canUpdate,
+    // state, step, error, checkedAt }
     report: () => report
   };
 }

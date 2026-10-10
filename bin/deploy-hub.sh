@@ -25,9 +25,14 @@ fi
 
 # The agent's code, which new agents download through the hub (hub-php/lib/agent-routes.php): bin/, src/, and
 # package.json are all it needs (no npm packages).
-# build.json says which commit it is, so agents report it with their version (src/config/build.js).
+# build.json says which version it is: major.minor from package.json, and the build number (how many commits the code
+# has, so a newer build always has a bigger number) as the patch; and the commit, to check a download against
+# (src/config/build.js). Needs the whole history (the workflow checks out with fetch-depth 0).
 mkdir -p web/dist-agent
-printf '{"commit":"%s","builtAt":"%s"}\n' "$(git rev-parse --short HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > web/dist-agent/build.json
+BUILD_NUMBER="$(git rev-list --count HEAD)"
+MAJOR_MINOR="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
+printf '{"version":"%s","build":%s,"commit":"%s","builtAt":"%s"}\n' "$MAJOR_MINOR.$BUILD_NUMBER" "$BUILD_NUMBER" \
+  "$(git rev-parse --short HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > web/dist-agent/build.json
 COPYFILE_DISABLE=1 tar -czf web/dist-agent/streamscribe-agent.tgz --exclude .DS_Store bin src package.json config.example.js \
   -C web/dist-agent build.json
 

@@ -10,7 +10,7 @@ const takes = (agent: Agent, type: string) => (agent.status?.jobTypes || []).inc
 const nameOf = (agent: Agent) => agent.status?.name || agent.name || agent.recorderId;
 
 export async function requestUpdate(agent: Agent, saved: AgentSettingsData, by: string, latest?: string | null) {
-  const to = latest || agent.status?.update?.latest || 'the newest build';
+  const to = latest || agent.status?.update?.latestVersion || agent.status?.update?.latest || 'the newest build';
   if (takes(agent, 'update'))
     await putRecord('jobs', `update-${agent.recorderId}-${Date.now()}`, {
       type: 'update',

@@ -44,10 +44,20 @@ test('agents: an install command, enrolling once for a key, downloading, revokin
   fs.writeFileSync(path.join(dir, 'agent', 'streamscribe-agent.tgz'), 'package');
   assert.equal(await (await fetch(`${hub}/agent-download?token=${created.token}`)).text(), 'package');
   // Which build it is, so agents can tell they're behind (agents' keys, or people who see meetings).
-  fs.writeFileSync(path.join(dir, 'agent', 'build.json'), '{"commit":"abc1234","builtAt":"2026-10-09T22:00:00Z"}');
+  fs.writeFileSync(
+    path.join(dir, 'agent', 'build.json'),
+    '{"version":"1.0.81","build":81,"commit":"abc1234","builtAt":"2026-10-09T22:00:00Z"}'
+  );
   assert.equal((await fetch(`${hub}/agent-build`)).status, 401);
   const build = await (await fetch(`${hub}/agent-build`, { headers: { 'x-streamscribe-key': recorderKey } })).json();
-  assert.deepEqual(build, { commit: 'abc1234', builtAt: '2026-10-09T22:00:00Z', sha256: sha('package'), bytes: 7 });
+  assert.deepEqual(build, {
+    version: '1.0.81',
+    build: 81,
+    commit: 'abc1234',
+    builtAt: '2026-10-09T22:00:00Z',
+    sha256: sha('package'),
+    bytes: 7
+  });
   // Enrolling trades the token for the agent's key, once.
   const enrolled = await json('agent-enroll', { token: created.token });
   assert.equal(enrolled.agentId, 'pi1');

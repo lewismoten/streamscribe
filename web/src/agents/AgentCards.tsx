@@ -3,7 +3,7 @@ import { hubCall } from '../data/hub.ts';
 import { useNow } from '../useNow.ts';
 import { ago, type Agent, type Capabilities, type UpdateStatus } from './types.ts';
 import { Progress } from './WorkQueue.tsx';
-import { isBehind, useAgentBuild } from './useAgentBuild.ts';
+import { isBehind, useAgentBuild, versionOf } from './useAgentBuild.ts';
 
 // A card for each agent that has reported to the hub, kept short: online or not (one not heard from for 90 seconds is
 // offline), what it's doing, its machine in a line or two, and a link to its own page (AgentPage) with everything else
@@ -34,7 +34,9 @@ export function StatusLine({
             : 'Online, idle'
         : `Offline · last heard from ${ago(agent.updatedAt, now)}`}
       {status?.freeGb !== null && status?.freeGb !== undefined ? ` · ${status.freeGb} GB free` : ''}
-      {status?.version ? ` · v${status.version}` : ''}
+      {status?.version && (
+        <span title={status.update?.current ? `commit ${status.update.current}` : undefined}> · v{status.version}</span>
+      )}
       {updateNote(status?.update, behind, latest)}
     </p>
   );
@@ -85,7 +87,7 @@ export default function AgentCards({
                 <code>{agent.recorderId}</code>
               </div>
               <Machine status={status} />
-              <StatusLine agent={agent} now={now} behind={isBehind(agent, build)} latest={build?.commit} />
+              <StatusLine agent={agent} now={now} behind={isBehind(agent, build)} latest={versionOf(build)} />
               {online && status?.job && (
                 <Progress value={status.job.progress} label={`${status.job.title}: ${status.job.message}`} />
               )}
@@ -125,8 +127,8 @@ function updateNote(update: UpdateStatus | null | undefined, behind: boolean, la
   if (update.state === 'waiting' || update.state === 'updating' || update.state === 'restarting')
     return ` · ${update.step || 'updating'}`;
   if (update.state === 'failed') return ` · update failed: ${update.error}`;
-  if (behind) return ` · update available (${latest || update.latest})`;
-  if (update.behind && !update.canUpdate) return ` · behind the hub (${update.latest})`;
+  if (behind) return ` · update available (${latest || update.latestVersion || update.latest})`;
+  if (update.behind && !update.canUpdate) return ` · behind the hub (${update.latestVersion || update.latest})`;
   return '';
 }
 
