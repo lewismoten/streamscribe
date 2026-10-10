@@ -132,6 +132,16 @@ export async function encodeVideo(
     add({ file: path.join(sessionDir, 'segments', item.fileName), offset: start - item.videoStart }, end);
   }
   if (to - position > 0.05) add({ black: true }, to);
+  // A piece of fewer than 3 frames goes into its neighbor (the one before, or the first into the next): x264 into
+  // MPEG-TS makes nothing at all of exactly 2 frames, and a sliver that short is invisible as a repeated frame. The
+  // running frame count is unchanged, so everything after stays exactly in place.
+  for (let index = 0; index < pieces.length; index += 1) {
+    if (pieces[index].frames >= 3 || pieces.length < 2) continue;
+    const into = index > 0 ? index - 1 : index + 1;
+    pieces[into] = { ...pieces[into], frames: pieces[into].frames + pieces[index].frames };
+    pieces.splice(index, 1);
+    index -= 1;
+  }
   const black = (count, file) =>
     run(
       TOOLS.ffmpeg,
@@ -153,21 +163,22 @@ export async function encodeVideo(
     );
   // A piece is only kept if it holds video: ffmpeg can finish "successfully" having written nothing (an older ffmpeg,
   // a segment it can't seek in), and one empty piece makes the whole join fail.
+  // (By its video packets: works for a piece of a single frame, which ffprobe can't read stream details from.)
   const hasVideo = async (file) => {
     try {
-      if (!fs.existsSync(file) || fs.statSync(file).size < 1000) return false;
+      if (!fs.existsSync(file) || fs.statSync(file).size === 0) return false;
       const probe = await run(TOOLS.ffprobe, [
         '-v',
         'error',
         '-select_streams',
         'v:0',
         '-show_entries',
-        'stream=codec_type',
+        'packet=pts',
         '-of',
         'csv=p=0',
         file
       ]);
-      return probe.stdout.includes('video');
+      return probe.stdout.trim().length > 0;
     } catch {
       return false;
     }
