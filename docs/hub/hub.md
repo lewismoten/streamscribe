@@ -14,6 +14,8 @@ You need PHP 8 with `pdo_sqlite`, which most hosts have, and HTTPS. [deploy.md](
 
 Recorders and the web app use `https://example.com/hub/api.php` as the hub address. It needs no URL rewriting: routes are `api.php/changes`, `api.php/records` and so on, or `api.php?r=changes` where a host doesn't pass the path through.
 
+`GET changes` returns at most `limit` records (500 by default, 1000 at most) and stops a page at about 2 MiB of record data, so one request's memory stays bounded however large records are; `more` and `next` tell the client to ask again.
+
 **Keys** are for recorders and scripts: the Agents page makes them for agents it installs. Otherwise, make one under Accounts → Keys, or with `php tools/new-key.php recorder "Office Mac"` (or `editor "Import script"`). Either shows the key once; the hub keeps only its hash, in the database. People don't use keys: they sign in. More hub tools, run in `hub-php/` on the server:
 
 | Tool                                                             | What it does                                                |

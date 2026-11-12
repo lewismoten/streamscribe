@@ -121,12 +121,21 @@ if ($method === 'GET' && $route === 'changes') {
   $statement->bindValue(1, $since, PDO::PARAM_INT);
   $statement->bindValue(2, $limit + 1, PDO::PARAM_INT);
   $statement->execute();
-  $rows = $statement->fetchAll();
+  // Rows are read one at a time and the page stops at about 2 MiB of record data (always at least one record), so a
+  // page of big records can't fill the worker's memory; `more` tells the client to ask again from the last rev.
+  $rows = [];
+  $bytes = 0;
+  $more = false;
+  while (($row = $statement->fetch()) !== false) {
+    if (count($rows) >= $limit || ($rows && $bytes + strlen((string)$row['data']) > 2097152)) { $more = true; break; }
+    $bytes += strlen((string)$row['data']);
+    $rows[] = $row;
+  }
+  $statement->closeCursor();
   $current = (int)hub_meta($db, 'rev');
   $db->exec('COMMIT');
-  $more = count($rows) > $limit;
   $people = hub_people($db);
-  $records = array_map(fn ($row) => hub_record_for($row, $viewer, $people), array_slice($rows, 0, $limit));
+  $records = array_map(fn ($row) => hub_record_for($row, $viewer, $people), $rows);
   // Caught up: continue from the current rev (past any cleared deletions), not just the last record shown.
   $next = $more ? end($records)['rev'] : max($since, $current);
   hub_send(200, ['records' => $records, 'next' => $next, 'more' => $more]);

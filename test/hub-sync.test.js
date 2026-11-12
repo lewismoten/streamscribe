@@ -213,3 +213,24 @@ test('a client behind cleared deletions starts over (410)', async () => {
   await behind.pull();
   assert.equal(await behind.store.getMeta('lastRev'), (await (await fetch(`${hub}/info`)).json()).rev);
 });
+
+test('a page of changes stops at about 2 MiB of record data, and the next page continues', async () => {
+  const big = 'x'.repeat(200000);
+  const records = Array.from({ length: 14 }, (_, index) => ({
+    collection: 'stills',
+    id: `big-${index}`,
+    data: { path: big },
+    base_rev: 0
+  }));
+  await post('records', { records }, recorderKey);
+  const first = await (
+    await fetch(`${hub}/changes?since=0&limit=1000`, { headers: { 'x-streamscribe-key': editorKey } })
+  ).json();
+  assert.equal(first.more, true);
+  assert.ok(first.records.length >= 1 && first.records.length < 1000);
+  const second = await (
+    await fetch(`${hub}/changes?since=${first.next}&limit=1000`, { headers: { 'x-streamscribe-key': editorKey } })
+  ).json();
+  assert.ok(second.records.length >= 1);
+  assert.ok(second.records[0].rev > first.next);
+});
