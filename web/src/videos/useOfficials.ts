@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { mergeOfficial, videoAt } from '../../../src/sync/official.js';
+import { mergeOfficial, officialTime, videoAt } from '../../../src/sync/official.js';
 import { stackMarks } from '../../../src/sync/layers.js';
 import { useAccount } from '../data/account.ts';
 import { useRecords } from '../data/useRecords.ts';
@@ -33,6 +33,14 @@ export function useOfficials() {
       const item = items[index];
       return videoAt(officialOf(item.recordingId), item.from + (seconds - starts[index])) || '';
     };
-    return { officialOf, officialAt };
+    // The official video's time at a moment of the video (seconds), or null when its times aren't known.
+    const officialTimeAt = (items: VideoItem[], seconds: number): number | null => {
+      if (!items.length) return null;
+      const { starts } = layout(items);
+      const index = itemAt(items, seconds);
+      const item = items[index];
+      return officialTime(officialOf(item.recordingId), item.from + (seconds - starts[index]));
+    };
+    return { officialOf, officialAt, officialTimeAt };
   }, [recordings, marks, viewerId]);
 }

@@ -42,6 +42,8 @@ export interface Video {
   overlays?: Partial<Record<'speaker' | 'body' | 'chapter' | 'clock' | 'vote', boolean>>;
   // What goes over the clips: QR codes, pictures, pictures in picture, blurred areas (see layers.ts).
   layers?: Layer[];
+  // How round the corners of every QR code in it are (a share of a QR code's size; 0: square).
+  qrRadius?: number;
 }
 // Where each clip starts in the video, and how long the video is.
 export function layout(items: { from: number; to: number }[]) {

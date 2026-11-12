@@ -7,14 +7,31 @@ import { qrPng } from './qr-image.js';
 // from `from` to `to` (seconds of the video), fading in and out over `fade` seconds (0: a cut), at a fixed size
 // (`size`: fractions of the frame's width and height); its keyframes (`keys`: seconds into the layer) move it, and for
 // pictures change what part shows (`crop`: fractions of the picture), each in step to the next:
-//   qr           a QR code for `url` (color, background, error correction level), with an optional `title` under it
-//   official-qr  a QR code to the official video at the moment shown, changing each second (`urls`: [{ at, url }])
+//   qr           a QR code for `url` (color, background, error correction level), with an optional `title` under it;
+//                `radius` rounds its corners (a share of its size)
+//   official-qr  a QR code to the official video at the moment shown, changing each second (`urls`: [{ at, url }]),
+//                and with `showTime`, the official video's time under it between `timePrefix` and `timeSuffix`
+//                (`timeRuns`: [{ from, to, offset }], seconds of the video where the official time is t + offset)
 //   image        a picture (`file`, downloaded by the agent), showing its `crop` (panning and zooming over time)
 //   pip          a part of the video itself (`crop`) shown again as a picture in picture
 //   blur         a part of the video (shape rect, ellipse, or polygon `points` within it) blurred, pixelated, or blacked
 //                out (`effect`, `strength`), as for children in the audience
 
 const even = (value) => Math.max(2, Math.round(value / 2) * 2);
+
+// An official video's time as drawtext writes it, as the video plays (h:mm:ss of t + offset), between words of the
+// person's own ("\\" and "%" in them kept as they are).
+export function timeText(prefix = '', offset = 0, suffix = '') {
+  const literal = (text) =>
+    String(text || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%');
+  const at = `(t+${number(offset)})`;
+  return (
+    `${literal(prefix)}%{eif:floor(${at}/3600):d}:%{eif:mod(floor(${at}/60),60):d:2}:%{eif:mod(floor(${at}),60):d:2}` +
+    literal(suffix)
+  );
+}
 const number = (value) => Number(value.toFixed(4));
 
 // An expression for a value at time t that goes in step from each keyframe to the next (and holds before the first
@@ -80,7 +97,13 @@ export function layerGraph(layers, { width, height, firstInput, folder, font }) 
         `[${current}][${picture}]overlay=x='${x}':y='${y}':${enable}${shortest ? ':shortest=1' : ''}[${next}]`
       );
     if (layer.kind === 'qr' || layer.kind === 'official-qr') {
-      const options = { size: boxW, color: layer.color, background: layer.background, level: layer.level || 'M' };
+      const options = {
+        size: boxW,
+        color: layer.color,
+        background: layer.background,
+        level: layer.level || 'M',
+        radius: layer.radius || 0
+      };
       if (layer.kind === 'qr') {
         const file = path.join(folder, `qr-${index}.png`);
         fs.writeFileSync(file, qrPng(layer.url, options).png);
@@ -106,17 +129,32 @@ export function layerGraph(layers, { width, height, firstInput, folder, font }) 
       }
       input += 1;
       current = next;
-      // Its title, centered under it.
+      // Its title, centered under it (taken as it is: no expansion), then an official video's time.
+      const fontSize = Math.round(22 * scale);
+      const caption = (file, top, when, expand) => {
+        const captioned = `caption${index}-${filters.length}`;
+        filters.push(
+          `[${current}]drawtext=fontfile='${font}':textfile='${file}':expansion=${expand ? 'normal' : 'none'}:fontcolor=white:fontsize=${fontSize}` +
+            `:box=1:boxcolor=black@0.6:boxborderw=${Math.round(6 * scale)}:x='${x}+(${boxW}-tw)/2':y='${y}+${top}':${when}[${captioned}]`
+        );
+        current = captioned;
+      };
+      let top = boxW + Math.round(8 * scale);
       if (layer.title && font) {
         const file = path.join(folder, `qr-title-${index}.txt`);
         fs.writeFileSync(file, layer.title);
-        const titled = `titled${index}`;
-        filters.push(
-          `[${current}]drawtext=fontfile='${font}':textfile='${file}':fontcolor=white:fontsize=${Math.round(22 * scale)}` +
-            `:box=1:boxcolor=black@0.6:boxborderw=${Math.round(6 * scale)}:x='${x}+(${boxW}-tw)/2':y='${y}+${boxW + Math.round(8 * scale)}':${enable}[${titled}]`
-        );
-        current = titled;
+        caption(file, top, enable, false);
+        top += Math.round(fontSize * 1.6);
       }
+      if (layer.kind === 'official-qr' && layer.showTime && font)
+        (layer.timeRuns || []).forEach((run, number_) => {
+          const from = Math.max(layer.from, run.from);
+          const to = Math.min(layer.to, run.to);
+          if (!(to > from)) return;
+          const file = path.join(folder, `qr-time-${index}-${number_}.txt`);
+          fs.writeFileSync(file, timeText(layer.timePrefix, run.offset, layer.timeSuffix));
+          caption(file, top, `enable='between(t,${number(from)},${number(to)})'`, true);
+        });
       return;
     }
     if (layer.kind === 'image' && layer.file) {

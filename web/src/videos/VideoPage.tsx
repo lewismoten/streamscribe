@@ -39,7 +39,7 @@ export default function VideoPage() {
     'stills'
   );
   const overlaysOf = useOverlays();
-  const { officialOf, officialAt } = useOfficials();
+  const { officialOf, officialAt, officialTimeAt } = useOfficials();
   const [selectedLayer, setSelectedLayer] = useState<string | null>(null);
   const [drawingPoints, setDrawingPoints] = useState(false);
   // Layers as they're being dragged (saved once the dragging pauses).
@@ -100,15 +100,26 @@ export default function VideoPage() {
         : newLayer('qr', time, total, { url: item.url, title: item.label, name: item.label }, place)
     );
   // For the agent: an official video QR code gets the official video's address for each second it shows.
+  // Every QR code gets the video's corner rounding; an official video's time caption, its stretches where the official
+  // time runs on with the video's (each a constant offset from it), so the agent can draw the time as it goes.
   const layersToRender = () =>
     layers.map((layer) => {
-      if (layer.kind !== 'official-qr') return layer;
+      if (layer.kind !== 'qr' && layer.kind !== 'official-qr') return layer;
+      const rounded = { ...layer, radius: video?.qrRadius || 0 };
+      if (layer.kind !== 'official-qr') return rounded;
       const urls: { at: number; url: string }[] = [];
+      const timeRuns: { from: number; to: number; offset: number }[] = [];
       for (let second = 0; second < Math.ceil(layer.to - layer.from); second += 1) {
-        const url = officialAt(items, layer.from + second);
+        const at = layer.from + second;
+        const url = officialAt(items, at);
         if (url && url !== urls.at(-1)?.url) urls.push({ at: second, url });
+        const official = layer.showTime ? officialTimeAt(items, at) : null;
+        if (official === null) continue;
+        const run = timeRuns.at(-1);
+        if (run && run.to === at && Math.abs(official - at - run.offset) < 0.6) run.to = Math.min(layer.to, at + 1);
+        else timeRuns.push({ from: at, to: Math.min(layer.to, at + 1), offset: official - at });
       }
-      return { ...layer, urls };
+      return { ...rounded, urls, timeRuns };
     });
   // Splitting the clip under the playhead in two there.
   const split = () => {
@@ -249,6 +260,8 @@ export default function VideoPage() {
                 editable={editable}
                 drawingPoints={drawingPoints}
                 officialAt={(seconds) => officialAt(items, seconds)}
+                officialTimeAt={(seconds) => officialTimeAt(items, seconds)}
+                qrRadius={video?.qrRadius || 0}
                 onSelect={(layerId) => {
                   setSelectedLayer(layerId);
                   if (layerId) setSelected(null);
@@ -309,6 +322,8 @@ export default function VideoPage() {
           {selectedLayer && editable && layers.some((layer) => layer.id === selectedLayer) ? (
             <LayerInspector
               layer={layers.find((layer) => layer.id === selectedLayer)!}
+              qrRadius={video?.qrRadius || 0}
+              onQrRadius={(qrRadius) => save({ qrRadius })}
               time={time}
               total={total}
               drawingPoints={drawingPoints}

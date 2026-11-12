@@ -2,7 +2,7 @@ import { useEffect, useRef, type DragEvent, type PointerEvent } from 'react';
 import { LIBRARY_DRAG, type LibraryItem } from './LibraryPanel.tsx';
 import { create } from '../../../src/vendor/qr/matrix-encoder.js';
 import { mediaUrl } from '../data/hub.ts';
-import { ASPECT, isOn, isSquare, opacityAt, setKeyAt, stateAt, type Layer } from './layers.ts';
+import { ASPECT, isOn, isSquare, opacityAt, setKeyAt, stateAt, timeCaption, type Layer } from './layers.ts';
 
 // The layers drawn over the preview as the render will draw them (QR codes, pictures, a part of the video again,
 // blurred areas), and the selected one in a box: drag it to move it (a keyframe at the playhead), drag its corner to
@@ -30,10 +30,26 @@ function imageOf(path: string, redraw: () => void) {
   return images.get(path)!;
 }
 
-function drawQr(context: CanvasRenderingContext2D, text: string, layer: Layer, x: number, y: number, size: number) {
+// A QR code as the render draws it: its background (corners rounded by radius, a share of its size), its modules, and
+// under it its title and (an official video QR code's) time caption, each on its own line.
+function drawQr(
+  context: CanvasRenderingContext2D,
+  text: string,
+  layer: Layer,
+  x: number,
+  y: number,
+  size: number,
+  { radius = 0, caption = '' }: { radius?: number; caption?: string } = {}
+) {
   const modules = qrOf(text, layer.level || 'M');
   const count = modules.size + 8;
   const cell = size / count;
+  context.save();
+  if (radius > 0) {
+    context.beginPath();
+    context.roundRect(x, y, size, size, radius * size);
+    context.clip();
+  }
   context.fillStyle = layer.background || '#ffffff';
   context.fillRect(x, y, size, size);
   context.fillStyle = layer.color || '#000000';
@@ -41,17 +57,19 @@ function drawQr(context: CanvasRenderingContext2D, text: string, layer: Layer, x
     for (let column = 0; column < modules.size; column += 1)
       if (modules.get(row, column))
         context.fillRect(x + (column + 4) * cell, y + (row + 4) * cell, Math.ceil(cell), Math.ceil(cell));
-  if (layer.title) {
-    context.font = `${Math.round(size * 0.11)}px system-ui, sans-serif`;
-    const width = context.measureText(layer.title).width;
+  context.restore();
+  const lines = [layer.title, caption].filter(Boolean) as string[];
+  context.font = `${Math.round(size * 0.11)}px system-ui, sans-serif`;
+  context.textBaseline = 'top';
+  lines.forEach((line, index) => {
+    const width = context.measureText(line).width;
     const pad = size * 0.03;
-    const top = y + size + size * 0.04;
+    const top = y + size + size * 0.04 + index * size * 0.17;
     context.fillStyle = 'rgba(0, 0, 0, 0.6)';
     context.fillRect(x + (size - width) / 2 - pad, top, width + pad * 2, size * 0.15);
     context.fillStyle = '#fff';
-    context.textBaseline = 'top';
-    context.fillText(layer.title, x + (size - width) / 2, top + pad);
-  }
+    context.fillText(line, x + (size - width) / 2, top + pad);
+  });
 }
 
 function shapePath(context: CanvasRenderingContext2D, layer: Layer, x: number, y: number, w: number, h: number) {
@@ -72,8 +90,16 @@ export function drawLayers(
   {
     video,
     officialAt,
+    officialTimeAt = () => null,
+    qrRadius = 0,
     redraw
-  }: { video: HTMLVideoElement | null; officialAt: (seconds: number) => string; redraw: () => void }
+  }: {
+    video: HTMLVideoElement | null;
+    officialAt: (seconds: number) => string;
+    officialTimeAt?: (seconds: number) => number | null;
+    qrRadius?: number;
+    redraw: () => void;
+  }
 ) {
   const { width: W, height: H } = context.canvas;
   const hasVideo = Boolean(video && video.readyState >= 2 && video.videoWidth);
@@ -85,7 +111,10 @@ export function drawLayers(
     context.save();
     context.globalAlpha = alpha;
     if (layer.kind === 'qr' || layer.kind === 'official-qr')
-      drawQr(context, layer.kind === 'qr' ? layer.url || '' : officialAt(seconds), layer, x, y, w);
+      drawQr(context, layer.kind === 'qr' ? layer.url || '' : officialAt(seconds), layer, x, y, w, {
+        radius: qrRadius,
+        caption: layer.kind === 'official-qr' ? timeCaption(layer, officialTimeAt(seconds)) : ''
+      });
     else if (layer.kind === 'image' && layer.image) {
       const image = imageOf(layer.image, redraw);
       if (image.complete && image.naturalWidth) {
@@ -130,6 +159,8 @@ export default function LayerCanvas({
   editable,
   drawingPoints,
   officialAt,
+  officialTimeAt,
+  qrRadius = 0,
   onSelect,
   onChange,
   onDropItem
@@ -143,6 +174,9 @@ export default function LayerCanvas({
   // Adding points to the selected blur's drawn shape.
   drawingPoints: boolean;
   officialAt: (seconds: number) => string;
+  // The official video's time at a moment (an official video QR code's caption), and how round QR codes' corners are.
+  officialTimeAt?: (seconds: number) => number | null;
+  qrRadius?: number;
   onSelect: (id: string | null) => void;
   onChange: (layer: Layer) => void;
   // Something from the library dropped on the preview, where it was dropped.
@@ -150,9 +184,9 @@ export default function LayerCanvas({
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const frame = useRef<HTMLDivElement>(null);
-  const latest = useRef({ layers, seconds, video, officialAt });
+  const latest = useRef({ layers, seconds, video, officialAt, officialTimeAt, qrRadius });
   useEffect(() => {
-    latest.current = { layers, seconds, video, officialAt };
+    latest.current = { layers, seconds, video, officialAt, officialTimeAt, qrRadius };
   });
   // Drawn on each change, and each animation frame while playing (the video moves under pictures in picture and blurs).
   useEffect(() => {
@@ -169,14 +203,20 @@ export default function LayerCanvas({
       const context = element.getContext('2d')!;
       context.clearRect(0, 0, element.width, element.height);
       const now = latest.current;
-      drawLayers(context, now.layers, now.seconds, { video: now.video, officialAt: now.officialAt, redraw: draw });
+      drawLayers(context, now.layers, now.seconds, {
+        video: now.video,
+        officialAt: now.officialAt,
+        officialTimeAt: now.officialTimeAt,
+        qrRadius: now.qrRadius,
+        redraw: draw
+      });
       if (playing) request = requestAnimationFrame(draw);
     };
     draw();
     return () => cancelAnimationFrame(request);
     // Drawn again when what's drawn changes (read through the ref, so the loop always draws the latest).
     // oxlint-disable-next-line react/exhaustive-effect-dependencies
-  }, [layers, seconds, video, playing, officialAt]);
+  }, [layers, seconds, video, playing, officialAt, officialTimeAt, qrRadius]);
 
   const layer = layers.find((item) => item.id === selected && isOn(item, seconds));
   const state = layer ? stateAt(layer, seconds) : null;

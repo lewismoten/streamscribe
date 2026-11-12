@@ -10,7 +10,8 @@ import {
   setKeyAt,
   SHAPES,
   stateAt,
-  type Layer
+  type Layer,
+  QR_CORNERS
 } from './layers.ts';
 
 // The selected layer's settings: when it shows (and its fade), its size, what it is (a QR code's address, title, and
@@ -25,8 +26,13 @@ export default function LayerInspector({
   onChange,
   onSeek,
   onRemove,
-  onMove
+  onMove,
+  qrRadius = 0,
+  onQrRadius = () => {}
 }: {
+  // How round every QR code's corners are in this video, and changing it.
+  qrRadius?: number;
+  onQrRadius?: (radius: number) => void;
   layer: Layer;
   time: number;
   total: number;
@@ -136,6 +142,48 @@ export default function LayerInspector({
           <label>
             Title under it
             <input value={layer.title || ''} onChange={(event) => onChange({ ...layer, title: event.target.value })} />
+          </label>
+          {layer.kind === 'official-qr' && (
+            <>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(layer.showTime)}
+                  onChange={(event) => onChange({ ...layer, showTime: event.target.checked })}
+                />{' '}
+                Show the official video&apos;s time under it
+              </label>
+              {layer.showTime && (
+                <>
+                  <label>
+                    Before the time
+                    <input
+                      value={layer.timePrefix || ''}
+                      placeholder="Watch at "
+                      onChange={(event) => onChange({ ...layer, timePrefix: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    After the time
+                    <input
+                      value={layer.timeSuffix || ''}
+                      placeholder=" on the official video"
+                      onChange={(event) => onChange({ ...layer, timeSuffix: event.target.value })}
+                    />
+                  </label>
+                </>
+              )}
+            </>
+          )}
+          <label>
+            Corners (every QR code in this video)
+            <select value={String(qrRadius)} onChange={(event) => onQrRadius(Number(event.target.value))}>
+              {QR_CORNERS.map(([value, label]) => (
+                <option key={value} value={String(value)}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             Color

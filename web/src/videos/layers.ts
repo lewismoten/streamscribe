@@ -34,6 +34,11 @@ export interface Layer {
   color?: string;
   background?: string;
   level?: 'L' | 'M' | 'Q' | 'H';
+  // An official video QR code: the official video's time shown under it (changing each second), between optional
+  // words before and after it ("Watch at " 1:02:07 " on Swagit").
+  showTime?: boolean;
+  timePrefix?: string;
+  timeSuffix?: string;
   // Pictures (a path on the hub) and their shape
   image?: string;
   imageWidth?: number;
@@ -51,6 +56,23 @@ export const LAYER_KINDS: Record<LayerKind, { icon: string; label: string }> = {
   pip: { icon: '⧉', label: 'Picture in picture (a part of the video)' },
   blur: { icon: '◌', label: 'Blurred area' }
 };
+// How round every QR code's corners are in a video (its qrRadius: a share of a QR code's size).
+export const QR_CORNERS: [number, string][] = [
+  [0, 'Square'],
+  [0.06, 'Slightly rounded'],
+  [0.12, 'Rounded'],
+  [0.2, 'Very rounded']
+];
+// The official video's time as the caption shows it (and the render draws it): h:mm:ss.
+export function officialClock(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(total / 3600)}:${String(Math.floor(total / 60) % 60).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+// An official video QR code's time caption at a moment ('' when the time isn't shown or isn't known).
+export const timeCaption = (layer: Layer, officialSeconds: number | null) =>
+  layer.showTime && officialSeconds !== null
+    ? `${layer.timePrefix || ''}${officialClock(officialSeconds)}${layer.timeSuffix || ''}`
+    : '';
 export const BLUR_EFFECTS = { blur: 'Blur', pixelate: 'Pixelate', black: 'Black out' } as const;
 export const SHAPES = { rect: 'Rectangle', ellipse: 'Circle or oval', polygon: 'Drawn shape' } as const;
 export const ASPECT = 16 / 9;

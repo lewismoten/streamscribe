@@ -88,7 +88,7 @@ need [a hub](hub/hub.md) (accounts, private meetings, publishing); capture and t
   volume, and who is speaking ([clips and videos](hub/hub.md#clips-and-videos)).
 - **Overlays**: who is speaking, the body, the chapter, the time of day, and votes, fading in and out as they change.
 - **Layers** with keyframes: QR codes (from a library of links and the meetings' documents, with a title, colors, and
-  error correction), a QR code to the official video that changes each second, pictures panned and zoomed, picture in
+  error correction), a QR code to the official video that changes each second (optionally with the official video's time under it, between words of your own), every QR code in a video with square or rounded corners, pictures panned and zoomed, picture in
   picture, and blurred, pixelated, or blacked-out areas (as for children in the audience).
 - **Rendering** by an agent from the original recordings: 720p for the web or 1080p production, to the hub as a public
   page or to a folder on the agent; a notification says when it's ready.
