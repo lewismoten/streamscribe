@@ -149,17 +149,21 @@ export function parseRule(text) {
   return rule;
 }
 
-// Candidate local dates of a rule, in order, from the schedule's first date. Stops when `stop(dateMs)` says so.
-function* ruleDates(rule, startDate) {
+// Candidate local dates, bounded even when a month has no matching days.
+function* ruleDates(rule, startDate, lastDate) {
   const start = parts(startDate);
   if (rule.freq === 'DAILY') {
-    for (let date = startDate; ; date += rule.interval * DAY_MS) yield date;
+    for (let date = startDate; date <= lastDate; date += rule.interval * DAY_MS) yield date;
   }
   if (rule.freq === 'WEEKLY') {
     const days = rule.byDay.length
       ? [...new Set(rule.byDay.map((item) => item.weekday))].sort((a, b) => a - b)
       : [weekdayIndex(startDate)];
-    for (let monday = startDate - weekdayIndex(startDate) * DAY_MS; ; monday += rule.interval * 7 * DAY_MS) {
+    for (
+      let monday = startDate - weekdayIndex(startDate) * DAY_MS;
+      monday <= lastDate;
+      monday += rule.interval * 7 * DAY_MS
+    ) {
       for (const day of days) {
         const date = monday + day * DAY_MS;
         if (date >= startDate) yield date;
@@ -170,6 +174,7 @@ function* ruleDates(rule, startDate) {
     for (let index = 0; ; index += rule.interval) {
       const year = start.year + Math.floor((start.month - 1 + index) / 12);
       const month = ((start.month - 1 + index) % 12) + 1;
+      if (!(civil(year, month, 1) <= lastDate)) return;
       const length = daysInMonth(year, month);
       const dates = new Set();
       if (rule.byDay.length) {
@@ -245,7 +250,7 @@ export function occurrences(schedule, fromMs, toMs, { includeCancelled = false }
   let count = 0;
   // A moved occurrence can land up to a few weeks from its original date, so look a little past the window.
   const lastDate = toMs + 45 * DAY_MS;
-  for (const date of ruleDates(rule, first.date)) {
+  for (const date of ruleDates(rule, first.date, Math.min(lastDate, rule.until?.date ?? lastDate))) {
     if (
       rule.until &&
       (date > rule.until.date || (date === rule.until.date && first.hour * 60 + first.minute > rule.until.minutes))

@@ -90,3 +90,15 @@ test('dates listed on a page, after a heading, with times beside them', async ()
   assert.equal(timeIn('at 7 PM'), '19:00');
   assert.equal(minutesOf('1:02:03'), 62);
 });
+
+test('SS-04: named calendar zones match UTC encodings and measure DST elapsed time', () => {
+  for (const [start, end, date, time, minutes] of [
+    [';TZID=America/Chicago:20261118T180000', ';TZID=America/Chicago:20261118T190000', '2026-11-18', '19:00', 60],
+    [':20261119T000000Z', ':20261119T010000Z', '2026-11-18', '19:00', 60],
+    [';TZID="America/Chicago":20260308T013000', ';TZID=America/New_York:20260308T043000', '2026-03-08', '03:30', 60],
+    [';TZID=America/Chicago:20261101T003000', ';TZID=America/Chicago:20261101T023000', '2026-11-01', '01:30', 180]
+  ]) {
+    const [event] = icalEvents(`BEGIN:VEVENT\nDTSTART${start}\nDTEND${end}\nEND:VEVENT`, 'America/New_York');
+    assert.deepEqual([event.date, event.time, event.minutes], [date, time, minutes]);
+  }
+});

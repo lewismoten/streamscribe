@@ -55,6 +55,31 @@ export class SqliteStore {
   async deletePending(collection, id) {
     this.db.prepare('DELETE FROM pending WHERE collection = ? AND id = ?').run(collection, id);
   }
+  async edit(collection, id, work) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const read = (table) => {
+        const row = this.db.prepare(`SELECT body FROM ${table} WHERE collection = ? AND id = ?`).get(collection, id);
+        return row ? JSON.parse(row.body) : undefined;
+      };
+      const update = work(read('records'), read('pending'));
+      if (update.record)
+        this.db
+          .prepare('INSERT OR REPLACE INTO records (collection, id, body) VALUES (?, ?, ?)')
+          .run(collection, id, JSON.stringify(update.record));
+      if ('pending' in update) {
+        if (update.pending)
+          this.db
+            .prepare('INSERT OR REPLACE INTO pending (collection, id, body) VALUES (?, ?, ?)')
+            .run(collection, id, JSON.stringify(update.pending));
+        else this.db.prepare('DELETE FROM pending WHERE collection = ? AND id = ?').run(collection, id);
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
   async listPending() {
     return this.db
       .prepare('SELECT body FROM pending ORDER BY rowid')

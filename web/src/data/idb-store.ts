@@ -60,6 +60,36 @@ function makeStore(dbName: string) {
       run('pending', 'readwrite', (objects) => {
         objects.delete([collection, id]);
       }),
+    // Both reads and writes share one transaction, so a save cannot interleave with an acknowledgement.
+    edit: async (
+      collection: string,
+      id: string,
+      work: (record: Row | undefined, pending: Row | undefined) => { record?: Row; pending?: Row | null }
+    ) => {
+      const db = await open();
+      return new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(['records', 'pending'], 'readwrite');
+        const records = transaction.objectStore('records');
+        const pending = transaction.objectStore('pending');
+        const record = records.get([collection, id]);
+        const change = pending.get([collection, id]);
+        change.onsuccess = () => {
+          try {
+            const update = work(record.result, change.result);
+            if (update.record) records.put(update.record);
+            if ('pending' in update) {
+              if (update.pending) pending.put(update.pending);
+              else pending.delete([collection, id]);
+            }
+          } catch {
+            transaction.abort();
+          }
+        };
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => reject(transaction.error || new Error('Store edit aborted'));
+        transaction.onerror = () => reject(transaction.error);
+      });
+    },
     listPending: () => run<Row[]>('pending', 'readonly', (objects) => objects.getAll()),
     // Everything, for export.
     allRecords: () => run<Row[]>('records', 'readonly', (objects) => objects.getAll()),

@@ -34,6 +34,15 @@ export class MemoryStore {
   async deletePending(collection, id) {
     this.pending.delete(this.key(collection, id));
   }
+  async edit(collection, id, work) {
+    const key = this.key(collection, id);
+    const update = work(structuredClone(this.records.get(key)), structuredClone(this.pending.get(key)));
+    if (update.record) this.records.set(key, structuredClone(update.record));
+    if ('pending' in update) {
+      if (update.pending) this.pending.set(key, structuredClone(update.pending));
+      else this.pending.delete(key);
+    }
+  }
   async listPending() {
     return [...this.pending.values()].map((change) => structuredClone(change));
   }

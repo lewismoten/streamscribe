@@ -3,7 +3,7 @@ import { defaultHubUrl, findHub, hubSettings, saveHubSettings } from '../data/hu
 import { idbStore } from '../data/idb-store.ts';
 import { onSyncState, syncClient, syncNow, type SyncState } from '../data/sync.ts';
 import { refreshAccount } from '../data/account.ts';
-import { canWrite } from '../../../src/sync/collections.js';
+import { restoreBackup } from '../../../src/sync/backup.js';
 
 // Where the hub is (and, for scripts, a key; people sign in under Account instead), syncing, and moving data in and out as
 // JSON (the same records the hub keeps; an export can also start a new hub).
@@ -77,15 +77,9 @@ export default function SettingsPage() {
     const value = JSON.parse(await file.text());
     // Only what an editor may change (schedules, sources, marks, settings); what recorders made (recordings,
     // transcripts, stills) goes into a hub with its tools/import.php instead.
-    const all = [...(value.records || []), ...(value.pending || [])].filter(
-      (item) => item.collection && item.id && !item.deleted
-    );
-    const items = all.filter((item) => canWrite(item.collection, 'editor'));
-    const client = syncClient();
-    for (const item of items) await client.put(item.collection, item.id, item.data);
-    const skipped = all.length - items.length;
+    const { imported, skipped } = await restoreBackup(syncClient(), value);
     setMessage(
-      `Imported ${items.length} records${hubSettings().url ? '; they go to the hub on the next sync' : ''}.` +
+      `Imported ${imported} records${hubSettings().url ? '; they go to the hub on the next sync' : ''}.` +
         (skipped ? ` Skipped ${skipped} made by recorders (load those into a hub with its tools/import.php).` : '')
     );
     event.target.value = '';

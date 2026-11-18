@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { db, scan } from './context.ts';
-import { sendText } from './http.ts';
+import { requestHandler } from './request-handler.ts';
 import { handleApi } from './routes/api.ts';
 import { handleFiles } from './routes/files.ts';
 import { handleApp } from './routes/app.ts';
@@ -14,18 +14,7 @@ const option = (name: string, fallback: string) =>
 const host = option('--host', '127.0.0.1');
 const port = Number(option('--port', '4873'));
 
-const server = http.createServer((request, response) => {
-  const url = new URL(request.url || '/', 'http://localhost');
-  const handler = url.pathname.startsWith('/api/')
-    ? handleApi(request, response, url)
-    : url.pathname.startsWith('/files/')
-      ? handleFiles(request, response, url)
-      : Promise.resolve(handleApp(request, response, url));
-  handler.catch((error) => {
-    console.error(error);
-    if (!response.headersSent) sendText(response, 500, `Server error: ${error.message}`);
-  });
-});
+const server = http.createServer(requestHandler(handleApi, handleFiles, handleApp));
 
 await scan();
 const count = (db.prepare('SELECT count(*) AS n FROM recordings WHERE missing = 0').get() as { n: number }).n;

@@ -16,6 +16,8 @@ const HUB_LOG_MOST_BYTES = 262144;
 function hub_upload_target(array $config, string $area, string $folder, string $name): array {
   $segment = '[A-Za-z0-9][A-Za-z0-9._-]*';
   if (!preg_match("#^$segment(/$segment)*$#", $folder) || !preg_match("#^$segment$#", $name) || strpos("/$folder/", '/../') !== false) hub_fail(400, 'Not a valid folder or name');
+  // Reject handler extensions anywhere in a name (Apache can handle multiple extensions), in both areas.
+  if (preg_match('/(?:^|\.)(?:php[0-9]*|phtml|pht|phar|cgi|pl|py|rb|sh|shtml|shtm|asp|aspx|jsp|jspx)(?:\.|$)/i', $name) || strtolower($name) === 'web.config') hub_fail(400, 'Executable upload name');
   if ($area === 'private' && strpos($folder, 'recordings/') === 0) return [hub_private_dir($config) . "/$folder/$name", "private/$folder/$name"];
   // A failed job's log (src/recorder/failure-log.js): a small text file, removable from the website.
   if ($area === 'private' && preg_match('#^logs/[A-Za-z0-9._-]+$#', $folder) && preg_match('/\.txt$/', $name)) return [hub_private_dir($config) . "/$folder/$name", "private/$folder/$name"];
