@@ -338,6 +338,8 @@ export default function ScheduleForm({
         <strong>{form.repeat === 'none' ? 'The meeting' : describeRule(ruleOf(form) || '') || 'Coming up'}</strong>
         {previewError ? (
           <p className="error">{previewError}</p>
+        ) : !preview.length ? (
+          <p className="muted">No dates in the next 400 days.</p>
         ) : (
           <ul>
             {preview.map((item) => (

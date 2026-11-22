@@ -1,17 +1,25 @@
 import { decode } from './text.js';
+import { zonedTime } from '../sync/recurrence.js';
 
 // An iCalendar feed's events whose summaries match (feed.match, a regular expression): each event's date and time
 // (in the feed's time, or converted from UTC to feed.timeZone), and its length.
 function unfold(text) {
   return String(text || '').replace(/\r?\n[ \t]/g, '');
 }
-function when(value, timeZone) {
+function when(value, timeZone, inputZone) {
   const match = String(value || '').match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/);
   if (!match) return { date: null, time: null, ms: null };
   if (!match[4]) return { date: `${match[1]}-${match[2]}-${match[3]}`, time: null, ms: null };
   const ms = match[7]
     ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]))
-    : null;
+    : inputZone
+      ? zonedTime(
+          Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+          Number(match[4]),
+          Number(match[5]),
+          inputZone
+        )
+      : null;
   if (ms !== null && timeZone) {
     const parts = Object.fromEntries(
       new Intl.DateTimeFormat('en-CA', {
@@ -34,8 +42,13 @@ function when(value, timeZone) {
 export function icalEvents(text, timeZone) {
   return [...unfold(text).matchAll(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/g)].map((block) => {
     const field = (name) => block[1].match(new RegExp(`\\n${name}(?:;[^:\\n]*)?:([^\\n]*)`))?.[1]?.trim() || '';
-    const start = when(field('DTSTART'), timeZone);
-    const end = when(field('DTEND'), timeZone);
+    const endpoint = (name) => {
+      const property = block[1].match(new RegExp(`\\n${name}((?:;[^:\\n]*)?):([^\\n]*)`));
+      const zone = property?.[1].match(/;TZID=(?:"([^"]+)"|([^;]+))/i);
+      return when(property?.[2]?.trim(), timeZone, zone?.[1] || zone?.[2]);
+    };
+    const start = endpoint('DTSTART');
+    const end = endpoint('DTEND');
     return {
       uid: field('UID'),
       summary: decode(field('SUMMARY').replace(/\\,/g, ',').replace(/\\;/g, ';')),

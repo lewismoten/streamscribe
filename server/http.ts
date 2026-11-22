@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pipeline } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const TYPES: Record<string, string> = {
@@ -79,7 +80,7 @@ export function sendFile(request: IncomingMessage, response: ServerResponse, fil
       response.end();
       return;
     }
-    fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(response);
+    pipeline(fs.createReadStream(filePath, { start: range.start, end: range.end }), response, () => {});
     return;
   }
   response.writeHead(200, {
@@ -92,7 +93,7 @@ export function sendFile(request: IncomingMessage, response: ServerResponse, fil
     response.end();
     return;
   }
-  fs.createReadStream(filePath).pipe(response);
+  pipeline(fs.createReadStream(filePath), response, () => {});
 }
 
 export function sendText(response: ServerResponse, status: number, text: string) {

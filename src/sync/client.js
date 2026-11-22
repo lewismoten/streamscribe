@@ -13,6 +13,7 @@ import { merge } from './merge.js';
 //   getMeta(name), setMeta(name, value)
 //   getRecord(collection, id), putRecord(record), listRecords(collection)        hub versions
 //   getPending(collection, id), putPending(change), deletePending(collection, id), listPending()
+//   edit(collection, id, work)  atomically read record/pending and apply synchronous work(record, pending)
 //
 // Hub API (see hub-php/api.php): GET {hub}/changes?since=rev&limit=n, POST {hub}/records with an X-Streamscribe-Key
 // (recorders, scripts) or a signed-in person's X-Streamscribe-Token.
@@ -65,17 +66,18 @@ export class SyncClient {
   async put(collection, id, data, { deleted = false } = {}) {
     if (!COLLECTIONS[collection]) throw new Error(`Unknown collection ${collection}`);
     const recordId = id || newId();
-    const earlier = await this.store.getPending(collection, recordId);
-    const synced = await this.store.getRecord(collection, recordId);
-    await this.store.putPending({
-      collection,
-      id: recordId,
-      data: deleted ? null : data,
-      deleted,
-      base_rev: earlier ? earlier.base_rev : (synced?.rev ?? 0),
-      base_data: earlier ? earlier.base_data : synced && !synced.deleted ? synced.data : null,
-      changed_at: new Date().toISOString()
-    });
+    await this.store.edit(collection, recordId, (synced, earlier) => ({
+      pending: {
+        collection,
+        id: recordId,
+        data: deleted ? null : data,
+        deleted,
+        generation: newId(),
+        base_rev: earlier ? earlier.base_rev : (synced?.rev ?? 0),
+        base_data: earlier ? earlier.base_data : synced && !synced.deleted ? synced.data : null,
+        changed_at: new Date().toISOString()
+      }
+    }));
     this.onChange([{ collection, id: recordId }]);
     return recordId;
   }
@@ -162,31 +164,48 @@ export class SyncClient {
       for (const result of reply.results) {
         const change = batch.find((item) => item.collection === result.collection && item.id === result.id);
         if (!change) continue;
-        if (result.status === 'ok') {
-          await this.store.putRecord(result.record);
-          await this.store.deletePending(change.collection, change.id);
-          sent += 1;
-        } else if (result.status === 'conflict') {
-          // Someone else changed it: merge into their version and send again.
-          const current = result.record;
-          const merged =
-            change.deleted || current.deleted
-              ? { data: change.deleted ? null : change.data, conflicts: ['(deleted on one side)'] }
-              : merge(change.base_data, change.data, current.data);
-          conflicts.push({ collection: change.collection, id: change.id, paths: merged.conflicts });
-          await this.store.putRecord(current);
-          await this.store.putPending({
-            ...change,
-            data: merged.data,
-            base_rev: current.rev,
-            base_data: current.deleted ? null : current.data
-          });
-          retry = true;
-        } else {
+        await this.store.edit(change.collection, change.id, (record, latest) => {
+          const newer = latest && latest.generation !== change.generation;
+          if (result.status === 'ok') {
+            sent += 1;
+            return {
+              record: result.record,
+              pending: newer
+                ? {
+                    ...latest,
+                    base_rev: result.record.rev,
+                    base_data: result.record.deleted ? null : result.record.data
+                  }
+                : null
+            };
+          }
+          if (result.status === 'conflict') {
+            // Merge the latest local intent, never the older in-flight snapshot.
+            const current = result.record;
+            if (!latest) return { record: current };
+            const merged =
+              latest.deleted || current.deleted
+                ? { data: latest.deleted ? null : latest.data, conflicts: ['(deleted on one side)'] }
+                : merge(latest.base_data, latest.data, current.data);
+            conflicts.push({ collection: change.collection, id: change.id, paths: merged.conflicts });
+            retry = true;
+            return {
+              record: current,
+              pending: {
+                ...latest,
+                generation: newId(),
+                data: merged.data,
+                base_rev: current.rev,
+                base_data: current.deleted ? null : current.data
+              }
+            };
+          }
           refused.push({ collection: change.collection, id: change.id, error: result.error || result.status });
-          await this.store.deletePending(change.collection, change.id);
+          // A refusal applies only to the generation sent. A later edit is still eligible to push.
+          if (newer) return {};
           retry = true;
-        }
+          return { pending: null };
+        });
       }
       if (!retry && batch.length === pending.length) break;
     }
