@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { RECORDER, TOOLS } from '../config/runtime-config.js';
 import { commandsSince } from '../util/command-log.js';
-import { failureLog } from './failure-log.js';
+import { failureLog, appendEntry } from './failure-log.js';
 import { loadSessionSegments } from '../sessions/session.js';
 import { joinClips } from '../media/compose.js';
 import { makeClip, run } from '../media/encode.js';
@@ -19,7 +19,8 @@ import { discover, firstPicture, officialTranscript } from './discovery.js';
 // can do (it has that recording here, or, for a clip or video, an agent nearby does, which it fetches the stretches
 // the work needs from; encoding takes the recording here; a job for a named agent waits for it), claims it on the hub so no other agent
 // takes it too (renewed while it works), and reports its progress in the job record. Cancelling a job in the web app
-// stops it. A job that fails leaves a log on the hub (private, linked from the job, and removable: failure-log.js).
+// stops it. A job that fails adds its entry to one rolling log on the hub (private/logs/error.log, linked from
+// the job, oldest entries dropped first past a size cap: failure-log.js).
 // Job types:
 //   clip    { publicationId, recordingId, part, from, to }  cut a published clip (MP4 with sound, and M4A), upload
 //           it (through the hub's API, in pieces) to its public media/published/<id>/, and mark the clip ready
@@ -57,12 +58,14 @@ export function jobRunner({
       if (current.lines.length > 2000) current.lines.splice(0, 500);
     }
   };
-  // A failed job's log, on the hub as a private file (private/logs/<job>/…txt, removable from the website): its path.
+  // A failed job's entry appended to one rolling log on the hub (private/logs/error.log, removable from the
+  // website): its path. Was one timestamped file per job folder (private/logs/<job>/…txt) -- scattered across
+  // many small files and folders that never got cleaned up; now everything funnels into a single capped file.
   async function attachLog(job, error, lines, since) {
     const ffmpeg = (await run(TOOLS.ffmpeg, ['-version']).catch(() => ({ stdout: '' }))).stdout
       .split('\n')[0]
       .replace('ffmpeg version ', '');
-    const text = failureLog({
+    const entry = failureLog({
       job,
       error,
       lines,
@@ -72,17 +75,20 @@ export function jobRunner({
     });
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'streamscribe-log-'));
     try {
-      const file = path.join(folder, 'log.txt');
+      const name = 'error.log';
+      let existing = '';
+      try {
+        await hubFiles().download(`private/logs/${name}`, path.join(folder, 'existing.log'));
+        existing = fs.readFileSync(path.join(folder, 'existing.log'), 'utf8');
+      } catch {
+        existing = ''; // no error.log yet
+      }
+      const text = appendEntry(existing, entry);
+      const file = path.join(folder, name);
       fs.writeFileSync(file, text);
-      const name = `failure-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
-      const [logPath] = await hubFiles().sendFolder(
-        'private',
-        `logs/${job.id.replace(/[^\w.-]+/g, '-')}`,
-        [{ local: file, name }],
-        {
-          keepOthers: true
-        }
-      );
+      const [logPath] = await hubFiles().sendFolder('private', 'logs', [{ local: file, name }], {
+        keepOthers: true
+      });
       return { path: logPath, bytes: Buffer.byteLength(text), at: new Date().toISOString() };
     } finally {
       fs.rmSync(folder, { recursive: true, force: true });
