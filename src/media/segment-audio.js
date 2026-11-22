@@ -130,7 +130,19 @@ async function joinExactly(parts, outputPath) {
   }
 }
 
-function wavHeader(dataBytes) {
+// A standard WAV's RIFF/data chunk sizes are 32-bit, capping a mono 16-bit 44.1kHz file at a little under 26.9
+// hours. A session this long shouldn't happen (session.js guards against corrupt segment metadata inflating
+// one), but if it ever genuinely does, fail with a clear, specific message instead of a RangeError buried in
+// Buffer internals.
+const MAX_WAV_DATA_BYTES = 0xffffffff - 36;
+export function wavHeader(dataBytes) {
+  if (dataBytes < 0 || dataBytes > MAX_WAV_DATA_BYTES) {
+    throw new Error(
+      `wavHeader: ${dataBytes} bytes of audio (~${(dataBytes / SAMPLE_RATE / 2 / 3600).toFixed(1)}h) exceeds what a ` +
+        `standard WAV header can address (max ~${(MAX_WAV_DATA_BYTES / SAMPLE_RATE / 2 / 3600).toFixed(1)}h) -- ` +
+        'check the session for a corrupted segment duration before assuming the recording is really this long'
+    );
+  }
   const header = Buffer.alloc(44);
   header.write('RIFF', 0);
   header.writeUInt32LE(36 + dataBytes, 4);
