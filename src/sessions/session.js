@@ -36,15 +36,29 @@ export async function loadSessionSegments(sessionDir) {
   const firstSequence = retainedSorted[0]?.sequence ?? 0;
   const lastSequence = retainedSorted.at(-1)?.sequence ?? -1;
 
+  // A segment's durationSeconds comes straight from its own metadata line, unverified. One bad line (a capture
+  // glitch, a bad write) can report a wildly wrong duration, and since positions accumulate forward, that one
+  // line inflates every segment after it too -- turning a short meeting into a phantom multi-day session that
+  // later blows past the WAV/video format limits (see segment-audio.js). A duration far outside what this
+  // session's segments actually look like is treated as corrupt: it's logged and clamped to typicalDuration,
+  // the same fallback already used for a missing segment.
+  const maxSaneDuration = Math.max(typicalDuration * 20, 300);
   const retained = [];
   let videoPosition = 0;
   let audioOffset = 0;
   for (let sequence = firstSequence; sequence <= lastSequence; sequence += 1) {
     const segment = bySequence.get(sequence);
     if (segment) {
-      retained.push({ ...segment, audioStart: audioOffset, videoStart: videoPosition });
-      audioOffset += segment.durationSeconds;
-      videoPosition += segment.durationSeconds;
+      const sane =
+        segment.durationSeconds >= 0 && segment.durationSeconds <= maxSaneDuration
+          ? segment.durationSeconds
+          : (console.warn(
+              `session: segment ${sequence} reports durationSeconds=${segment.durationSeconds}, far outside the typical ${typicalDuration}s -- treating it as corrupt metadata and using ${typicalDuration}s instead`
+            ),
+            typicalDuration);
+      retained.push({ ...segment, durationSeconds: sane, audioStart: audioOffset, videoStart: videoPosition });
+      audioOffset += sane;
+      videoPosition += sane;
     } else {
       videoPosition += discarded.get(sequence) || typicalDuration;
     }
